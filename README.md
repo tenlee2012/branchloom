@@ -44,9 +44,20 @@
 
 ## 获取有谱
 
-发布版本可从本仓库的 Releases 页面下载；请选择与操作系统匹配的安装包。
+发布版本可从本仓库的 Releases 页面下载；请选择与操作系统匹配的安装包。macOS 用户请根据设备选择 `aarch64`（Apple 芯片）或 `x64`（Intel 芯片）版本。
 
-犹豫是完全开源公开项目，尚未完成商业代码签名，操作系统可能显示安全提醒。请只从本项目官方仓库下载。
+本项目目前未使用 Apple Developer ID 签名和公证，macOS 安装包使用 ad-hoc 签名。请只从本项目官方 GitHub Releases 下载并确认来源可信。
+
+将“有谱”拖入“应用程序”文件夹后，如果 macOS 提示“App 已损坏”或无法验证开发者，请打开“终端”执行：
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/有谱.app"
+open "/Applications/有谱.app"
+```
+
+该命令只移除“有谱”的互联网下载隔离标记，不会关闭系统的全局 Gatekeeper。仅对从本项目官方 GitHub Releases 下载的安装包执行此操作。
+
+Windows 安装包目前也未进行商业代码签名，安装时操作系统可能显示安全提醒。
 
 重要资料建议保留至少一份独立备份，并在升级前导出 `.blp` 项目包。
 
