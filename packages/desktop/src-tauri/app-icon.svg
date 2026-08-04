@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="paper" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fffaf0"/>
+      <stop offset="1" stop-color="#eee4d2"/>
+    </linearGradient>
+    <linearGradient id="leaf" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#607d66"/>
+      <stop offset="1" stop-color="#3f5948"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="220" fill="url(#leaf)"/>
+  <circle cx="512" cy="512" r="360" fill="url(#paper)"/>
+  <g fill="none" stroke="#506b57" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M512 760V520" stroke-width="52"/>
+    <path d="M512 610C438 578 378 516 342 432" stroke-width="38"/>
+    <path d="M512 610C586 578 646 516 682 432" stroke-width="38"/>
+    <path d="M342 432C292 408 256 368 234 316" stroke-width="30"/>
+    <path d="M342 432C390 402 420 358 436 302" stroke-width="30"/>
+    <path d="M682 432C634 402 604 358 588 302" stroke-width="30"/>
+    <path d="M682 432C732 408 768 368 790 316" stroke-width="30"/>
+  </g>
+  <g fill="#a76548" stroke="#fffaf0" stroke-width="20">
+    <circle cx="512" cy="760" r="58"/>
+    <circle cx="342" cy="432" r="52"/>
+    <circle cx="682" cy="432" r="52"/>
+    <circle cx="234" cy="316" r="44"/>
+    <circle cx="436" cy="302" r="44"/>
+    <circle cx="588" cy="302" r="44"/>
+    <circle cx="790" cy="316" r="44"/>
+  </g>
+</svg>

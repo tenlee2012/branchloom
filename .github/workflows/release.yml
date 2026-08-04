@@ -1,0 +1,199 @@
+name: Build desktop installers
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.1
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check release version
+        run: |
+          APP_VERSION=$(node -p "require('./packages/desktop/src-tauri/tauri.conf.json').version")
+          test "v$APP_VERSION" = "$GITHUB_REF_NAME"
+
+      - name: Type check
+        run: pnpm typecheck
+
+      - name: Run frontend tests
+        run: pnpm test:unit
+
+      - name: Run core and CLI tests
+        run: cargo test -p branchloom-core -p branchloom-cli
+
+  create-release:
+    name: Create release
+    needs: test
+    runs-on: ubuntu-22.04
+
+    permissions:
+      contents: write
+
+    outputs:
+      release-id: ${{ steps.release.outputs.result }}
+
+    steps:
+      - name: Create or find release
+        id: release
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          result-encoding: string
+          script: |
+            const tag = context.ref.replace("refs/tags/", "");
+            const releases = await github.paginate(
+              github.rest.repos.listReleases,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                per_page: 100,
+              },
+            );
+            const matchingReleases = releases.filter(
+              (release) => release.tag_name === tag,
+            );
+
+            if (matchingReleases.length > 1) {
+              core.setFailed(
+                `Found ${matchingReleases.length} releases for ${tag}. ` +
+                  "Delete the duplicate releases before rerunning this workflow.",
+              );
+              return "";
+            }
+
+            if (matchingReleases.length === 1) {
+              const release = matchingReleases[0];
+              core.info(`Using existing release ${release.id} for ${tag}.`);
+              return String(release.id);
+            }
+
+            const { data: release } = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              target_commitish: context.sha,
+              name: `有谱 ${tag}`,
+              body: [
+                "有谱APP 安装包。",
+                "",
+                "本版本安装包暂未进行 Apple 或 Windows 商业代码签名，",
+                "安装时操作系统可能显示安全提醒。",
+              ].join("\n"),
+              draft: true,
+              prerelease: true,
+            });
+            core.info(`Created draft release ${release.id} for ${tag}.`);
+            return String(release.id);
+
+  build:
+    name: Build ${{ matrix.name }}
+    needs: create-release
+    runs-on: ${{ matrix.platform }}
+
+    permissions:
+      contents: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x64
+            platform: ubuntu-22.04
+            args: "--bundles appimage,deb"
+            cache-key: linux-x64
+
+          - name: Windows x64
+            platform: windows-latest
+            args: "--bundles nsis"
+            cache-key: windows-x64
+
+          - name: macOS Apple Silicon
+            platform: macos-latest
+            args: "--target aarch64-apple-darwin --bundles dmg"
+            cache-key: macos-arm64
+
+          - name: macOS Intel
+            platform: macos-latest
+            args: "--target x86_64-apple-darwin --bundles dmg"
+            cache-key: macos-x64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.1
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: >-
+            ${{ startsWith(matrix.platform, 'macos')
+                && 'aarch64-apple-darwin,x86_64-apple-darwin'
+                || '' }}
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-${{ matrix.cache-key }}
+
+      - name: Install Linux build dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and upload installers
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: packages/desktop
+          tauriScript: pnpm tauri
+          args: ${{ matrix.args }}
+          releaseId: ${{ needs.create-release.outputs.release-id }}

@@ -1,0 +1,7 @@
+[workspace]
+members = [
+  "packages/core",
+  "packages/desktop/src-tauri",
+  "packages/cli/native",
+]
+resolver = "2"

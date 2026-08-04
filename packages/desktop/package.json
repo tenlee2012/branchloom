@@ -1,0 +1,17 @@
+{
+  "name": "@branchloom/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/run-web.mjs dev",
+    "build": "vue-tsc -b && vite build",
+    "preview": "node scripts/run-web.mjs preview",
+    "typecheck": "vue-tsc -b",
+    "test": "vitest",
+    "test:unit": "vitest run",
+    "test:e2e": "playwright test",
+    "tauri": "tauri"
+  }
+}

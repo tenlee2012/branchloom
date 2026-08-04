@@ -1,0 +1,50 @@
+{
+  "name": "branchloom",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": "^20.19.0 || ^22.13.0 || >=24.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm --dir packages/desktop dev",
+    "build": "pnpm --dir packages/desktop build",
+    "build:mac": "pnpm --dir packages/desktop tauri build --bundles dmg",
+    "build:cli": "cargo build -p branchloom-cli",
+    "install:cli:local": "pnpm --dir packages/cli install:local",
+    "preview": "pnpm --dir packages/desktop preview",
+    "typecheck": "pnpm --dir packages/desktop typecheck",
+    "test": "pnpm --dir packages/desktop test",
+    "test:unit": "pnpm --dir packages/desktop test:unit",
+    "test:cli": "cargo test -p branchloom-core -p branchloom-cli",
+    "test:e2e": "pnpm --dir packages/desktop test:e2e",
+    "tauri": "pnpm --dir packages/desktop tauri"
+  },
+  "dependencies": {
+    "@tabler/icons-vue": "^3.45.0",
+    "@tauri-apps/api": "2.11.1",
+    "@tauri-apps/plugin-dialog": "2.7.2",
+    "cytoscape": "3.34.0",
+    "cytoscape-elk": "2.3.0",
+    "elkjs": "0.11.1",
+    "pinia": "4.0.2",
+    "vue": "3.5.40",
+    "vue-router": "5.2.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.61.1",
+    "@tauri-apps/cli": "2.11.4",
+    "@types/cytoscape": "3.21.9",
+    "@types/node": "22.20.1",
+    "@vue/compiler-sfc": "3.5.40",
+    "@vitejs/plugin-vue": "6.0.8",
+    "@vue/test-utils": "2.4.11",
+    "jsdom": "29.1.1",
+    "typescript": "5.9.3",
+    "vite": "8.1.5",
+    "vitest": "4.1.10",
+    "vue-tsc": "3.3.7"
+  },
+  "packageManager": "pnpm@10.15.1"
+}
