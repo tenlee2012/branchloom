@@ -40,7 +40,19 @@ jobs:
       - name: Check release version
         run: |
           APP_VERSION=$(node -p "require('./packages/desktop/src-tauri/tauri.conf.json').version")
-          test "v$APP_VERSION" = "$GITHUB_REF_NAME"
+          ROOT_VERSION=$(node -p "require('./package.json').version")
+          DESKTOP_VERSION=$(node -p "require('./packages/desktop/package.json').version")
+          CLI_VERSION=$(node -p "require('./packages/cli/package.json').version")
+          if [ "v$APP_VERSION" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Release tag $GITHUB_REF_NAME does not match Tauri version $APP_VERSION"
+            exit 1
+          fi
+          if [ "$ROOT_VERSION" != "$APP_VERSION" ] || \
+             [ "$DESKTOP_VERSION" != "$APP_VERSION" ] || \
+             [ "$CLI_VERSION" != "$APP_VERSION" ]; then
+            echo "::error::Version mismatch: root=$ROOT_VERSION desktop=$DESKTOP_VERSION cli=$CLI_VERSION tauri=$APP_VERSION"
+            exit 1
+          fi
 
       - name: Type check
         run: pnpm typecheck

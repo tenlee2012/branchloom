@@ -1,6 +1,6 @@
 {
   "name": "@branchloom/cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Native Rust command-line interface for Branchloom genealogy data",
   "type": "module",
   "bin": {
