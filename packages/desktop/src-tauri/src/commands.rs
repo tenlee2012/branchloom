@@ -6,7 +6,7 @@ use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager, State};
 use uuid::Uuid;
 
-use branchloom_core::application::{ApplicationService, StatePayload};
+use branchloom_core::application::{ApplicationService, GedcomImportResult, StatePayload};
 use branchloom_core::core::duplicate::DuplicateCandidate;
 use branchloom_core::data_location::{
     database_path as shared_database_path, default_data_directory,
@@ -111,6 +111,14 @@ pub struct DuplicateCandidatesInput {
 pub struct ProjectArchiveImportResult {
     pub project_id: String,
     pub state: NormalizedStatePayload,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GedcomDesktopImportResult {
+    pub project_id: String,
+    pub state: NormalizedStatePayload,
+    pub summary: branchloom_core::gedcom::GedcomSummary,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -397,6 +405,43 @@ pub fn import_project_archive(
     Ok(ProjectArchiveImportResult {
         project_id: imported.id,
         state,
+    })
+}
+
+#[tauri::command]
+pub fn export_project_gedcom(
+    state: State<'_, DesktopProjectSession>,
+    input: ProjectArchiveInput,
+) -> Result<branchloom_core::gedcom::GedcomSummary, String> {
+    if !input.path.is_absolute() {
+        return Err("导出路径必须是绝对路径".to_owned());
+    }
+    lock_session(&state)?
+        .export_project_gedcom(&input.project_id, input.path)
+        .map_err(|error| format!("无法导出 GEDCOM 文件：{error}"))
+}
+
+#[tauri::command]
+pub fn import_project_gedcom(
+    state: State<'_, DesktopProjectSession>,
+    input: ProjectArchiveInput,
+) -> Result<GedcomDesktopImportResult, String> {
+    if !input.path.is_absolute() {
+        return Err("导入路径必须是绝对路径".to_owned());
+    }
+    let mut service = lock_session(&state)?;
+    let GedcomImportResult { project, summary } = service
+        .import_project_gedcom(input.path, input.overwrite)
+        .map_err(|error| format!("无法导入 GEDCOM 文件：{error}"))?;
+    let state = service
+        .load_state()
+        .map_err(|error| format!("无法读取导入后的本地资料：{error}"))?
+        .map(NormalizedStatePayload::from)
+        .ok_or_else(|| "导入后未找到项目资料".to_owned())?;
+    Ok(GedcomDesktopImportResult {
+        project_id: project.id,
+        state,
+        summary,
     })
 }
 

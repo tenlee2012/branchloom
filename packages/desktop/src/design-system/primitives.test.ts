@@ -175,7 +175,10 @@ describe('BaseDialog', () => {
     const descriptionId = dialog?.getAttribute('aria-describedby')
     expect(document.getElementById(titleId ?? '')?.textContent).toBe('删除人物')
     expect(document.getElementById(descriptionId ?? '')?.textContent).toBe('此操作会影响已有关系。')
-    expect(document.activeElement).toBe(dialog?.querySelector('button[aria-label="关闭"]'))
+    const closeButton = dialog?.querySelector('button[aria-label="关闭"]')
+    expect(document.activeElement).toBe(closeButton)
+    expect(closeButton?.querySelector('svg')).not.toBeNull()
+    expect(closeButton?.textContent).toBe('')
   })
 
   it('can hide the header close button while keeping an explicit dialog action focusable', async () => {

@@ -130,7 +130,9 @@ async function verifyNativeAttachments() {
     }
     if (changed) emit('changed')
   } catch (error) {
-    failure.value = error instanceof Error ? error.message : '附件完整性暂时无法检查'
+    if (!failure.value) {
+      failure.value = error instanceof Error ? error.message : '附件完整性暂时无法检查'
+    }
   } finally {
     verifying.value = false
   }

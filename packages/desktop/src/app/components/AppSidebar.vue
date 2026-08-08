@@ -10,6 +10,7 @@ import {
   IconNetwork,
   IconPlus,
   IconRotateClockwise,
+  IconRobot,
   IconSettings,
   IconShieldCheck,
   IconUser,
@@ -34,7 +35,13 @@ const projectSwitcher = ref<HTMLDetailsElement>()
 const projects = ref<Project[]>([])
 const projectListError = ref('')
 const issueCount = ref<number>()
-const projectTreePath = computed(() => `/project/${encodeURIComponent(props.projectId)}/tree`)
+const projectTreePath = computed(() => props.projectId
+  ? `/project/${encodeURIComponent(props.projectId)}/tree`
+  : '/')
+const aiToolsTarget = computed(() => props.projectId
+  ? { name: 'project-ai-tools', params: { projectId: props.projectId } }
+  : { name: 'ai-tools' })
+const isAiToolsCurrent = computed(() => ['ai-tools', 'project-ai-tools'].includes(String(route.name)))
 let issueRequestId = 0
 
 async function loadProjects() {
@@ -66,6 +73,12 @@ async function loadIssueCount(scopedProjectId = props.projectId) {
 }
 
 watch(() => props.projectId, (projectId) => {
+  if (!projectId) {
+    projects.value = []
+    projectListError.value = ''
+    issueCount.value = undefined
+    return
+  }
   void loadProjects()
   void loadIssueCount(projectId)
 }, { immediate: true })
@@ -89,6 +102,7 @@ onBeforeUnmount(() => {
 })
 
 const navigation = computed(() => {
+  if (!props.projectId) return []
   const base = `/project/${props.projectId}`
   return [
     { label: '家谱树', icon: IconNetwork, to: `${base}/tree`, segment: '/tree' },
@@ -99,6 +113,7 @@ const navigation = computed(() => {
 })
 
 const projectNavigation = computed(() => {
+  if (!props.projectId) return []
   const base = `/project/${props.projectId}`
   return [
     {
@@ -132,8 +147,8 @@ function isExact(to: string) {
     <RouterLink
       class="app-sidebar__brand"
       :to="projectTreePath"
-      aria-label="返回当前项目家谱树"
-      title="返回当前项目家谱树"
+      :aria-label="projectId ? '返回当前项目家谱树' : '返回 Branchloom 首页'"
+      :title="projectId ? '返回当前项目家谱树' : '返回 Branchloom 首页'"
     >
       <img class="app-sidebar__seal" :src="appIcon" alt="" aria-hidden="true" />
       <span>
@@ -142,7 +157,7 @@ function isExact(to: string) {
       </span>
     </RouterLink>
 
-    <div class="app-sidebar__project">
+    <div v-if="projectId" class="app-sidebar__project">
       <span>当前项目</span>
       <details ref="projectSwitcher" class="app-sidebar__project-switcher">
         <summary aria-label="切换项目">
@@ -196,6 +211,10 @@ function isExact(to: string) {
         </div>
       </details>
     </div>
+    <div v-else class="app-sidebar__project app-sidebar__project--empty">
+      <span>当前项目</span>
+      <RouterLink to="/">尚未打开项目</RouterLink>
+    </div>
 
     <nav class="app-sidebar__navigation" aria-label="项目导航">
       <RouterLink
@@ -235,7 +254,11 @@ function isExact(to: string) {
     </nav>
 
     <div class="app-sidebar__footer">
-      <RouterLink :to="`/project/${projectId}/manage/settings`"><IconSettings :size="22" aria-hidden="true" />设置</RouterLink>
+      <RouterLink
+        :to="aiToolsTarget"
+        :aria-current="isAiToolsCurrent ? 'page' : undefined"
+      ><IconRobot :size="22" aria-hidden="true" />AI 工具</RouterLink>
+      <RouterLink v-if="projectId" :to="`/project/${projectId}/manage/settings`"><IconSettings :size="22" aria-hidden="true" />设置</RouterLink>
     </div>
   </aside>
 </template>
@@ -300,6 +323,13 @@ function isExact(to: string) {
   color: rgb(255 253 246 / 68%);
   font-size: .72rem;
   letter-spacing: .08em;
+}
+
+.app-sidebar__project--empty a {
+  color: #fffdf6;
+  font-family: var(--font-heading);
+  font-size: .95rem;
+  text-decoration: none;
 }
 
 .app-sidebar__project-switcher {
@@ -482,6 +512,11 @@ function isExact(to: string) {
   gap: .7rem;
   color: inherit;
   text-decoration: none;
+}
+
+.app-sidebar__footer a[aria-current='page'] {
+  color: #fff;
+  font-weight: 700;
 }
 
 @media (max-width: 64rem) {

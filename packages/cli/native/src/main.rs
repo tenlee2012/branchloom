@@ -14,6 +14,7 @@ use branchloom_core::core::project::{NewProject, ProjectPatch};
 use branchloom_core::data_location::{
     database_path as canonical_database_path, default_data_directory, profile_data_directory,
 };
+use branchloom_core::gedcom::read_gedcom;
 use branchloom_core::project_format::ProjectTree;
 use branchloom_core::sync::{
     load_connection, save_connection, save_sync_baseline, ConflictResolution, GithubConnection,
@@ -256,6 +257,7 @@ fn dispatch_project(action: &str, args: &[String], data_dir: &Path) -> CliResult
             "readableFields": ["id", "name", "description", "defaultPersonId", "createdAt", "updatedAt"],
             "filterFields": [],
             "includes": [],
+            "exchangeFormats": ["blp", "gedcom"],
             "writeSchemas": {
                 "create": {
                     "type": "object",
@@ -459,8 +461,9 @@ fn dispatch_project(action: &str, args: &[String], data_dir: &Path) -> CliResult
         "export" => {
             let id = required_option(args, "--id")?;
             let destination = absolute_path_option(args, "--destination")?;
+            let format = project_exchange_format(args, &destination)?;
             let current = json!(service.get_project(&id).map_err(CliError::core)?);
-            let input = json!({ "id": id, "destination": destination });
+            let input = json!({ "id": id, "destination": destination, "format": format });
             let etag = etag("project.export", &id, &input, &current);
             if !flag(args, "--apply") {
                 let mut result = preview("project.export", &id, &etag, false, vec![]);
@@ -468,21 +471,38 @@ fn dispatch_project(action: &str, args: &[String], data_dir: &Path) -> CliResult
                 return Ok(result);
             }
             require_match(args, &etag)?;
-            service
-                .export_project_archive(&id, &destination)
-                .map_err(CliError::core)?;
+            let summary = if format == "gedcom" {
+                Some(
+                    service
+                        .export_project_gedcom(&id, &destination)
+                        .map_err(CliError::core)?,
+                )
+            } else {
+                service
+                    .export_project_archive(&id, &destination)
+                    .map_err(CliError::core)?;
+                None
+            };
             Ok(json!({
                 "status": "applied",
                 "operation": "project.export",
                 "target": { "resource": "project", "id": id },
                 "destination": destination,
+                "format": format,
+                "summary": summary,
             }))
         }
         "import" => {
             let expected_revision = service.data_revision().map_err(CliError::core)?;
             let source = absolute_path_option(args, "--source")?;
-            let tree = ProjectTree::read_archive(&source).map_err(CliError::core)?;
-            let data = tree.parse_project_data().map_err(CliError::core)?;
+            let format = project_exchange_format(args, &source)?;
+            let (data, import_summary) = if format == "gedcom" {
+                let imported = read_gedcom(&source).map_err(CliError::core)?;
+                (imported.data, Some(imported.summary))
+            } else {
+                let tree = ProjectTree::read_archive(&source).map_err(CliError::core)?;
+                (tree.parse_project_data().map_err(CliError::core)?, None)
+            };
             let id = data.project_id().map_err(CliError::core)?.to_owned();
             let existing = service
                 .list_projects()
@@ -493,7 +513,9 @@ fn dispatch_project(action: &str, args: &[String], data_dir: &Path) -> CliResult
             let overwrite = flag(args, "--overwrite");
             let input = json!({
                 "source": source,
-                "project": data.project,
+                "project": { "id": id, "name": data.project["name"] },
+                "format": format,
+                "summary": import_summary,
                 "overwrite": overwrite
             });
             let current = json!(existing);
@@ -506,10 +528,12 @@ fn dispatch_project(action: &str, args: &[String], data_dir: &Path) -> CliResult
                     &id,
                     &etag,
                     project_exists,
-                    diff_values(&current, &input["project"]),
+                    diff_values(&current, &data.project),
                 );
                 result["source"] = json!(source);
                 result["overwrite"] = json!(overwrite);
+                result["format"] = json!(format);
+                result["summary"] = json!(import_summary);
                 if let Some(confirmation) = confirmation {
                     result["destructiveConfirmation"] = json!(confirmation);
                 }
@@ -519,14 +543,26 @@ fn dispatch_project(action: &str, args: &[String], data_dir: &Path) -> CliResult
             if let Some(confirmation) = confirmation {
                 require_destructive(args, &confirmation)?;
             }
-            let imported = service
-                .import_project_archive_if_revision(&source, overwrite, expected_revision)
-                .map_err(CliError::core)?;
+            let (imported, summary) = if format == "gedcom" {
+                let result = service
+                    .import_project_gedcom_if_revision(&source, overwrite, expected_revision)
+                    .map_err(CliError::core)?;
+                (result.project, Some(result.summary))
+            } else {
+                (
+                    service
+                        .import_project_archive_if_revision(&source, overwrite, expected_revision)
+                        .map_err(CliError::core)?,
+                    None,
+                )
+            };
             Ok(json!({
                 "status": "applied",
                 "operation": "project.import",
                 "target": { "resource": "project", "id": imported.id },
                 "record": imported,
+                "format": format,
+                "summary": summary,
             }))
         }
         _ => Err(CliError::usage(
@@ -1527,6 +1563,49 @@ fn absolute_path_option(args: &[String], key: &str) -> CliResult<PathBuf> {
         ));
     }
     Ok(path)
+}
+
+fn project_exchange_format(args: &[String], path: &Path) -> CliResult<&'static str> {
+    let extension = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let inferred = match extension.as_str() {
+        "blp" => Some("blp"),
+        "ged" | "gedcom" => Some("gedcom"),
+        _ => None,
+    };
+    let requested = option(args, "--format");
+    let format = match requested.as_deref() {
+        Some("blp") => "blp",
+        Some("gedcom") | Some("ged") => "gedcom",
+        Some(value) => {
+            return Err(CliError::usage(
+                "INVALID_FORMAT",
+                format!("Unsupported project exchange format {value}; use blp or gedcom"),
+            ));
+        }
+        None => inferred.ok_or_else(|| {
+            CliError::usage(
+                "INVALID_FORMAT",
+                "Cannot infer project exchange format; use a .blp, .ged, or .gedcom path",
+            )
+        })?,
+    };
+    let inferred = inferred.ok_or_else(|| {
+        CliError::usage(
+            "INVALID_FORMAT",
+            "Project exchange paths must end in .blp, .ged, or .gedcom",
+        )
+    })?;
+    if inferred != format {
+        return Err(CliError::usage(
+            "FORMAT_EXTENSION_MISMATCH",
+            format!("--format {format} does not match the file extension"),
+        ));
+    }
+    Ok(format)
 }
 
 fn github_token() -> CliResult<String> {

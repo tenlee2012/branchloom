@@ -149,6 +149,45 @@ describe('application shell', () => {
     wrapper.unmount()
   })
 
+  it('keeps AI tools inside the shared project shell and preserves project context', async () => {
+    const repository = makeRepository()
+    const [project] = await repository.listProjects()
+    const { wrapper, router } = await mountShell(
+      `/project/${project!.id}/people`,
+      repository,
+    )
+
+    const aiToolsLink = wrapper.get('.app-sidebar__footer a[href$="/ai-tools"]')
+    expect(aiToolsLink.attributes('href')).toBe(`/project/${project!.id}/ai-tools`)
+
+    await aiToolsLink.trigger('click')
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('project-ai-tools'))
+    await flushPromises()
+
+    expect(wrapper.get('.project-layout')).toBeTruthy()
+    expect(wrapper.get('nav[aria-label="项目导航"]')).toBeTruthy()
+    expect(wrapper.get('.app-sidebar__project-switcher summary strong').text()).toBe(project!.name)
+    expect(wrapper.get('.app-sidebar__footer a[aria-current="page"]').text()).toContain('AI 工具')
+    expect(wrapper.get('#ai-tools-title').text()).toBe('AI 工具')
+
+    wrapper.unmount()
+  })
+
+  it('uses the same shell for the global AI tools route', async () => {
+    const repository = makeRepository()
+    const [project] = await repository.listProjects()
+    const { wrapper, router } = await mountShell('/ai-tools', repository)
+
+    expect(router.currentRoute.value.name).toBe('ai-tools')
+    expect(wrapper.get('.project-layout')).toBeTruthy()
+    expect(wrapper.get('nav[aria-label="项目导航"]')).toBeTruthy()
+    expect(wrapper.get('.app-sidebar__project-switcher summary strong').text()).toBe(project!.name)
+    expect(wrapper.get('.app-sidebar__footer a[aria-current="page"]').text()).toContain('AI 工具')
+    expect(wrapper.get('#ai-tools-title').text()).toBe('AI 工具')
+
+    wrapper.unmount()
+  })
+
   it('records each successfully opened project as the most recent project', async () => {
     const repository = makeRepository()
     const [first] = await repository.listProjects()

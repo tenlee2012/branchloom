@@ -1,4 +1,4 @@
-# @branchloom/cli
+# Branchloom CLI
 
 通过共享 Rust 应用核心离线访问 Branchloom 的原生命令行工具。桌面端和 CLI 使用同一个
 `branchloom-core::ApplicationService`、SQLite Schema 和存储实现。
@@ -6,7 +6,7 @@
 ## 环境要求
 
 - 从源码构建需要稳定版 Rust 工具链
-- 通过 npm 安装需要 Node.js 20.19 或更高版本；Node.js 只负责启动原生二进制
+- 正式安装通过 Branchloom 桌面端完成，不需要 Node.js、npm 或 npx
 - 默认访问桌面端资料；测试写操作需要绝对路径测试目录或隔离的命名配置
 
 ## 从本地仓库运行
@@ -17,11 +17,18 @@
 cd /Users/bytedance/work/branchloom
 pnpm install
 pnpm build:cli
-target/debug/branchloom --help
+target/debug/branchloom-cli --help
 ```
 
-如果当前目录已经是 `packages/cli`，也可以直接运行 `pnpm build:cli`；构建产物位于
-`../../target/debug/branchloom`。
+也可以直接使用 Cargo：
+
+```bash
+cargo build -p branchloom-cli
+cargo run -p branchloom-cli --bin branchloom-cli -- doctor --output json
+```
+
+源码构建产物位于 `target/debug/branchloom-cli`。`branchloom-cli` 是仓库内部产物名；由
+桌面端安装后，对外命令仍然是 `branchloom`。
 
 默认情况下，CLI 与桌面端访问同一个系统应用数据目录。macOS 下为：
 
@@ -37,25 +44,29 @@ target/debug/branchloom --help
 
 ```bash
 BRANCHLOOM_TEST_DIR="$(mktemp -d "${TMPDIR:-/tmp}/branchloom-cli.XXXXXX")"
-target/debug/branchloom doctor \
+target/debug/branchloom-cli doctor \
   --data-dir "$BRANCHLOOM_TEST_DIR" \
   --output json
 ```
 
-如果希望直接使用 `branchloom` 命令，请从仓库根目录运行本地安装脚本。它会重新构建
-release 二进制后再安装：
+## 通过桌面端安装
+
+打开 Branchloom 桌面端的“AI 工具”页面，选择“安装 CLI 和 Skill”。桌面安装包会离线
+安装与当前版本匹配的原生 CLI 和 Codex Skill：
+
+- macOS/Linux：CLI 安装为 `~/.local/bin/branchloom`
+- Windows：CLI 安装为 `%LOCALAPPDATA%\Branchloom\bin\branchloom.exe`
+- Skill：安装到 Codex 全局 Skill 目录
 
 ```bash
-pnpm install:cli:local
-branchloom --help
-```
-
-安装已经发布的版本：
-
-```bash
-npm install --global @branchloom/cli
 branchloom doctor --output json
 ```
+
+如果页面提示 CLI 目录不在 PATH 中，请复制页面提供的配置命令并重新打开终端。桌面端
+不会自动修改 Shell 配置。
+
+开发者可以在仓库根目录运行 `pnpm prepare:ai-tools`，为当前平台构建 CLI 并生成桌面端
+开发资源；该命令只服务于源码构建，不是用户安装方式。
 
 ## 安全写入协议
 
@@ -225,7 +236,7 @@ branchloom attachment import \
 再次为同一人物导入头像会替换其头像关联；内容相同的文件不会重复保存。单个文件最大
 100 MiB。
 
-## `.blp` 项目包
+## `.blp` 项目包与 GEDCOM
 
 `.blp` 是 GitHub 展开项目工作区的 ZIP 封装，可在不使用 GitHub 时导出、分享和导入：
 
@@ -243,6 +254,25 @@ branchloom project import --source /absolute/family.blp \
 
 相同项目 ID 已存在时，只有明确增加 `--overwrite` 才允许导入覆盖；覆盖预览还会返回
 `destructiveConfirmation`，提交时必须通过 `--confirm-destructive <token>` 原样传回。
+
+GEDCOM 使用同一套两阶段预览协议，格式可由 `.ged` / `.gedcom` 扩展名自动识别，也可
+显式传入 `--format gedcom`：
+
+```bash
+branchloom project export --id <project-id> \
+  --destination /absolute/family.ged --output json
+branchloom project export --id <project-id> \
+  --destination /absolute/family.ged \
+  --apply --if-match <etag> --output json
+
+branchloom project import --source /absolute/family.ged --output json
+branchloom project import --source /absolute/family.ged \
+  --apply --if-match <etag> --output json
+```
+
+GEDCOM 导入会新建具有稳定 ID 的项目；再次导入同一 Branchloom 导出的 GEDCOM 时，需要
+`--overwrite` 和危险确认才能替换同 ID 项目。响应中的 `summary` 会列出人物、关系、地点
+数量及兼容性警告。完整保留来源、附件和 Branchloom 扩展资料仍应使用 `.blp`。
 
 ## 手动快照
 
@@ -303,4 +333,4 @@ pnpm test:cli
 
 ## 许可证
 
-`@branchloom/cli` 采用 Apache License 2.0，详见随 npm 包分发的 `LICENSE` 文件。
+Branchloom CLI 采用 Apache License 2.0，详见仓库中的 `LICENSE` 文件。

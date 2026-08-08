@@ -509,6 +509,9 @@ fn add_attachment_content(
             continue;
         };
         validate_hash(content_hash)?;
+        if attachment.get("missing").and_then(Value::as_bool) == Some(true) {
+            continue;
+        }
         let source = attachments_root.join(project_id).join(content_hash);
         let bytes = fs::read(&source).map_err(|error| {
             CoreError::Validation(format!(
@@ -753,6 +756,25 @@ mod tests {
                 .expect("attachment in archive"),
             attachment_bytes
         );
+    }
+
+    #[test]
+    fn missing_attachment_metadata_is_exported_without_media_content() {
+        let directory = tempdir().expect("create temporary directory");
+        let attachment_hash = sha256_hex(b"known missing attachment");
+        let mut data = test_project_data(&attachment_hash);
+        data.collections
+            .get_mut("attachments")
+            .expect("attachment collection")[0]["missing"] = json!(true);
+
+        let tree = ProjectTree::from_project_data(&data, &directory.path().join("attachments"))
+            .expect("export missing attachment metadata");
+
+        assert!(tree
+            .files()
+            .keys()
+            .all(|path| !path.starts_with("media/sha256/")));
+        assert_eq!(tree.parse_project_data().expect("parse project data"), data);
     }
 
     #[test]

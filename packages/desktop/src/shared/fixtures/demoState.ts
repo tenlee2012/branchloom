@@ -430,10 +430,10 @@ const DEMO_STATE: PrototypeState = {
     { id: 'citation-adoption-interview', projectId: PROJECT_ID, sourceId: 'source-oral-history', targetType: 'relationship', targetId: 'relationship-hai-xue', locator: '00:42:10', notes: '收养年份为口述估计。' },
   ],
   attachments: [
-    { id: 'attachment-register-scan', projectId: PROJECT_ID, name: '族谱第18页.jpg', mimeType: 'image/jpeg', size: 248320, previewUrl: '/demo/attachments/register-page-18.jpg', contentHash: 'sha256:demo-register-page-18', missing: false },
-    { id: 'attachment-interview-audio', projectId: PROJECT_ID, name: '周素琴访谈.m4a', mimeType: 'audio/mp4', size: 7340032, previewUrl: '/demo/attachments/oral-history.m4a', contentHash: 'sha256:demo-oral-history-audio', missing: false },
-    { id: 'attachment-reunion-photo', projectId: PROJECT_ID, name: '四代合影.jpg', mimeType: 'image/jpeg', size: 1824768, previewUrl: '/demo/attachments/reunion.jpg', contentHash: 'sha256:demo-family-reunion-photo', missing: false },
-    { id: 'attachment-missing-letter', projectId: PROJECT_ID, name: '林国强旧信.pdf', mimeType: 'application/pdf', size: 0, contentHash: 'sha256:demo-missing-letter', missing: true },
+    { id: 'attachment-register-scan', projectId: PROJECT_ID, name: '族谱第18页.jpg', mimeType: 'image/jpeg', size: 248320, previewUrl: '/demo/attachments/register-page-18.jpg', contentHash: '16899059cd934d04216bab163bb68e887e2bb9a5065e66d8be2fdeafb00694c1', missing: false },
+    { id: 'attachment-interview-audio', projectId: PROJECT_ID, name: '周素琴访谈.m4a', mimeType: 'audio/mp4', size: 7340032, previewUrl: '/demo/attachments/oral-history.m4a', contentHash: 'da0c613c913a52e4be4479c3757ca00257d7a0beed6e93c08bfe67b661a02539', missing: false },
+    { id: 'attachment-reunion-photo', projectId: PROJECT_ID, name: '四代合影.jpg', mimeType: 'image/jpeg', size: 1824768, previewUrl: '/demo/attachments/reunion.jpg', contentHash: '4e47845db280c0954dd594fa393cd5c14ee0a815288e061b0a31e1a4817a49df', missing: false },
+    { id: 'attachment-missing-letter', projectId: PROJECT_ID, name: '林国强旧信.pdf', mimeType: 'application/pdf', size: 0, contentHash: 'c8989a82a0265e0ee015ccb0f3189086fe0af17d2d134ee4eb0d9553f7a653ee', missing: true },
   ],
   attachmentLinks: [
     { id: 'attachment-link-register-person', projectId: PROJECT_ID, attachmentId: 'attachment-register-scan', targetType: 'person', targetId: 'person-lin-hai' },

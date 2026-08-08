@@ -849,15 +849,29 @@ Schema 应约束字段类型、必填字段、enum、UUID、URI、时间戳、�
 |---|---|---|
 | Branchloom JSON-LD | Git 存储、同步、SQLite 重建 | 对 Branchloom 数据无损 |
 | SQLite | 本地事务、查询和索引 | 可以由 JSON-LD 重建 |
-| GEDCOM 7 / 5.5.1 | 与其他族谱软件交换 | 允许存在映射损失，必须报告 |
+| GEDCOM 7 / 5.5.1 / 5.5 | 与其他族谱软件交换 | 允许存在映射损失，必须报告 |
 | `.blp` | 单文件导出、迁移和分享 | 对 Branchloom 数据无损；内部为 ZIP |
 | CSV | 表格型交换 | 只覆盖用户选择的字段 |
 
 `.blp` 是 GitHub 展开工作区的便携封装。解压后具有相同目录、结构化数据和附件布局，
 但不包含 `.git`、本地同步基线、SQLite、缓存或凭据。
 
-GEDCOM 导入应转换为稳定 JSON-LD 实体；导出 GEDCOM 时，无法表达的组织、履历、称号和
-复杂关系必须出现在兼容性报告中。
+GEDCOM 导入会转换为稳定的 Branchloom 实体；导出 GEDCOM 时，无法表达的扩展资料会在
+兼容性报告中提示，内部 JSON-LD 与 SQLite 模型不会为迁就 GEDCOM 而降级。
+
+当前首版 GEDCOM 映射如下：
+
+- 支持 UTF-8 与带 BOM 的 UTF-16，接受 GEDCOM 5.5、5.5.1 和 7.0 常见层级结构；ANSEL
+  文件会被安全拒绝并提示先转换编码。
+- `INDI` 映射人物、多个 `NAME`、`SEX`、`BIRT`、`DEAT` 和 `NOTE`；常见日期限定词
+  `ABT`、`BEF`、`AFT`、`BET ... AND ...` 会转换为结构化日期精度。
+- `FAM` 的 `HUSB`、`WIFE`、`CHIL`、`MARR`、`DIV` 映射亲子与伴侣关系；`PEDI adopted`
+  映射收养关系。
+- 生卒与婚姻地点按名称去重后映射为地点实体。
+- 导出使用 GEDCOM 5.5.1 UTF-8，并写入 `_BRANCHLOOM_PROJECT_ID` 与 `_BRANCHLOOM_ID`
+  扩展标签，使 Branchloom 往返导入时保持稳定 ID。
+- 组织、履历、称号、独立事件、来源、引文、附件和维护问题暂不写入 GEDCOM；存在这些
+  资料时导出结果会警告用户使用 `.blp` 保存完整备份。
 
 ## 隐私和安全
 

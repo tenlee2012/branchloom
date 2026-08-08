@@ -86,6 +86,41 @@ export async function importProjectArchive(path: string, overwrite = false): Pro
   return result.projectId
 }
 
+export interface GedcomExchangeSummary {
+  people: number
+  relationships: number
+  places: number
+  warnings: string[]
+}
+
+export interface GedcomImportResult extends GedcomExchangeSummary {
+  projectId: string
+}
+
+export async function exportProjectGedcom(
+  projectId: string,
+  path: string,
+): Promise<GedcomExchangeSummary> {
+  const { invoke } = await import('@tauri-apps/api/core')
+  return invoke<GedcomExchangeSummary>('export_project_gedcom', {
+    input: { projectId, path, overwrite: false },
+  })
+}
+
+export async function importProjectGedcom(
+  path: string,
+  overwrite = false,
+): Promise<GedcomImportResult> {
+  const { invoke } = await import('@tauri-apps/api/core')
+  const result = await invoke<{
+    projectId: string
+    summary: GedcomExchangeSummary
+  }>('import_project_gedcom', {
+    input: { projectId: '', path, overwrite },
+  })
+  return { projectId: result.projectId, ...result.summary }
+}
+
 export async function requestNativeRepositoryRefresh(
   repository: BranchloomRepository,
 ): Promise<void> {

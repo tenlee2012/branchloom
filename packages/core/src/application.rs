@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
+use tempfile::NamedTempFile;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use uuid::Uuid;
 
@@ -15,6 +16,7 @@ use crate::contract::{
 use crate::core::duplicate::{score_duplicate_candidates, DuplicateCandidate};
 use crate::core::error::{CoreError, CoreResult};
 use crate::core::project::{NewProject, ProjectPatch, ProjectRecord};
+use crate::gedcom::{export_gedcom, read_gedcom, GedcomSummary, GEDCOM_EXTENSION};
 use crate::project_format::{ProjectData, ProjectTree, ARCHIVE_EXTENSION};
 use crate::storage::{DesktopRecordChange, NormalizedState, Resource, Storage};
 
@@ -43,6 +45,13 @@ pub struct ImportedAttachmentContent {
     pub size: u64,
     pub content_hash: String,
     pub already_stored: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GedcomImportResult {
+    pub project: ProjectRecord,
+    pub summary: GedcomSummary,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -1811,6 +1820,112 @@ impl ApplicationService {
         installed.commit();
         self.storage.get_project(&project_id)
     }
+
+    pub fn export_project_gedcom(
+        &self,
+        project_id: &str,
+        destination: impl AsRef<Path>,
+    ) -> CoreResult<GedcomSummary> {
+        let destination = destination.as_ref();
+        validate_gedcom_destination(destination)?;
+        let mut data = self.storage.export_project_data(project_id)?;
+        sanitize_project_data(&mut data);
+        let document = export_gedcom(&data)?;
+        let parent = destination.parent().ok_or_else(|| {
+            CoreError::Validation("GEDCOM destination must have a parent directory".to_owned())
+        })?;
+        let mut temporary = NamedTempFile::new_in(parent)?;
+        temporary.write_all(document.as_bytes())?;
+        temporary.as_file_mut().sync_all()?;
+        temporary
+            .persist(destination)
+            .map_err(|error| CoreError::Io(error.error))?;
+        Ok(gedcom_export_summary(&data))
+    }
+
+    pub fn import_project_gedcom(
+        &mut self,
+        source: impl AsRef<Path>,
+        overwrite: bool,
+    ) -> CoreResult<GedcomImportResult> {
+        let imported = read_gedcom(source.as_ref())?;
+        let project_id = imported.data.project_id()?.to_owned();
+        self.storage
+            .replace_project_data(&imported.data, overwrite)?;
+        Ok(GedcomImportResult {
+            project: self.storage.get_project(&project_id)?,
+            summary: imported.summary,
+        })
+    }
+
+    pub fn import_project_gedcom_if_revision(
+        &mut self,
+        source: impl AsRef<Path>,
+        overwrite: bool,
+        expected_revision: i64,
+    ) -> CoreResult<GedcomImportResult> {
+        let imported = read_gedcom(source.as_ref())?;
+        let project_id = imported.data.project_id()?.to_owned();
+        self.storage.replace_project_data_if_revision(
+            &imported.data,
+            overwrite,
+            expected_revision,
+        )?;
+        Ok(GedcomImportResult {
+            project: self.storage.get_project(&project_id)?,
+            summary: imported.summary,
+        })
+    }
+}
+
+fn validate_gedcom_destination(destination: &Path) -> CoreResult<()> {
+    if !destination.is_absolute() {
+        return Err(CoreError::Validation(
+            "GEDCOM destination must be an absolute path".to_owned(),
+        ));
+    }
+    let extension = destination
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    if !matches!(extension.as_str(), GEDCOM_EXTENSION | "gedcom") {
+        return Err(CoreError::Validation(
+            "GEDCOM destination must use .ged or .gedcom".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+fn gedcom_export_summary(data: &ProjectData) -> GedcomSummary {
+    let unsupported_count = [
+        "organizations",
+        "careers",
+        "personTitles",
+        "events",
+        "sources",
+        "citations",
+        "attachments",
+        "attachmentLinks",
+        "issues",
+    ]
+    .into_iter()
+    .map(|collection| data.collections[collection].len())
+    .sum::<usize>();
+    let warnings = (unsupported_count > 0)
+        .then(|| {
+            format!(
+                "{unsupported_count} 条 Branchloom 扩展记录不属于首版 GEDCOM 映射范围，完整备份请使用 .blp 项目包"
+            )
+        })
+        .into_iter()
+        .collect();
+    GedcomSummary {
+        people: data.collections["people"].len(),
+        relationships: data.collections["relationships"].len(),
+        places: data.collections["places"].len(),
+        warnings,
+    }
 }
 
 fn resolve_batch_references(
@@ -1918,6 +2033,52 @@ fn sanitize_project_data(data: &mut ProjectData) {
     strip_null_project_record(&mut data.project);
     for records in data.collections.values_mut() {
         records.iter_mut().for_each(sanitize_state_value);
+    }
+    normalize_demo_attachment_placeholders(data);
+}
+
+fn normalize_demo_attachment_placeholders(data: &mut ProjectData) {
+    let Some(attachments) = data.collections.get_mut("attachments") else {
+        return;
+    };
+    for attachment in attachments {
+        let Some(object) = attachment.as_object_mut() else {
+            continue;
+        };
+        let Some(content_hash) = object
+            .get("contentHash")
+            .and_then(Value::as_str)
+            .map(str::to_owned)
+        else {
+            continue;
+        };
+        let Some(normalized_hash) = normalized_demo_attachment_hash(&content_hash) else {
+            continue;
+        };
+        object.insert("contentHash".to_owned(), json!(normalized_hash));
+        object.insert("missing".to_owned(), json!(true));
+    }
+}
+
+fn normalized_demo_attachment_hash(content_hash: &str) -> Option<&'static str> {
+    match content_hash {
+        "sha256:demo-register-page-18"
+        | "16899059cd934d04216bab163bb68e887e2bb9a5065e66d8be2fdeafb00694c1" => {
+            Some("16899059cd934d04216bab163bb68e887e2bb9a5065e66d8be2fdeafb00694c1")
+        }
+        "sha256:demo-oral-history-audio"
+        | "da0c613c913a52e4be4479c3757ca00257d7a0beed6e93c08bfe67b661a02539" => {
+            Some("da0c613c913a52e4be4479c3757ca00257d7a0beed6e93c08bfe67b661a02539")
+        }
+        "sha256:demo-family-reunion-photo"
+        | "4e47845db280c0954dd594fa393cd5c14ee0a815288e061b0a31e1a4817a49df" => {
+            Some("4e47845db280c0954dd594fa393cd5c14ee0a815288e061b0a31e1a4817a49df")
+        }
+        "sha256:demo-missing-letter"
+        | "c8989a82a0265e0ee015ccb0f3189086fe0af17d2d134ee4eb0d9553f7a653ee" => {
+            Some("c8989a82a0265e0ee015ccb0f3189086fe0af17d2d134ee4eb0d9553f7a653ee")
+        }
+        _ => None,
     }
 }
 
@@ -2297,6 +2458,112 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
+
+    #[test]
+    fn gedcom_export_atomically_replaces_an_existing_destination() {
+        let directory = tempdir().expect("create data directory");
+        let database = directory.path().join("branchloom.sqlite3");
+        let mut service = ApplicationService::open(&database).expect("open core");
+        service
+            .create_project_with_id(
+                "project-gedcom-export".to_owned(),
+                NewProject {
+                    name: "GEDCOM Export".to_owned(),
+                    description: String::new(),
+                },
+            )
+            .expect("create project");
+        let destination = directory.path().join("family.ged");
+        fs::write(&destination, b"previous export").expect("write previous export");
+
+        service
+            .export_project_gedcom("project-gedcom-export", &destination)
+            .expect("replace GEDCOM export");
+
+        let exported = fs::read_to_string(destination).expect("read replaced GEDCOM");
+        assert!(exported.starts_with("0 HEAD\r\n"));
+        assert!(exported.ends_with("0 TRLR\r\n"));
+        assert!(!exported.contains("previous export"));
+    }
+
+    #[test]
+    fn project_archive_normalizes_legacy_demo_attachment_placeholders() {
+        let directory = tempdir().expect("create data directory");
+        let database = directory.path().join("branchloom.sqlite3");
+        let mut service = ApplicationService::open(&database).expect("open core");
+        service
+            .create_project_with_id(
+                "project-demo-export".to_owned(),
+                NewProject {
+                    name: "Demo Export".to_owned(),
+                    description: String::new(),
+                },
+            )
+            .expect("create project");
+        service
+            .put_record(
+                Resource::Attachment,
+                "attachment-demo",
+                "project-demo-export",
+                &json!({
+                    "id": "attachment-demo",
+                    "projectId": "project-demo-export",
+                    "name": "演示访谈.m4a",
+                    "mimeType": "audio/mp4",
+                    "size": 1024,
+                    "contentHash": "sha256:demo-oral-history-audio",
+                    "missing": false
+                }),
+            )
+            .expect("store legacy demo attachment");
+        service
+            .put_record(
+                Resource::Attachment,
+                "attachment-demo-normalized",
+                "project-demo-export",
+                &json!({
+                    "id": "attachment-demo-normalized",
+                    "projectId": "project-demo-export",
+                    "name": "演示合影.jpg",
+                    "mimeType": "image/jpeg",
+                    "size": 2048,
+                    "contentHash": "4e47845db280c0954dd594fa393cd5c14ee0a815288e061b0a31e1a4817a49df",
+                    "missing": false
+                }),
+            )
+            .expect("store normalized demo attachment");
+        let archive = directory.path().join("demo.blp");
+
+        service
+            .export_project_archive("project-demo-export", &archive)
+            .expect("export demo project archive");
+
+        let tree = ProjectTree::read_archive(&archive).expect("read project archive");
+        let data = tree.parse_project_data().expect("parse project data");
+        let attachments = &data.collections["attachments"];
+        let attachment = attachments
+            .iter()
+            .find(|attachment| attachment["id"] == "attachment-demo")
+            .expect("legacy demo attachment");
+        assert_eq!(
+            attachment["contentHash"],
+            "da0c613c913a52e4be4479c3757ca00257d7a0beed6e93c08bfe67b661a02539"
+        );
+        assert_eq!(attachment["missing"], true);
+        let normalized_attachment = attachments
+            .iter()
+            .find(|attachment| attachment["id"] == "attachment-demo-normalized")
+            .expect("normalized demo attachment");
+        assert_eq!(
+            normalized_attachment["contentHash"],
+            "4e47845db280c0954dd594fa393cd5c14ee0a815288e061b0a31e1a4817a49df"
+        );
+        assert_eq!(normalized_attachment["missing"], true);
+        assert!(tree
+            .files()
+            .keys()
+            .all(|path| !path.starts_with("media/sha256/")));
+    }
 
     #[test]
     fn duplicate_candidate_query_is_read_only_and_uses_core_name_semantics() {

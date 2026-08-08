@@ -40,6 +40,23 @@ const routes: RouteRecordRaw[] = [
     ],
   },
   {
+    path: '/ai-tools',
+    component: () => import('./layouts/ProjectLayout.vue'),
+    children: [
+      {
+        path: '',
+        name: 'ai-tools',
+        component: () => import('../features/ai-tools/views/AiToolsView.vue'),
+        meta: {
+          title: 'AI 工具',
+          eyebrow: '本机 AI 集成',
+          allowMissingProject: true,
+          utilityWorkspace: true,
+        },
+      },
+    ],
+  },
+  {
     path: '/project/:projectId',
     component: () => import('./layouts/ProjectLayout.vue'),
     children: [
@@ -111,6 +128,16 @@ const routes: RouteRecordRaw[] = [
         name: 'project-sources',
         component: () => import('../features/sources/views/SourcesView.vue'),
         meta: { title: '资料来源', eyebrow: '证据、引用与附件' },
+      },
+      {
+        path: 'ai-tools',
+        name: 'project-ai-tools',
+        component: () => import('../features/ai-tools/views/AiToolsView.vue'),
+        meta: {
+          title: 'AI 工具',
+          eyebrow: '本机 AI 集成',
+          utilityWorkspace: true,
+        },
       },
       {
         path: 'manage/overview',

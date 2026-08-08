@@ -1,3 +1,4 @@
+mod ai_tools;
 mod commands;
 mod credentials;
 mod external_links;
@@ -14,6 +15,9 @@ pub fn run() {
             let session = commands::open_desktop_project_session(app.handle())
                 .map_err(std::io::Error::other)?;
             app.manage(session);
+            let ai_tools =
+                ai_tools::AiToolsState::from_app(app.handle()).map_err(std::io::Error::other)?;
+            app.manage(ai_tools);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -28,11 +32,16 @@ pub fn run() {
             commands::read_attachment,
             commands::export_project_archive,
             commands::import_project_archive,
+            commands::export_project_gedcom,
+            commands::import_project_gedcom,
             commands::create_manual_snapshot,
             commands::connect_github,
             commands::get_github_connection,
             commands::preview_github_sync,
             commands::apply_github_sync,
+            ai_tools::get_ai_tools_status,
+            ai_tools::preview_ai_tools_change,
+            ai_tools::apply_ai_tools_change,
             external_links::open_external_url,
         ])
         .run(tauri::generate_context!())

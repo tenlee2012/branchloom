@@ -7,6 +7,8 @@ export interface AppNotification {
   message: string
 }
 
+const MAX_VISIBLE_NOTIFICATIONS = 3
+
 export const useNotificationsStore = defineStore('notifications', () => {
   const notifications = ref<AppNotification[]>([])
   let nextId = 1
@@ -14,6 +16,9 @@ export const useNotificationsStore = defineStore('notifications', () => {
   function push(message: string, tone: AppNotification['tone'] = 'info') {
     const notification: AppNotification = { id: nextId++, message, tone }
     notifications.value.push(notification)
+    if (notifications.value.length > MAX_VISIBLE_NOTIFICATIONS) {
+      notifications.value.splice(0, notifications.value.length - MAX_VISIBLE_NOTIFICATIONS)
+    }
     return notification.id
   }
 

@@ -73,8 +73,6 @@ importers:
         specifier: 3.3.7
         version: 3.3.7(typescript@5.9.3)
 
-  packages/cli: {}
-
   packages/desktop: {}
 
 packages:

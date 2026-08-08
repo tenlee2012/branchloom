@@ -4,22 +4,14 @@ The machine protocol version for this Skill is `3`.
 
 ## Installation
 
-The Skill is installed with the open-source Vercel Skills CLI:
+Branchloom desktop installs the native CLI and this Skill together from its **AI 工具** page. The
+matching files are bundled with the desktop release, so installation is offline and does not need
+Node.js, npm, npx, or a background service.
 
-```bash
-npx skills add <branchloom-repository-or-release-tag> --skill branchloom
-```
-
-The Branchloom CLI is installed separately:
-
-```bash
-npm install -g @branchloom/cli
-```
-
-The npm package is only a platform launcher for the native Rust executable. It contains no
-Branchloom business rules or database implementation.
-
-Neither the Skill nor Branchloom installs or upgrades the other automatically.
+If `branchloom` is missing or contract version `3` is incompatible, stop and ask the user to open
+that page and install, update, or repair both tools. An Agent must not copy package-internal
+binaries, write directly into the shared Agent Skill directory, or suggest legacy npm/npx
+installation. Branchloom desktop installs this Skill at `~/.agents/skills/branchloom`.
 
 ## Command model
 
@@ -53,6 +45,8 @@ Project packages and GitHub:
 - `project snapshot --id <project-id> --note <snapshot-name>`
 - `project export --id <project-id> --destination /absolute/file.blp`
 - `project import --source /absolute/file.blp`
+- `project export --id <project-id> --destination /absolute/file.ged`
+- `project import --source /absolute/file.ged`
 - `github connect --project <project-id> --owner <owner> --repo <repo>`
 - `github status --project <project-id>`
 - `github pull --project <project-id>`
@@ -60,6 +54,10 @@ Project packages and GitHub:
 
 `.blp` is a ZIP container whose extracted project tree matches the GitHub working tree. GitHub
 commands use the native Rust Git Data/LFS client and do not require system Git.
+
+`.ged` and `.gedcom` select GEDCOM exchange automatically; `--format gedcom` is also accepted.
+GEDCOM import/export uses the same preview, etag, overwrite, and destructive-confirmation protocol.
+Inspect `summary.warnings` because GEDCOM does not preserve every Branchloom extension record.
 
 ## Scope and input
 

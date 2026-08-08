@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { IconRobot } from '@tabler/icons-vue'
 import { RouterLink, RouterView } from 'vue-router'
 import DataRefreshButton from '../components/DataRefreshButton.vue'
 import PageBackLink from '../components/PageBackLink.vue'
@@ -13,6 +14,9 @@ import PageBackLink from '../components/PageBackLink.vue'
       </RouterLink>
       <div class="home-layout__header-actions">
         <p>一座属于你们家的私人档案馆</p>
+        <RouterLink class="home-layout__ai-tools" to="/ai-tools">
+          <IconRobot :size="17" aria-hidden="true" />AI 工具
+        </RouterLink>
         <DataRefreshButton />
       </div>
     </header>
@@ -80,6 +84,21 @@ import PageBackLink from '../components/PageBackLink.vue'
   gap: var(--space-4);
 }
 
+.home-layout__ai-tools {
+  display: inline-flex;
+  min-height: 2.25rem;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-primary);
+  font-size: .82rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
 .home-layout__brand span {
   display: grid;
   width: 2.25rem;
@@ -110,8 +129,24 @@ import PageBackLink from '../components/PageBackLink.vue'
   text-align: center;
 }
 
-@media (max-width: 40rem) {
+@media (max-width: 52rem) {
   .home-layout__header p {
+    display: none;
+  }
+}
+
+@media (max-width: 40rem) {
+  .home-layout__header {
+    gap: var(--space-2);
+    padding-right: var(--space-4);
+    padding-left: var(--space-4);
+  }
+
+  .home-layout__header-actions {
+    gap: var(--space-2);
+  }
+
+  .home-layout__brand strong {
     display: none;
   }
 }

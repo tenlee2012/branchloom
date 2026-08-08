@@ -6,6 +6,7 @@ import AppTopbar from '../components/AppTopbar.vue'
 import { useSessionStore } from '../stores/session'
 import { useBranchloomRepository } from '../../shared/repository/injection'
 import { BrowserRecentProjectLocations } from '../../features/projects/model/recentProjectLocations'
+import { selectInitialProject } from '../startup'
 import appIcon from '../../../src-tauri/icons/icon.png'
 
 const route = useRoute()
@@ -14,8 +15,12 @@ const recentProjectLocations = new BrowserRecentProjectLocations()
 const session = useSessionStore()
 const loadState = ref<'loading' | 'ready' | 'error'>('loading')
 const loadError = ref('')
+const navigationProjectId = ref('')
 const isTreeWorkspace = computed(() => route.name === 'project-tree')
-const isManagementWorkspace = computed(() => route.path.includes('/manage/'))
+const allowsMissingProject = computed(() => route.meta.allowMissingProject === true)
+const isManagementWorkspace = computed(() => (
+  route.path.includes('/manage/') || route.meta.utilityWorkspace === true
+))
 const routeView = ref<{
   fitCanvas?(): void
   addPerson?(): void
@@ -31,8 +36,8 @@ function addTreePerson() {
 }
 
 watch(
-  () => String(route.params.projectId ?? ''),
-  async (projectId, _previousProjectId, onCleanup) => {
+  [() => String(route.params.projectId ?? ''), allowsMissingProject],
+  async ([projectId, canLoadWithoutProject], _previousValue, onCleanup) => {
     const request = ++latestRequest
     let active = true
     onCleanup(() => {
@@ -40,21 +45,36 @@ watch(
     })
 
     session.closeProject()
+    navigationProjectId.value = ''
     loadState.value = 'loading'
     loadError.value = ''
-    if (!projectId) return
+    if (!projectId && !canLoadWithoutProject) return
     try {
-      const project = await repository.getProject(projectId)
+      const project = projectId
+        ? await repository.getProject(projectId)
+        : selectInitialProject(
+            await repository.listProjects(),
+            recentProjectLocations.list().map(({ projectId: recentProjectId }) => recentProjectId),
+          )
       if (!active || request !== latestRequest) return
+      if (!project) {
+        loadState.value = 'ready'
+        return
+      }
 
       const history = repository.getHistoryState()
       if (!active || request !== latestRequest) return
       session.openProject(project, history)
+      navigationProjectId.value = project.id
       recentProjectLocations.record(project)
       loadState.value = 'ready'
     } catch (error) {
       if (!active || request !== latestRequest) return
       session.closeProject()
+      if (!projectId && canLoadWithoutProject) {
+        loadState.value = 'ready'
+        return
+      }
       loadError.value = error instanceof Error ? error.message : '项目资料无法读取'
       loadState.value = 'error'
     }
@@ -93,7 +113,7 @@ onBeforeUnmount(() => {
 
   <div v-else class="project-layout">
     <AppSidebar
-      :project-id="String(route.params.projectId)"
+      :project-id="navigationProjectId"
       :project-name="session.currentProjectName"
     />
     <div class="project-layout__workspace">

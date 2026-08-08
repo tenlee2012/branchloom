@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { IconX } from '@tabler/icons-vue'
 import { ref, toRef, useId } from 'vue'
 import { useModalOverlay } from './useModalOverlay'
 
@@ -59,7 +60,7 @@ useModalOverlay({
             :aria-label="closeLabel"
             @click="emit('close')"
           >
-            <span aria-hidden="true">×</span>
+            <IconX :size="20" aria-hidden="true" />
           </button>
         </header>
         <div class="base-dialog__body"><slot /></div>
@@ -122,7 +123,6 @@ useModalOverlay({
   border-radius: 50%;
   background: transparent;
   color: var(--color-muted);
-  font-size: 1.5rem;
   cursor: pointer;
 }
 

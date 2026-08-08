@@ -100,6 +100,28 @@
         "Pauses and asks for direction when the first disallowed mutation is encountered",
         "Does not weaken validation or use batch for overwrite, update, delete, or remove"
       ]
+    },
+    {
+      "id": 10,
+      "prompt": "I tried to use Branchloom, but the branchloom command is missing and Codex says the installed Skill may be out of date. Fix the setup.",
+      "expected_output": "Stops before accessing data and directs the user to install or repair the matching CLI and Skill from Branchloom desktop's AI 工具 page.",
+      "assertions": [
+        "Does not recommend npm, npx, or a package-internal Rust binary",
+        "Does not install or modify Codex Skill files itself",
+        "Directs the user to update CLI and Skill together in Branchloom desktop",
+        "Does not attempt a Branchloom data operation while the command or contract is unavailable"
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "Export my Branchloom family project to /Users/me/Exports/family.ged for another genealogy app.",
+      "expected_output": "Uses project export with the absolute .ged destination, previews the GEDCOM exchange, explains compatibility warnings, and waits for confirmation before applying the exact etag.",
+      "assertions": [
+        "Requires the project.gedcom-exchange capability",
+        "Uses project export rather than reading the database or building GEDCOM itself",
+        "Does not apply before confirmation",
+        "Reports summary.warnings and recommends .blp for a complete backup"
+      ]
     }
   ]
 }

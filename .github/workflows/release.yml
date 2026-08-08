@@ -34,6 +34,15 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
 
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -42,7 +51,7 @@ jobs:
           APP_VERSION=$(node -p "require('./packages/desktop/src-tauri/tauri.conf.json').version")
           ROOT_VERSION=$(node -p "require('./package.json').version")
           DESKTOP_VERSION=$(node -p "require('./packages/desktop/package.json').version")
-          CLI_VERSION=$(node -p "require('./packages/cli/package.json').version")
+          CLI_VERSION=$(node -p "require('fs').readFileSync('./packages/cli/native/Cargo.toml', 'utf8').match(/\[package\][\s\S]*?version\s*=\s*\"([^\"]+)\"/)[1]")
           if [ "v$APP_VERSION" != "$GITHUB_REF_NAME" ]; then
             echo "::error::Release tag $GITHUB_REF_NAME does not match Tauri version $APP_VERSION"
             exit 1
@@ -60,8 +69,8 @@ jobs:
       - name: Run frontend tests
         run: pnpm test:unit
 
-      - name: Run core and CLI tests
-        run: cargo test -p branchloom-core -p branchloom-cli
+      - name: Run Rust workspace tests
+        run: cargo test --workspace
 
   create-release:
     name: Create release
@@ -85,7 +94,8 @@ jobs:
             const tag = context.ref.replace("refs/tags/", "");
             const releaseName = `有谱 ${tag}`;
             const releaseBody = [
-              "有谱桌面端安装包。",
+              "有谱桌面端安装包。每个平台的安装包均内置匹配版本的原生 CLI 与 Codex Skill，",
+              "安装桌面端后可从“AI 工具”页面离线安装、更新或修复，无需 npm 或 npx。",
               "",
               "## macOS 安装说明",
               "",
@@ -165,21 +175,29 @@ jobs:
         include:
           - name: Linux x64
             platform: ubuntu-22.04
-            args: "--bundles appimage,deb"
+            target: x86_64-unknown-linux-gnu
+            cli_binary: target/x86_64-unknown-linux-gnu/release/branchloom-cli
+            args: "--target x86_64-unknown-linux-gnu --bundles appimage,deb"
             cache-key: linux-x64
 
           - name: Windows x64
             platform: windows-latest
-            args: "--bundles nsis"
+            target: x86_64-pc-windows-msvc
+            cli_binary: target/x86_64-pc-windows-msvc/release/branchloom-cli.exe
+            args: "--target x86_64-pc-windows-msvc --bundles nsis"
             cache-key: windows-x64
 
           - name: macOS Apple Silicon
-            platform: macos-latest
+            platform: macos-15
+            target: aarch64-apple-darwin
+            cli_binary: target/aarch64-apple-darwin/release/branchloom-cli
             args: "--target aarch64-apple-darwin --bundles dmg"
             cache-key: macos-arm64
 
           - name: macOS Intel
-            platform: macos-latest
+            platform: macos-15-intel
+            target: x86_64-apple-darwin
+            cli_binary: target/x86_64-apple-darwin/release/branchloom-cli
             args: "--target x86_64-apple-darwin --bundles dmg"
             cache-key: macos-x64
 
@@ -201,10 +219,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: >-
-            ${{ startsWith(matrix.platform, 'macos')
-                && 'aarch64-apple-darwin,x86_64-apple-darwin'
-                || '' }}
+          targets: ${{ matrix.target }}
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
@@ -224,10 +239,27 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build native CLI
+        run: cargo build --release -p branchloom-cli --target ${{ matrix.target }}
+
+      - name: Prepare and verify bundled CLI and Skill
+        run: >-
+          node packages/desktop/scripts/prepare-ai-tools.mjs
+          --target ${{ matrix.target }}
+          --release
+          --binary ${{ matrix.cli_binary }}
+          --verify
+
+      - name: Verify macOS CLI signature
+        if: startsWith(matrix.platform, 'macos-')
+        run: codesign --verify --verbose=2 packages/desktop/src-tauri/resources/ai-tools/cli/branchloom-cli
+
       - name: Build and upload installers
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCHLOOM_AI_TOOLS_PREPARED: "1"
+          BRANCHLOOM_TARGET_TRIPLE: ${{ matrix.target }}
         with:
           projectPath: packages/desktop
           tauriScript: pnpm tauri

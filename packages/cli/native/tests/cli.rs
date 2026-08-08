@@ -1,3 +1,4 @@
+use std::fs;
 use std::process::Command;
 
 use branchloom_core::application::{ApplicationService, BusinessResource as Resource};
@@ -8,7 +9,7 @@ use serde_json::Value;
 use tempfile::tempdir;
 
 fn run(arguments: &[&str]) -> (i32, Value, String) {
-    let output = Command::new(env!("CARGO_BIN_EXE_branchloom"))
+    let output = Command::new(env!("CARGO_BIN_EXE_branchloom-cli"))
         .args(arguments)
         .output()
         .expect("run Branchloom CLI");
@@ -20,7 +21,7 @@ fn run(arguments: &[&str]) -> (i32, Value, String) {
 }
 
 fn run_with_home(arguments: &[&str], home: &std::path::Path) -> (i32, Value, String) {
-    let output = Command::new(env!("CARGO_BIN_EXE_branchloom"))
+    let output = Command::new(env!("CARGO_BIN_EXE_branchloom-cli"))
         .args(arguments)
         .env("HOME", home)
         .env_remove("BRANCHLOOM_DATA_DIR")
@@ -1243,6 +1244,158 @@ fn blp_export_and_import_use_the_same_project_format() {
     assert_eq!(status, 0);
     assert!(stderr.is_empty());
     assert_eq!(overwritten["data"]["target"]["id"], project_id);
+}
+
+#[test]
+fn gedcom_round_trip_uses_the_project_preview_protocol() {
+    let directory = tempdir().expect("create GEDCOM test directory");
+    let source_data = directory.path().join("source-data");
+    let target_data = directory.path().join("target-data");
+    let source = directory.path().join("family.ged");
+    fs::write(
+        &source,
+        "0 HEAD\n1 SOUR Test\n2 NAME GEDCOM family\n1 GEDC\n2 VERS 5.5.1\n2 FORM LINEAGE-LINKED\n1 CHAR UTF-8\n0 @I1@ INDI\n1 NAME Mei /Lin/\n1 SEX F\n1 BIRT\n2 DATE 2 MAR 1980\n0 @I2@ INDI\n1 NAME An /Lin/\n0 @F1@ FAM\n1 WIFE @I1@\n1 CHIL @I2@\n0 TRLR\n",
+    )
+    .expect("write GEDCOM fixture");
+
+    let source_path = source.to_str().expect("GEDCOM source path");
+    let source_data_path = source_data.to_str().expect("source data path");
+    let (_, preview, stderr) = run(&[
+        "project",
+        "import",
+        "--data-dir",
+        source_data_path,
+        "--source",
+        source_path,
+        "--output",
+        "json",
+    ]);
+    assert!(stderr.is_empty());
+    assert_eq!(preview["data"]["format"], "gedcom");
+    assert_eq!(preview["data"]["summary"]["people"], 2);
+    let etag = preview["data"]["etag"].as_str().expect("import etag");
+    let (status, imported, stderr) = run(&[
+        "project",
+        "import",
+        "--data-dir",
+        source_data_path,
+        "--source",
+        source_path,
+        "--apply",
+        "--if-match",
+        etag,
+        "--output",
+        "json",
+    ]);
+    assert_eq!(status, 0);
+    assert!(stderr.is_empty());
+    let project_id = imported["data"]["target"]["id"]
+        .as_str()
+        .expect("imported project id");
+
+    let exported = directory.path().join("round-trip.ged");
+    let exported_path = exported.to_str().expect("GEDCOM export path");
+    let (_, preview, _) = run(&[
+        "project",
+        "export",
+        "--data-dir",
+        source_data_path,
+        "--id",
+        project_id,
+        "--destination",
+        exported_path,
+        "--output",
+        "json",
+    ]);
+    let etag = preview["data"]["etag"].as_str().expect("export etag");
+    let (status, result, stderr) = run(&[
+        "project",
+        "export",
+        "--data-dir",
+        source_data_path,
+        "--id",
+        project_id,
+        "--destination",
+        exported_path,
+        "--apply",
+        "--if-match",
+        etag,
+        "--output",
+        "json",
+    ]);
+    assert_eq!(status, 0);
+    assert!(stderr.is_empty());
+    assert_eq!(result["data"]["format"], "gedcom");
+    assert!(fs::read_to_string(&exported)
+        .expect("read exported GEDCOM")
+        .contains("1 _BRANCHLOOM_PROJECT_ID"));
+
+    fs::write(&exported, "stale GEDCOM export").expect("replace export with stale content");
+    let (_, overwrite_preview, _) = run(&[
+        "project",
+        "export",
+        "--data-dir",
+        source_data_path,
+        "--id",
+        project_id,
+        "--destination",
+        exported_path,
+        "--output",
+        "json",
+    ]);
+    let overwrite_etag = overwrite_preview["data"]["etag"]
+        .as_str()
+        .expect("overwrite export etag");
+    let (status, _, stderr) = run(&[
+        "project",
+        "export",
+        "--data-dir",
+        source_data_path,
+        "--id",
+        project_id,
+        "--destination",
+        exported_path,
+        "--apply",
+        "--if-match",
+        overwrite_etag,
+        "--output",
+        "json",
+    ]);
+    assert_eq!(status, 0);
+    assert!(stderr.is_empty());
+    assert!(fs::read_to_string(&exported)
+        .expect("read overwritten GEDCOM")
+        .starts_with("0 HEAD\r\n"));
+
+    let target_data_path = target_data.to_str().expect("target data path");
+    let (_, preview, _) = run(&[
+        "project",
+        "import",
+        "--data-dir",
+        target_data_path,
+        "--source",
+        exported_path,
+        "--output",
+        "json",
+    ]);
+    let etag = preview["data"]["etag"].as_str().expect("reimport etag");
+    let (status, reimported, stderr) = run(&[
+        "project",
+        "import",
+        "--data-dir",
+        target_data_path,
+        "--source",
+        exported_path,
+        "--apply",
+        "--if-match",
+        etag,
+        "--output",
+        "json",
+    ]);
+    assert_eq!(status, 0);
+    assert!(stderr.is_empty());
+    assert_eq!(reimported["data"]["target"]["id"], project_id);
+    assert_eq!(reimported["data"]["summary"]["people"], 2);
 }
 
 #[test]

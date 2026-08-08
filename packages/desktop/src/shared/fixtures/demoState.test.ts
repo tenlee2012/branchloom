@@ -181,10 +181,10 @@ describe('createDemoState', () => {
     expect(state.citations.every(({ notes }) => typeof notes === 'string')).toBe(true)
     expect(state.attachments.every(({ contentHash }) => contentHash.length > 0)).toBe(true)
     expect(state.attachments.map(({ contentHash }) => contentHash)).toEqual([
-      'sha256:demo-register-page-18',
-      'sha256:demo-oral-history-audio',
-      'sha256:demo-family-reunion-photo',
-      'sha256:demo-missing-letter',
+      '16899059cd934d04216bab163bb68e887e2bb9a5065e66d8be2fdeafb00694c1',
+      'da0c613c913a52e4be4479c3757ca00257d7a0beed6e93c08bfe67b661a02539',
+      '4e47845db280c0954dd594fa393cd5c14ee0a815288e061b0a31e1a4817a49df',
+      'c8989a82a0265e0ee015ccb0f3189086fe0af17d2d134ee4eb0d9553f7a653ee',
     ])
     expect(state.issues.some(({ targetType }) => targetType === 'attachment')).toBe(true)
     expect(

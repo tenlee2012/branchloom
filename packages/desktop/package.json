@@ -1,12 +1,14 @@
 {
   "name": "@branchloom/desktop",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
     "dev": "node scripts/run-web.mjs dev",
     "build": "vue-tsc -b && vite build",
+    "prepare:ai-tools": "node scripts/prepare-ai-tools.mjs --build",
+    "prepare:ai-tools:release": "node scripts/prepare-ai-tools.mjs --build --release",
     "preview": "node scripts/run-web.mjs preview",
     "typecheck": "vue-tsc -b",
     "test": "vitest",

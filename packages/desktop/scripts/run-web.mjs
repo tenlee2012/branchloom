@@ -12,7 +12,7 @@ if (mode !== 'dev' && mode !== 'preview') {
 
 const desktopDirectory = fileURLToPath(new URL('..', import.meta.url))
 const workspaceDirectory = path.resolve(desktopDirectory, '../..')
-const binaryName = process.platform === 'win32' ? 'branchloom.exe' : 'branchloom'
+const binaryName = process.platform === 'win32' ? 'branchloom-cli.exe' : 'branchloom-cli'
 const bridgeBinary = path.join(workspaceDirectory, 'target', 'debug', binaryName)
 const token = randomBytes(32).toString('hex')
 
@@ -73,6 +73,11 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
 
 try {
   await run('cargo', ['build', '-p', 'branchloom-cli'], { cwd: workspaceDirectory })
+  await run(process.execPath, [
+    path.join(desktopDirectory, 'scripts', 'prepare-ai-tools.mjs'),
+    '--binary',
+    bridgeBinary,
+  ], { cwd: workspaceDirectory })
   const port = await reservePort()
   const runtimeEnvironment = {
     ...process.env,

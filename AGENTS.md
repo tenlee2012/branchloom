@@ -8,7 +8,7 @@ Branchloom（有谱）是本地优先的家谱与家庭资料管理应用。仓�
 
 - `packages/core`：共享 Rust 业务核心、SQLite 存储、项目格式、附件和 GitHub 同步。
 - `packages/desktop`：Vue 3 前端和 Tauri 2 桌面外壳。
-- `packages/cli`：原生 Rust CLI、npm 平台启动器和协议测试。
+- `packages/cli`：原生 Rust CLI、协议测试和开发文档。
 - `skills/branchloom`：供 Agent 使用的 Branchloom Skill 与 CLI 机器协议说明。
 
 面向用户的界面和产品文案以简体中文为主；代码标识符、协议字段和提交信息可沿用现有英文风格。
@@ -42,7 +42,8 @@ Branchloom（有谱）是本地优先的家谱与家庭资料管理应用。仓�
 - 所有持久化业务规则必须进入 `branchloom-core::ApplicationService` 或其下层模块。
 - SQLite Schema 和迁移只维护在 `packages/core/migrations`；桌面端和 CLI 不得各自实现数据库逻辑。
 - Vue 页面与 composable 只依赖 `BranchloomRepository`，不得直接访问 SQLite、附件目录或 Tauri internals。
-- `TauriRepository`、Tauri commands、Web bridge 和 npm 启动器保持为薄适配层，不复制验证、事务或合并规则。
+- `TauriRepository`、Tauri commands 和 Web bridge 保持为薄适配层，不复制验证、事务或合并规则。
+- CLI 与 Skill 由桌面安装包携带，并通过桌面端“AI 工具”页面安装；不得恢复 npm/npx 用户安装链路。
 - Web 开发模式只能通过本机受令牌保护的数据桥访问共享核心；不得退回 `localStorage` 作为正式数据源。
 - CLI 与桌面端必须使用相同的数据目录解析、实体校验、附件语义和项目导入导出实现。
 - 新增核心能力时，同时评估桌面适配、CLI 合约、Skill 文档和测试是否需要更新。
@@ -103,7 +104,7 @@ Branchloom（有谱）是本地优先的家谱与家庭资料管理应用。仓�
 - Rust 静态检查：`cargo check --workspace`
 - Rust 格式：`cargo fmt --all -- --check`
 - Rust lint：`cargo clippy --workspace --all-targets -- -D warnings`
-- 发布相关改动：核对 tag、根版本、CLI package 与 `tauri.conf.json` 的版本关系
+- 发布相关改动：核对 tag、根版本、Rust CLI Cargo 版本、AI tools manifest 与 `tauri.conf.json` 的版本关系
 
 测试要求：
 

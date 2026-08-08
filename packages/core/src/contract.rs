@@ -19,6 +19,7 @@ pub const CAPABILITIES: &[&str] = &[
     "person.embedded-names-without-name-id",
     "attachment.person-avatar-local-file",
     "batch.person-relationship-atomic",
+    "project.gedcom-exchange",
     "preview.field-patch",
     "write.etag",
     "write.change-set",

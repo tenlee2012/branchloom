@@ -1,12 +1,12 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "有谱",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "identifier": "app.branchloom.desktop",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://127.0.0.1:5173",
-    "beforeBuildCommand": "pnpm build",
+    "beforeBuildCommand": "pnpm prepare:ai-tools:release && pnpm build",
     "frontendDist": "../dist"
   },
   "app": {
@@ -30,6 +30,9 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "resources": {
+      "resources/ai-tools/": "ai-tools/"
+    },
     "license": "Apache-2.0",
     "licenseFile": "../../../LICENSE",
     "macOS": {

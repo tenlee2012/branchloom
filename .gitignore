@@ -2,9 +2,6 @@ node_modules/
 .pnpm-store/
 dist/
 /target/
-packages/cli/dist/
-packages/cli/bin/native/
-packages/cli/lib/
 *.log
 *.tgz
 .DS_Store
@@ -12,6 +9,8 @@ packages/cli/lib/
 .vscode/
 packages/desktop/src-tauri/target/
 packages/desktop/src-tauri/gen/
+packages/desktop/src-tauri/resources/ai-tools/*
+!packages/desktop/src-tauri/resources/ai-tools/.gitkeep
 test-results/
 playwright-report/
 coverage/

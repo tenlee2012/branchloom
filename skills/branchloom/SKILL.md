@@ -18,11 +18,14 @@ the shared Rust application core.
    branchloom doctor --output json
    ```
 
-2. If the command is missing, tell the user how to install `@branchloom/cli`. Do not install or upgrade it automatically.
+2. If the command is missing, stop and ask the user to open Branchloom desktop's **AI 工具** page
+   and install the matching CLI and Skill. Do not install, copy, or upgrade either tool yourself,
+   and do not recommend npm, npx, or a package-internal binary.
 3. Require `compatible: true`, contract version `3`, and the capabilities needed for the task.
    Schema-driven writes require the matching capability: `event.write-schema`,
    `relationship.write-schema`, `source.write-schema`, or `citation.write-schema`. Atomic person
-   and relationship batches require `batch.person-relationship-atomic`.
+   and relationship batches require `batch.person-relationship-atomic`. GEDCOM exchange requires
+   `project.gedcom-exchange`.
 4. Preserve the default data directory unless the user explicitly supplied a profile or data directory.
 5. Use `--output json` for every call. Parse the JSON envelope; never infer status from prose.
 
@@ -218,8 +221,10 @@ All deletion is immediate hard deletion. There is no trash, restore, soft delete
 - Call `describe` before a write when the current task needs fields not covered by this Skill. Only
   write when `schemaStatus` is `published`; otherwise report that the installed CLI has not yet
   published a safe write schema for that resource.
-- Use `project export/import` for `.blp` packages. The extracted `.blp` tree is the same format
-  stored in GitHub.
+- Use `project export/import` for `.blp` packages and `.ged` / `.gedcom` exchange files. The
+  extracted `.blp` tree is the same format stored in GitHub. GEDCOM operations use the same
+  preview/apply and destructive-confirmation rules; always report `summary.warnings` because
+  GEDCOM cannot preserve every Branchloom extension record.
 - Use `github pull` for pull-only updates and `github sync` for pull/merge/push. GitHub operations
   require the user to explicitly request external synchronization.
 - When GitHub preview reports conflicts, collect explicit `base`, `ours`, or `theirs` choices for
@@ -238,7 +243,8 @@ Branchloom intentionally permits unconventional genealogy data, including self-r
 - `REVISION_CONFLICT`, `ETAG_MISMATCH`, or `INVALID_ETAG`: rerun the preview and ask for confirmation of the new plan.
 - `DUPLICATE_RELATIONSHIP`: use the existing relationship ID and `relationship update` if the user wants a type change.
 - `RESOURCE_IN_USE`: show the blocking references; do not silently delete or clear them.
-- `CONTRACT_VERSION_MISMATCH`: stop. Ask the user to install matching CLI and Skill versions.
+- `CONTRACT_VERSION_MISMATCH`: stop. Ask the user to open Branchloom desktop's **AI 工具** page
+  and update CLI and Skill together.
 - Data directory, permission, storage, or lock errors: run `branchloom doctor --output json` once and report its focused findings.
 - Unknown fields or actions: call the resource’s `describe --output json`, correct the structured request, and preview again.
 
