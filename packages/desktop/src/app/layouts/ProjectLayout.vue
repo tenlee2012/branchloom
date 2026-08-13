@@ -17,10 +17,10 @@ const loadState = ref<'loading' | 'ready' | 'error'>('loading')
 const loadError = ref('')
 const navigationProjectId = ref('')
 const isTreeWorkspace = computed(() => route.name === 'project-tree')
+const workspaceMode = computed(() => route.meta.workspaceMode ?? 'standard')
+const isCanvasWorkspace = computed(() => workspaceMode.value === 'canvas')
 const allowsMissingProject = computed(() => route.meta.allowMissingProject === true)
-const isManagementWorkspace = computed(() => (
-  route.path.includes('/manage/') || route.meta.utilityWorkspace === true
-))
+const isManagementWorkspace = computed(() => workspaceMode.value === 'management')
 const routeView = ref<{
   fitCanvas?(): void
   addPerson?(): void
@@ -126,7 +126,7 @@ onBeforeUnmount(() => {
         :class="[
           'project-layout__main',
           {
-            'project-layout__main--tree': isTreeWorkspace,
+            'project-layout__main--canvas': isCanvasWorkspace,
             'project-layout__main--management': isManagementWorkspace,
           },
         ]"
@@ -217,10 +217,6 @@ onBeforeUnmount(() => {
   grid-template-rows: auto 1fr;
 }
 
-.project-layout__workspace--content-only {
-  grid-template-rows: 1fr;
-}
-
 .project-layout__main {
   min-width: 0;
   min-height: 0;
@@ -233,7 +229,7 @@ onBeforeUnmount(() => {
   background-size: 2rem 2rem;
 }
 
-.project-layout__main--tree {
+.project-layout__main--canvas {
   overflow: hidden;
   padding: 0;
   background: var(--color-surface);

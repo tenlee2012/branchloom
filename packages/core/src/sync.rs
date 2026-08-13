@@ -14,6 +14,7 @@ use uuid::Uuid;
 
 use crate::application::ApplicationService;
 use crate::core::error::{CoreError, CoreResult};
+use crate::core::project::ProjectRecord;
 use crate::project_format::ProjectTree;
 
 const DEFAULT_GITHUB_API: &str = "https://api.github.com";
@@ -61,6 +62,13 @@ impl GithubConnection {
 pub enum SyncMode {
     PullOnly,
     PullThenPush,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SyncInitializationStrategy {
+    Remote,
+    Local,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -130,6 +138,155 @@ pub struct SyncPlan {
     merged: Option<ProjectTree>,
 }
 
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteProjectImportSummary {
+    pub project_id: String,
+    pub project_name: String,
+    pub project_description: String,
+    pub commit: Option<String>,
+    pub record_counts: BTreeMap<String, usize>,
+    pub replaces_project_id: Option<String>,
+    pub already_exists: bool,
+    pub fingerprint: String,
+}
+
+pub struct RemoteProjectImportPlan {
+    summary: RemoteProjectImportSummary,
+    data_revision: i64,
+    tree: ProjectTree,
+}
+
+impl RemoteProjectImportPlan {
+    pub fn summary(&self) -> &RemoteProjectImportSummary {
+        &self.summary
+    }
+
+    pub fn tree(&self) -> &ProjectTree {
+        &self.tree
+    }
+}
+
+pub struct RemoteProjectImportService<'a, R: ProjectRemote> {
+    application: &'a mut ApplicationService,
+    remote: &'a R,
+}
+
+impl<'a, R: ProjectRemote> RemoteProjectImportService<'a, R> {
+    pub fn new(application: &'a mut ApplicationService, remote: &'a R) -> Self {
+        Self {
+            application,
+            remote,
+        }
+    }
+
+    pub fn plan(
+        &self,
+        placeholder_project_id: Option<&str>,
+    ) -> CoreResult<RemoteProjectImportPlan> {
+        let data_revision = self.application.data_revision()?;
+        let remote = self.remote.pull()?;
+        let tree = remote.tree.ok_or_else(|| {
+            CoreError::Validation(
+                "GitHub repository does not contain a Branchloom project".to_owned(),
+            )
+        })?;
+        let data = tree.parse_project_data()?;
+        let project_id = data.project_id()?.to_owned();
+        let project_name = data
+            .project
+            .get("name")
+            .and_then(Value::as_str)
+            .filter(|name| !name.trim().is_empty())
+            .ok_or_else(|| CoreError::Validation("remote project name is required".to_owned()))?
+            .to_owned();
+        let project_description = data
+            .project
+            .get("description")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_owned();
+
+        if let Some(placeholder_project_id) = placeholder_project_id {
+            self.application.get_project(placeholder_project_id)?;
+            if placeholder_project_id == project_id {
+                return Err(CoreError::Validation(
+                    "GitHub project is already the current local project; use synchronization"
+                        .to_owned(),
+                ));
+            }
+            if !self
+                .application
+                .project_is_empty_for_replacement(placeholder_project_id)?
+            {
+                return Err(CoreError::Conflict(
+                    "local project is not empty and cannot be replaced by a GitHub project"
+                        .to_owned(),
+                ));
+            }
+        }
+
+        let already_exists = self
+            .application
+            .list_projects()?
+            .iter()
+            .any(|project| project.id == project_id);
+        let record_counts = data
+            .collections
+            .iter()
+            .map(|(collection, records)| (collection.clone(), records.len()))
+            .collect::<BTreeMap<_, _>>();
+        let fingerprint = format!(
+            "github-import.v1.{}",
+            sha256_hex(
+                json!({
+                    "localRevision": data_revision,
+                    "remoteCommit": remote.commit.as_deref(),
+                    "remoteTree": tree_digest(&tree),
+                    "placeholderProjectId": placeholder_project_id,
+                    "projectId": project_id.as_str(),
+                })
+                .to_string()
+                .as_bytes(),
+            )
+        );
+        Ok(RemoteProjectImportPlan {
+            summary: RemoteProjectImportSummary {
+                project_id,
+                project_name,
+                project_description,
+                commit: remote.commit,
+                record_counts,
+                replaces_project_id: placeholder_project_id.map(str::to_owned),
+                already_exists,
+                fingerprint,
+            },
+            data_revision,
+            tree,
+        })
+    }
+
+    pub fn apply(&mut self, plan: RemoteProjectImportPlan) -> CoreResult<ProjectRecord> {
+        if plan.summary.already_exists {
+            return Err(CoreError::Conflict(format!(
+                "project already exists: {}",
+                plan.summary.project_id
+            )));
+        }
+        if let Some(placeholder_project_id) = plan.summary.replaces_project_id.as_deref() {
+            self.application
+                .replace_empty_project_with_tree_if_revision(
+                    placeholder_project_id,
+                    &plan.tree,
+                    plan.data_revision,
+                )
+        } else {
+            self.application
+                .import_project_tree_if_revision(&plan.tree, false, plan.data_revision)
+        }
+    }
+}
+
 impl SyncPlan {
     pub fn summary(&self) -> &SyncPlanSummary {
         &self.summary
@@ -179,29 +336,78 @@ impl<'a, R: ProjectRemote> SyncService<'a, R> {
         mode: SyncMode,
         resolutions: &[ConflictResolution],
     ) -> CoreResult<SyncPlan> {
+        self.plan_with_resolutions_and_initialization(project_id, mode, resolutions, None)
+    }
+
+    pub fn plan_with_resolutions_and_initialization(
+        &self,
+        project_id: &str,
+        mode: SyncMode,
+        resolutions: &[ConflictResolution],
+        initialization_strategy: Option<SyncInitializationStrategy>,
+    ) -> CoreResult<SyncPlan> {
         let data_revision = self.application.data_revision()?;
         let local_tree = self.application.export_project_tree(project_id)?;
         let remote = self.remote.pull()?;
+        if let Some(remote_tree) = remote.tree.as_ref() {
+            let remote_data = remote_tree.parse_project_data()?;
+            let remote_project_id = remote_data.project_id()?;
+            if remote_project_id != project_id {
+                return Err(CoreError::Conflict(format!(
+                    "remote project id {remote_project_id} does not match local project id {project_id}; import the remote project as a separate local project before synchronization"
+                )));
+            }
+        }
         let base = self.load_base()?;
-
-        if self.connection.last_synced_commit != remote.commit
+        let initialization_required = self.connection.last_synced_commit != remote.commit
             && base.is_none()
             && remote
                 .tree
                 .as_ref()
-                .is_some_and(|remote_tree| remote_tree != &local_tree)
-        {
+                .is_some_and(|remote_tree| remote_tree != &local_tree);
+
+        if initialization_required && initialization_strategy.is_none() {
             return Err(CoreError::Conflict(
                 "remote project has history but no local synchronization baseline".to_owned(),
             ));
         }
 
-        let merge = merge_project_trees_with_resolutions(
-            base.as_ref(),
-            Some(&local_tree),
-            remote.tree.as_ref(),
-            resolutions,
-        )?;
+        if initialization_strategy.is_some() && !initialization_required {
+            return Err(CoreError::Validation(
+                "synchronization initialization is not required; preview again without an initialization strategy"
+                    .to_owned(),
+            ));
+        }
+        if initialization_strategy.is_some() && !resolutions.is_empty() {
+            return Err(CoreError::Validation(
+                "synchronization initialization cannot include conflict resolutions".to_owned(),
+            ));
+        }
+        if initialization_strategy == Some(SyncInitializationStrategy::Local)
+            && mode == SyncMode::PullOnly
+        {
+            return Err(CoreError::Validation(
+                "using the local project for synchronization initialization requires full synchronization"
+                    .to_owned(),
+            ));
+        }
+
+        let merge = match initialization_strategy {
+            Some(SyncInitializationStrategy::Remote) => MergeResult {
+                tree: remote.tree.clone(),
+                conflicts: Vec::new(),
+            },
+            Some(SyncInitializationStrategy::Local) => MergeResult {
+                tree: Some(local_tree.clone()),
+                conflicts: Vec::new(),
+            },
+            None => merge_project_trees_with_resolutions(
+                base.as_ref(),
+                Some(&local_tree),
+                remote.tree.as_ref(),
+                resolutions,
+            )?,
+        };
         let changed_local = merge
             .tree
             .as_ref()
@@ -214,6 +420,7 @@ impl<'a, R: ProjectRemote> SyncService<'a, R> {
             merge.tree.as_ref(),
             &merge.conflicts,
             mode,
+            initialization_strategy,
         );
         Ok(SyncPlan {
             summary: SyncPlanSummary {
@@ -370,18 +577,20 @@ fn sync_fingerprint(
     merged: Option<&ProjectTree>,
     conflicts: &[SyncConflict],
     mode: SyncMode,
+    initialization_strategy: Option<SyncInitializationStrategy>,
 ) -> String {
     let value = json!({
         "local": tree_digest(local),
         "remoteCommit": remote_commit,
         "merged": merged.map(tree_digest),
         "conflicts": conflicts,
+        "initializationStrategy": initialization_strategy,
         "mode": match mode {
             SyncMode::PullOnly => "pull",
             SyncMode::PullThenPush => "sync",
         }
     });
-    format!("sync.v1.{}", sha256_hex(value.to_string().as_bytes()))
+    format!("sync.v2.{}", sha256_hex(value.to_string().as_bytes()))
 }
 
 fn tree_digest(tree: &ProjectTree) -> String {
@@ -1428,6 +1637,414 @@ mod tests {
     }
 
     #[test]
+    fn requires_an_explicit_initialization_strategy_without_a_shared_baseline() {
+        let directory = tempdir().expect("create temporary directory");
+        let database = directory.path().join("branchloom.sqlite3");
+        let mut application =
+            ApplicationService::open(&database).expect("open application service");
+        application
+            .create_project_with_id(
+                "project-test".to_owned(),
+                crate::core::project::NewProject {
+                    name: "Local".to_owned(),
+                    description: String::new(),
+                },
+            )
+            .expect("create project");
+        let local = application
+            .export_project_tree("project-test")
+            .expect("export local project");
+        let remote = FakeRemote::new(RemoteProject {
+            commit: Some("commit-remote".to_owned()),
+            tree: Some(replace_project_name(&local, "Remote")),
+        });
+        let connection = GithubConnection {
+            owner: "alice".to_owned(),
+            repository: "family".to_owned(),
+            branch: "main".to_owned(),
+            last_synced_commit: None,
+        };
+        let service = SyncService::new(
+            &mut application,
+            &remote,
+            directory.path().join("sync"),
+            connection,
+        )
+        .expect("create sync service");
+
+        let error = service
+            .plan("project-test", SyncMode::PullThenPush)
+            .err()
+            .expect("initialization choice must be required");
+
+        assert!(error
+            .to_string()
+            .contains("remote project has history but no local synchronization baseline"));
+        assert_eq!(remote.calls.borrow().as_slice(), ["pull"]);
+    }
+
+    #[test]
+    fn imports_a_remote_project_with_its_stable_id_without_pushing() {
+        let source_directory = tempdir().expect("create source directory");
+        let mut source =
+            ApplicationService::open(source_directory.path().join("branchloom.sqlite3"))
+                .expect("open source application");
+        source
+            .create_project_with_id(
+                "project-remote".to_owned(),
+                crate::core::project::NewProject {
+                    name: "Remote family".to_owned(),
+                    description: "Shared archive".to_owned(),
+                },
+            )
+            .expect("create remote project");
+        let remote_tree = source
+            .export_project_tree("project-remote")
+            .expect("export remote project");
+        let remote = FakeRemote::new(RemoteProject {
+            commit: Some("commit-remote".to_owned()),
+            tree: Some(remote_tree),
+        });
+
+        let target_directory = tempdir().expect("create target directory");
+        let mut application =
+            ApplicationService::open(target_directory.path().join("branchloom.sqlite3"))
+                .expect("open target application");
+        let mut service = RemoteProjectImportService::new(&mut application, &remote);
+        let plan = service.plan(None).expect("plan remote import");
+        assert_eq!(plan.summary().project_id, "project-remote");
+        assert_eq!(plan.summary().project_name, "Remote family");
+        assert!(!plan.summary().already_exists);
+
+        let imported = service.apply(plan).expect("apply remote import");
+
+        assert_eq!(imported.id, "project-remote");
+        assert!(remote.pushed.borrow().is_none());
+        assert_eq!(remote.calls.borrow().as_slice(), ["pull"]);
+    }
+
+    #[test]
+    fn replaces_an_empty_placeholder_with_the_remote_stable_project() {
+        let source_directory = tempdir().expect("create source directory");
+        let mut source =
+            ApplicationService::open(source_directory.path().join("branchloom.sqlite3"))
+                .expect("open source application");
+        source
+            .create_project_with_id(
+                "project-remote".to_owned(),
+                crate::core::project::NewProject {
+                    name: "Remote family".to_owned(),
+                    description: String::new(),
+                },
+            )
+            .expect("create remote project");
+        let remote = FakeRemote::new(RemoteProject {
+            commit: Some("commit-remote".to_owned()),
+            tree: Some(
+                source
+                    .export_project_tree("project-remote")
+                    .expect("export remote project"),
+            ),
+        });
+
+        let target_directory = tempdir().expect("create target directory");
+        let mut application =
+            ApplicationService::open(target_directory.path().join("branchloom.sqlite3"))
+                .expect("open target application");
+        application
+            .create_project_with_id(
+                "project-placeholder".to_owned(),
+                crate::core::project::NewProject {
+                    name: "Temporary".to_owned(),
+                    description: String::new(),
+                },
+            )
+            .expect("create placeholder");
+        let mut service = RemoteProjectImportService::new(&mut application, &remote);
+        let plan = service
+            .plan(Some("project-placeholder"))
+            .expect("plan placeholder replacement");
+        assert_eq!(
+            plan.summary().replaces_project_id.as_deref(),
+            Some("project-placeholder")
+        );
+
+        let imported = service.apply(plan).expect("replace placeholder");
+
+        assert_eq!(imported.id, "project-remote");
+        assert!(matches!(
+            application.get_project("project-placeholder"),
+            Err(CoreError::NotFound { .. })
+        ));
+        assert!(remote.pushed.borrow().is_none());
+    }
+
+    #[test]
+    fn refuses_to_replace_a_placeholder_that_contains_business_records() {
+        let source_directory = tempdir().expect("create source directory");
+        let mut source =
+            ApplicationService::open(source_directory.path().join("branchloom.sqlite3"))
+                .expect("open source application");
+        source
+            .create_project_with_id(
+                "project-remote".to_owned(),
+                crate::core::project::NewProject {
+                    name: "Remote family".to_owned(),
+                    description: String::new(),
+                },
+            )
+            .expect("create remote project");
+        let remote = FakeRemote::new(RemoteProject {
+            commit: Some("commit-remote".to_owned()),
+            tree: Some(
+                source
+                    .export_project_tree("project-remote")
+                    .expect("export remote project"),
+            ),
+        });
+
+        let target_directory = tempdir().expect("create target directory");
+        let mut application =
+            ApplicationService::open(target_directory.path().join("branchloom.sqlite3"))
+                .expect("open target application");
+        application
+            .create_project_with_id(
+                "project-placeholder".to_owned(),
+                crate::core::project::NewProject {
+                    name: "Local family".to_owned(),
+                    description: String::new(),
+                },
+            )
+            .expect("create local project");
+        application
+            .put_record(
+                crate::storage::Resource::Person,
+                "person-local",
+                "project-placeholder",
+                &json!({
+                    "id": "person-local",
+                    "projectId": "project-placeholder",
+                    "names": [],
+                    "updatedAt": "2026-01-01T00:00:00Z"
+                }),
+            )
+            .expect("create local person");
+        let service = RemoteProjectImportService::new(&mut application, &remote);
+
+        let error = service
+            .plan(Some("project-placeholder"))
+            .err()
+            .expect("non-empty replacement must fail");
+
+        assert!(error
+            .to_string()
+            .contains("local project is not empty and cannot be replaced"));
+        assert!(application
+            .get_record(crate::storage::Resource::Person, "person-local")
+            .expect("read local person")
+            .is_some());
+        assert!(remote.pushed.borrow().is_none());
+    }
+
+    #[test]
+    fn rejects_a_remote_project_with_a_different_stable_id() {
+        let directory = tempdir().expect("create temporary directory");
+        let database = directory.path().join("branchloom.sqlite3");
+        let mut application =
+            ApplicationService::open(&database).expect("open application service");
+        application
+            .create_project_with_id(
+                "project-local".to_owned(),
+                crate::core::project::NewProject {
+                    name: "Same name".to_owned(),
+                    description: String::new(),
+                },
+            )
+            .expect("create project");
+        let local = application
+            .export_project_tree("project-local")
+            .expect("export local project");
+        let remote = FakeRemote::new(RemoteProject {
+            commit: Some("commit-remote".to_owned()),
+            tree: Some(replace_project_id(&local, "project-remote")),
+        });
+        let connection = GithubConnection {
+            owner: "alice".to_owned(),
+            repository: "family".to_owned(),
+            branch: "main".to_owned(),
+            last_synced_commit: None,
+        };
+        let service = SyncService::new(
+            &mut application,
+            &remote,
+            directory.path().join("sync"),
+            connection,
+        )
+        .expect("create sync service");
+
+        let error = service
+            .plan_with_resolutions_and_initialization(
+                "project-local",
+                SyncMode::PullThenPush,
+                &[],
+                Some(SyncInitializationStrategy::Remote),
+            )
+            .err()
+            .expect("different project ids must be rejected");
+
+        assert!(error.to_string().contains(
+            "remote project id project-remote does not match local project id project-local"
+        ));
+        assert!(!directory.path().join("sync/base.blp").exists());
+        assert!(remote.pushed.borrow().is_none());
+    }
+
+    #[test]
+    fn initializes_from_the_remote_project_only_after_preview_and_apply() {
+        let directory = tempdir().expect("create temporary directory");
+        let database = directory.path().join("branchloom.sqlite3");
+        let mut application =
+            ApplicationService::open(&database).expect("open application service");
+        application
+            .create_project_with_id(
+                "project-test".to_owned(),
+                crate::core::project::NewProject {
+                    name: "Local".to_owned(),
+                    description: String::new(),
+                },
+            )
+            .expect("create project");
+        let local = application
+            .export_project_tree("project-test")
+            .expect("export local project");
+        let remote_tree = replace_project_name(&local, "Remote");
+        let remote = FakeRemote::new(RemoteProject {
+            commit: Some("commit-remote".to_owned()),
+            tree: Some(remote_tree.clone()),
+        });
+        let state_directory = directory.path().join("sync");
+        let connection = GithubConnection {
+            owner: "alice".to_owned(),
+            repository: "family".to_owned(),
+            branch: "main".to_owned(),
+            last_synced_commit: None,
+        };
+        let mut service = SyncService::new(&mut application, &remote, &state_directory, connection)
+            .expect("create sync service");
+
+        let plan = service
+            .plan_with_resolutions_and_initialization(
+                "project-test",
+                SyncMode::PullThenPush,
+                &[],
+                Some(SyncInitializationStrategy::Remote),
+            )
+            .expect("preview remote initialization");
+        assert!(plan.summary().changed_local);
+        assert!(!plan.summary().will_push);
+        assert!(plan.summary().conflicts.is_empty());
+        assert!(plan.summary().fingerprint.starts_with("sync.v2."));
+
+        let outcome = service
+            .apply(plan, SyncMode::PullThenPush)
+            .expect("apply remote initialization");
+        assert_eq!(outcome.status, "upToDate");
+        assert!(outcome.changed_local);
+        assert!(outcome.baseline_updated);
+        drop(service);
+
+        assert_eq!(
+            application
+                .get_project("project-test")
+                .expect("read initialized project")
+                .name,
+            "Remote"
+        );
+        assert_eq!(remote.calls.borrow().as_slice(), ["pull"]);
+        assert!(remote.pushed.borrow().is_none());
+        assert_eq!(
+            load_connection(&state_directory)
+                .expect("load initialized connection")
+                .last_synced_commit
+                .as_deref(),
+            Some("commit-remote")
+        );
+        assert_eq!(
+            ProjectTree::read_archive(&state_directory.join(SYNC_BASE_FILE))
+                .expect("read synchronization baseline"),
+            remote_tree
+        );
+    }
+
+    #[test]
+    fn initializes_from_the_local_project_only_after_preview_and_apply() {
+        let directory = tempdir().expect("create temporary directory");
+        let database = directory.path().join("branchloom.sqlite3");
+        let mut application =
+            ApplicationService::open(&database).expect("open application service");
+        application
+            .create_project_with_id(
+                "project-test".to_owned(),
+                crate::core::project::NewProject {
+                    name: "Local".to_owned(),
+                    description: String::new(),
+                },
+            )
+            .expect("create project");
+        let local = application
+            .export_project_tree("project-test")
+            .expect("export local project");
+        let remote = FakeRemote::new(RemoteProject {
+            commit: Some("commit-remote".to_owned()),
+            tree: Some(replace_project_name(&local, "Remote")),
+        });
+        let state_directory = directory.path().join("sync");
+        let connection = GithubConnection {
+            owner: "alice".to_owned(),
+            repository: "family".to_owned(),
+            branch: "main".to_owned(),
+            last_synced_commit: None,
+        };
+        let mut service = SyncService::new(&mut application, &remote, &state_directory, connection)
+            .expect("create sync service");
+
+        let plan = service
+            .plan_with_resolutions_and_initialization(
+                "project-test",
+                SyncMode::PullThenPush,
+                &[],
+                Some(SyncInitializationStrategy::Local),
+            )
+            .expect("preview local initialization");
+        assert!(!plan.summary().changed_local);
+        assert!(plan.summary().will_push);
+        assert!(plan.summary().conflicts.is_empty());
+
+        let outcome = service
+            .apply(plan, SyncMode::PullThenPush)
+            .expect("apply local initialization");
+        assert_eq!(outcome.status, "synchronized");
+        assert!(!outcome.changed_local);
+        assert!(outcome.baseline_updated);
+        drop(service);
+
+        assert_eq!(remote.calls.borrow().as_slice(), ["pull", "push"]);
+        assert_eq!(remote.pushed.borrow().as_ref(), Some(&local));
+        assert_eq!(
+            load_connection(&state_directory)
+                .expect("load initialized connection")
+                .last_synced_commit
+                .as_deref(),
+            Some("commit-new")
+        );
+        assert_eq!(
+            ProjectTree::read_archive(&state_directory.join(SYNC_BASE_FILE))
+                .expect("read synchronization baseline"),
+            local
+        );
+    }
+
+    #[test]
     fn synchronization_always_pulls_before_it_pushes() {
         let directory = tempdir().expect("create temporary directory");
         let database = directory.path().join("branchloom.sqlite3");
@@ -1661,6 +2278,19 @@ mod tests {
             serde_json::from_slice(files.get("project.jsonld").expect("project document"))
                 .expect("parse project document");
         project["name"] = json!(name);
+        files.insert(
+            "project.jsonld".to_owned(),
+            serde_json::to_vec_pretty(&project).expect("serialize project document"),
+        );
+        ProjectTree::rebuild_manifest(files).expect("rebuild project manifest")
+    }
+
+    fn replace_project_id(tree: &ProjectTree, project_id: &str) -> ProjectTree {
+        let mut files = tree.clone().into_files();
+        let mut project: Value =
+            serde_json::from_slice(files.get("project.jsonld").expect("project document"))
+                .expect("parse project document");
+        project["id"] = json!(project_id);
         files.insert(
             "project.jsonld".to_owned(),
             serde_json::to_vec_pretty(&project).expect("serialize project document"),

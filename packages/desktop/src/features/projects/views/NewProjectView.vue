@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { IconBrandGithub } from '@tabler/icons-vue'
 import { computed, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useBranchloomRepository } from '../../../shared/repository/injection'
@@ -66,6 +67,14 @@ async function createProject(input: { name: string; description: string }) {
         </div>
       </div>
       <NewProjectForm :saving="saving" :submit-error="submitError" @submit="createProject" />
+      <RouterLink
+        v-if="!isProjectTask"
+        class="new-project-view__github-import"
+        :to="{ name: 'github-import' }"
+      >
+        <IconBrandGithub :size="18" aria-hidden="true" />
+        已有 GitHub 项目？直接导入
+      </RouterLink>
       <RouterLink v-if="!isProjectTask" class="new-project-view__cancel" :to="{ name: 'home' }">
         返回最近项目
       </RouterLink>
@@ -165,6 +174,21 @@ async function createProject(input: { name: string; description: string }) {
   justify-self: start;
   color: var(--color-muted);
   font-size: 0.875rem;
+}
+
+.new-project-view__github-import {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-muted-surface);
+  color: var(--color-primary);
+  font-weight: 700;
+  text-decoration: none;
 }
 
 .new-project-view--task {

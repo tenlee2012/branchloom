@@ -101,13 +101,16 @@ describe('project overview', () => {
 })
 
 describe('project settings', () => {
-  it('places GitHub synchronization under backup and history instead of project settings', async () => {
+  it('places GitHub synchronization in the standalone collaboration workspace', async () => {
     const settings = await mountManagement(`/project/${PROJECT_ID}/manage/settings`)
     expect(settings.wrapper.find('.github-sync').exists()).toBe(false)
 
     const history = await mountManagement(`/project/${PROJECT_ID}/manage/history`)
-    expect(history.wrapper.get('.github-sync').text()).toContain('同步项目仓库')
-    expect(history.wrapper.text()).toContain('GitHub 同步只在 Tauri 桌面应用中可用')
+    expect(history.wrapper.find('.github-sync').exists()).toBe(false)
+
+    const collaboration = await mountManagement(`/project/${PROJECT_ID}/collaboration-sync`)
+    expect(collaboration.wrapper.get('.github-sync h1').text()).toBe('协作同步')
+    expect(collaboration.wrapper.text()).toContain('GitHub 同步仅在桌面端可用')
   })
 
   it('renames without changing the stable id or the center person', async () => {

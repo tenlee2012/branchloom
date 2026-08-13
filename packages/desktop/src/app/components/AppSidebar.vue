@@ -5,10 +5,12 @@ import { RouterLink, useRoute } from 'vue-router'
 import {
   IconChevronDown,
   IconClock,
+  IconBrandGithub,
   IconFolder,
   IconHistory,
   IconNetwork,
   IconPlus,
+  IconRefresh,
   IconRotateClockwise,
   IconRobot,
   IconSettings,
@@ -124,6 +126,13 @@ const projectNavigation = computed(() => {
       badge: undefined,
     },
     {
+      label: '协作同步',
+      icon: IconRefresh,
+      to: `${base}/collaboration-sync`,
+      segment: '/collaboration-sync',
+      badge: undefined,
+    },
+    {
       label: '数据检查',
       icon: IconShieldCheck,
       to: `${base}/manage/checks`,
@@ -188,6 +197,14 @@ function isExact(to: string) {
           >
             <IconPlus :size="17" aria-hidden="true" />新建项目
           </RouterLink>
+          <RouterLink
+            class="app-sidebar__new-project app-sidebar__github-import"
+            :to="{ name: 'github-import' }"
+            aria-label="从 GitHub 导入项目"
+            @click="closeProjectSwitcher"
+          >
+            <IconBrandGithub :size="17" aria-hidden="true" />从 GitHub 导入
+          </RouterLink>
           <div class="app-sidebar__history" aria-label="编辑历史">
             <BaseButton
               variant="ghost"
@@ -239,6 +256,7 @@ function isExact(to: string) {
         :key="item.label"
         :to="item.to"
         :aria-label="item.label"
+        :aria-current="isExact(item.to) ? 'page' : undefined"
         :class="['app-sidebar__link', { 'app-sidebar__link--active': isCurrent(item.segment) }]"
       >
         <component :is="item.icon" class="app-sidebar__glyph" :size="24" :stroke-width="1.6" aria-hidden="true" />
@@ -278,7 +296,7 @@ function isExact(to: string) {
   align-items: center;
   flex-direction: column;
   gap: .55rem;
-  padding: 2.8rem 1rem 2rem;
+  padding: 2.8rem 1rem .9rem;
   color: #fffdf6;
   text-align: center;
   text-decoration: none;
@@ -314,7 +332,7 @@ function isExact(to: string) {
 .app-sidebar__project {
   display: grid;
   gap: .55rem;
-  margin: 1rem 1.1rem 1rem;
+  margin: 0 1.1rem 1rem;
   padding: 1rem .35rem;
   border-bottom: 1px solid rgb(255 253 246 / 26%);
 }
@@ -425,6 +443,11 @@ function isExact(to: string) {
   font-size: .8rem;
   font-weight: 700;
   text-decoration: none;
+}
+
+.app-sidebar__github-import {
+  border-top: 0;
+  padding-top: .2rem;
 }
 
 .app-sidebar__history {

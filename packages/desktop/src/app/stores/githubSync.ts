@@ -3,6 +3,7 @@ import { acceptHMRUpdate, defineStore } from 'pinia'
 import {
   githubError,
   isGithubConnectionFailure,
+  isGithubInitializationRequired,
   githubSyncOutcomeError,
   tauriGithubSyncGateway,
   type GithubSyncConflict,
@@ -15,7 +16,7 @@ const DEFAULT_INTERVAL_MINUTES = 60
 
 export interface AutomaticSyncStatus {
   enabled: boolean
-  state: 'idle' | 'waiting' | 'syncing' | 'success' | 'conflict' | 'failed'
+  state: 'idle' | 'waiting' | 'syncing' | 'success' | 'conflict' | 'initializationRequired' | 'failed'
   lastAttemptAt?: string
   lastSuccessAt?: string
   message?: string
@@ -126,6 +127,22 @@ export const useGithubSyncStore = defineStore('github-sync', () => {
     }
   }
 
+  function clearAutomaticBlockers(projectId: string) {
+    const current = status(projectId)
+    if (
+      current.state !== 'conflict'
+      && current.state !== 'initializationRequired'
+      && current.conflicts.length === 0
+    ) return
+    setStatus(projectId, {
+      state: current.enabled ? 'waiting' : 'idle',
+      message: current.enabled
+        ? current.message
+        : '手工同步已处理待办；自动同步仍保持关闭。',
+      conflicts: [],
+    })
+  }
+
   async function runAutomatic(projectId: string): Promise<void> {
     const schedule = scheduled.get(projectId)
     if (!schedule || status(projectId).state === 'syncing') return
@@ -148,7 +165,7 @@ export const useGithubSyncStore = defineStore('github-sync', () => {
         setStatus(projectId, {
           enabled: false,
           state: 'conflict',
-          message: '自动同步已暂停，请在项目设置中解决冲突。',
+          message: '自动同步已暂停，请在“协作同步”中解决冲突。',
           conflicts: preview.conflicts,
         })
         return
@@ -173,6 +190,16 @@ export const useGithubSyncStore = defineStore('github-sync', () => {
         conflicts: [],
       })
     } catch (error) {
+      if (isGithubInitializationRequired(error)) {
+        stop(projectId)
+        setStatus(projectId, {
+          enabled: false,
+          state: 'initializationRequired',
+          message: '自动同步已暂停，请先在“协作同步”中选择首次同步版本。',
+          conflicts: [],
+        })
+        return
+      }
       if (isGithubConnectionFailure(error)) markConnectionError(projectId)
       setStatus(projectId, {
         state: 'failed',
@@ -235,6 +262,7 @@ export const useGithubSyncStore = defineStore('github-sync', () => {
     markConnectionHealthy,
     markConnectionError,
     clearConnectionHealth,
+    clearAutomaticBlockers,
     start,
     stop,
     runAutomatic,

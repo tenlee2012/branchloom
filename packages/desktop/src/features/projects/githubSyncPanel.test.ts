@@ -6,6 +6,7 @@ import type {
   GithubConnectionStatus,
   GithubOperationProgress,
   GithubSyncGateway,
+  GithubSyncInitializationStrategy,
   GithubSyncPreview,
 } from '../../shared/githubSync'
 import GithubSyncPanel from './components/GithubSyncPanel.vue'
@@ -16,6 +17,11 @@ vi.mock('../../shared/externalLinks', () => ({ openExternalUrl }))
 
 const PROJECT_ID = 'project-demo-family'
 const wrappers: VueWrapper[] = []
+
+Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+  configurable: true,
+  value: vi.fn(),
+})
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -44,6 +50,23 @@ function gateway(overrides: Partial<GithubSyncGateway> = {}): GithubSyncGateway 
       pushedCommit: 'pushed-commit',
       changedLocal: false,
     })),
+    previewImport: vi.fn(async () => ({
+      projectId: 'project-remote',
+      projectName: '远端家谱',
+      projectDescription: '',
+      commit: 'remote-commit',
+      recordCounts: {},
+      replacesProjectId: PROJECT_ID,
+      alreadyExists: false,
+      fingerprint: 'github-import.v1.preview',
+    })),
+    applyImport: vi.fn(async () => ({
+      projectId: 'project-remote',
+      replacedProjectId: PROJECT_ID,
+      baselineUpdated: true,
+      credentialStored: true,
+      warnings: [],
+    })),
     ...overrides,
   }
 }
@@ -54,10 +77,23 @@ function mountPanel(syncGateway: GithubSyncGateway) {
   const wrapper = mount(GithubSyncPanel, {
     attachTo: document.body,
     props: { projectId: PROJECT_ID, gateway: syncGateway },
-    global: { plugins: [pinia] },
+    global: { plugins: [pinia], stubs: { Teleport: true } },
   })
   wrappers.push(wrapper)
   return { wrapper, store: useGithubSyncStore(pinia) }
+}
+
+async function openConnectionSettings(wrapper: VueWrapper) {
+  if (wrapper.find('input[name="githubOwner"]').exists()) return
+  await wrapper.get('.github-sync__page-heading button[name="打开连接设置"]').trigger('click')
+  await wrapper.vm.$nextTick()
+}
+
+async function setSessionToken(wrapper: VueWrapper, token = 'session-token') {
+  await openConnectionSettings(wrapper)
+  await wrapper.get('input[name="githubToken"]').setValue(token)
+  await wrapper.get('button[aria-label="关闭 GitHub 连接设置"]').trigger('click')
+  await wrapper.vm.$nextTick()
 }
 
 afterEach(() => {
@@ -72,7 +108,7 @@ describe('GitHub sync panel', () => {
     const { wrapper } = mountPanel(gateway({ available: () => false }))
     await flushPromises()
 
-    expect(wrapper.text()).toContain('GitHub 同步只在 Tauri 桌面应用中可用')
+    expect(wrapper.text()).toContain('GitHub 同步仅在桌面端可用')
     expect(wrapper.find('input[name="githubToken"]').exists()).toBe(false)
   })
 
@@ -95,6 +131,7 @@ describe('GitHub sync panel', () => {
     const { wrapper, store } = mountPanel(syncGateway)
     await flushPromises()
 
+    await openConnectionSettings(wrapper)
     await wrapper.get('input[name="githubOwner"]').setValue('family-owner')
     await wrapper.get('input[name="githubRepository"]').setValue('family-tree')
     await wrapper.get('input[name="githubBranch"]').setValue('main')
@@ -117,7 +154,9 @@ describe('GitHub sync panel', () => {
     expect(store.status(PROJECT_ID).enabled).toBe(true)
     expect(store.hasToken(PROJECT_ID)).toBe(true)
     expect(store.credential(PROJECT_ID)).toBe('')
-    expect(wrapper.get('input[name="githubToken"]').element).toHaveProperty('value', 'session-token')
+    await openConnectionSettings(wrapper)
+    expect(wrapper.get('input[name="githubToken"]').element).toHaveProperty('value', '')
+    expect(wrapper.get('.github-sync__token-stored').text()).toBe('已安全保存')
     store.stop(PROJECT_ID)
   })
 
@@ -134,6 +173,7 @@ describe('GitHub sync panel', () => {
     const { wrapper, store } = mountPanel(syncGateway)
     await flushPromises()
 
+    await openConnectionSettings(wrapper)
     expect(wrapper.get('input[name="githubToken"]').element).toHaveProperty('value', '')
     expect(wrapper.get('.github-sync__token-mask').text()).toBe('••••••••••••••••')
     expect(wrapper.get('.github-sync__token-stored').text()).toBe('已安全保存')
@@ -147,6 +187,31 @@ describe('GitHub sync panel', () => {
     expect(syncGateway.preview).toHaveBeenCalledWith(expect.objectContaining({ token: '' }))
     expect(wrapper.text()).toContain('同步预览已生成')
     store.stop(PROJECT_ID)
+  })
+
+  it('opens reconnection only when the stored credential cannot be loaded for a preview', async () => {
+    const connected: GithubConnectionStatus = {
+      owner: 'family-owner',
+      repository: 'family-tree',
+      branch: 'main',
+      credentialStored: true,
+    }
+    const syncGateway = gateway({
+      connection: vi.fn(async () => connected),
+      preview: vi.fn(async () => {
+        throw new Error('没有找到已保存的 GitHub Token，请重新输入并连接仓库')
+      }),
+    })
+    const { wrapper } = mountPanel(syncGateway)
+    await flushPromises()
+
+    expect(wrapper.find('input[name="githubToken"]').exists()).toBe(false)
+    await wrapper.get('button[name="预览 GitHub 完整同步"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('input[name="githubToken"]').element).toHaveProperty('value', '')
+    expect(wrapper.find('.github-sync__token-mask').exists()).toBe(false)
+    expect(wrapper.text()).toContain('已保存的 GitHub Token 不可用')
   })
 
   it('distinguishes a saved configuration from a healthy GitHub connection', async () => {
@@ -164,12 +229,13 @@ describe('GitHub sync panel', () => {
     const { wrapper } = mountPanel(syncGateway)
     await flushPromises()
 
-    expect(wrapper.get('.github-sync__heading .status-badge').text()).toBe('已配置')
+    expect(wrapper.get('#github-sync-state-title').text()).toBe('仓库已连接，可以同步')
+    await openConnectionSettings(wrapper)
     await wrapper.get('input[name="githubToken"]').setValue('expired-token')
     await wrapper.get('button[name="连接 GitHub 仓库"]').trigger('click')
     await flushPromises()
 
-    expect(wrapper.get('.github-sync__heading .status-badge').text()).toBe('连接异常')
+    expect(wrapper.get('#github-sync-state-title').text()).toBe('同步遇到问题')
     expect(wrapper.get('.github-sync__operation').text()).toContain('GitHub Token 无效或已过期')
     expect(wrapper.text()).toContain('family-owner/family-tree')
   })
@@ -178,10 +244,12 @@ describe('GitHub sync panel', () => {
     const { wrapper } = mountPanel(gateway())
     await flushPromises()
 
+    await openConnectionSettings(wrapper)
     await wrapper.get('button[aria-label="查看 GitHub token 申请帮助"]').trigger('click')
     await flushPromises()
 
-    const dialog = document.body.querySelector<HTMLElement>('[role="dialog"]')
+    const dialog = Array.from(document.body.querySelectorAll<HTMLElement>('[role="dialog"]'))
+      .find((candidate) => candidate.textContent?.includes('Fine-grained token'))
     expect(dialog?.textContent).toContain('Fine-grained token')
     expect(dialog?.textContent).toContain('Contents')
     expect(dialog?.textContent).toContain('Read and write')
@@ -203,6 +271,167 @@ describe('GitHub sync panel', () => {
     expect(openExternalUrl.mock.calls).toEqual(links.map((link) => [link.href]))
   })
 
+  it.each([
+    {
+      strategy: 'remote' as GithubSyncInitializationStrategy,
+      buttonName: '预览使用 GitHub 版本进行首次同步',
+      changedLocal: true,
+      willPush: false,
+      summary: 'GitHub 更新将写入本地',
+    },
+    {
+      strategy: 'local' as GithubSyncInitializationStrategy,
+      buttonName: '预览使用本地版本进行首次同步',
+      changedLocal: false,
+      willPush: true,
+      summary: '本地更新将上传到 GitHub',
+    },
+  ])('initializes the first synchronization from the $strategy version only after preview and confirmation', async ({
+    strategy,
+    buttonName,
+    changedLocal,
+    willPush,
+    summary,
+  }) => {
+    const connected: GithubConnectionStatus = {
+      owner: 'family-owner',
+      repository: 'family-tree',
+      branch: 'main',
+      credentialStored: true,
+    }
+    const initializationPreview: GithubSyncPreview = {
+      pulledCommit: 'remote-commit',
+      changedLocal,
+      willPush,
+      conflicts: [],
+      fingerprint: `sync.v2.initial-${strategy}`,
+    }
+    const preview = vi
+      .fn<GithubSyncGateway['preview']>()
+      .mockRejectedValueOnce(new Error(
+        'project data conflict: remote project has history but no local synchronization baseline',
+      ))
+      .mockResolvedValueOnce(initializationPreview)
+    const syncGateway = gateway({
+      connection: vi.fn(async () => connected),
+      preview,
+    })
+    const { wrapper } = mountPanel(syncGateway)
+    await flushPromises()
+
+    await wrapper.get('button[name="预览 GitHub 完整同步"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('#github-sync-state-title').text()).toBe('首次同步需要选择版本')
+    expect(wrapper.text()).toContain('有谱不会自动覆盖任何一方')
+    expect(wrapper.find('button[name="预览使用 GitHub 版本进行首次同步"]').exists()).toBe(true)
+    expect(wrapper.find('button[name="预览使用本地版本进行首次同步"]').exists()).toBe(true)
+
+    await wrapper.get(`button[name="${buttonName}"]`).trigger('click')
+    await flushPromises()
+
+    expect(preview).toHaveBeenLastCalledWith({
+      operationId: expect.any(String),
+      projectId: PROJECT_ID,
+      token: '',
+      pullOnly: false,
+      resolutions: [],
+      initializationStrategy: strategy,
+    })
+    expect(wrapper.get('#github-sync-state-title').text()).toBe('同步预览已准备好')
+    expect(wrapper.text()).toContain(summary)
+
+    await wrapper.get('button[name="确认执行 GitHub 同步"]').trigger('click')
+    await flushPromises()
+
+    expect(syncGateway.apply).toHaveBeenCalledWith({
+      operationId: expect.any(String),
+      projectId: PROJECT_ID,
+      token: '',
+      pullOnly: false,
+      resolutions: [],
+      initializationStrategy: strategy,
+      expectedFingerprint: `sync.v2.initial-${strategy}`,
+    })
+  })
+
+  it('can postpone first synchronization without writing either version', async () => {
+    const connected: GithubConnectionStatus = {
+      owner: 'family-owner',
+      repository: 'family-tree',
+      branch: 'main',
+      credentialStored: true,
+    }
+    const syncGateway = gateway({
+      connection: vi.fn(async () => connected),
+      preview: vi.fn(async () => {
+        throw new Error(
+          'project data conflict: remote project has history but no local synchronization baseline',
+        )
+      }),
+    })
+    const { wrapper } = mountPanel(syncGateway)
+    await flushPromises()
+
+    await wrapper.get('button[name="预览 GitHub 完整同步"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('button[name="暂不处理首次同步"]').trigger('click')
+    await flushPromises()
+
+    expect(syncGateway.apply).not.toHaveBeenCalled()
+    expect(wrapper.get('#github-sync-state-title').text()).toBe('首次同步需要选择版本')
+    expect(wrapper.find('button[name="暂不处理首次同步"]').exists()).toBe(false)
+  })
+
+  it('offers to adopt a different stable GitHub project when the local project is blank', async () => {
+    const connected: GithubConnectionStatus = {
+      owner: 'family-owner',
+      repository: 'family-tree',
+      branch: 'main',
+      credentialStored: true,
+    }
+    const syncGateway = gateway({
+      connection: vi.fn(async () => connected),
+      preview: vi.fn(async () => {
+        throw new Error(
+          'project data conflict: remote project id project-remote does not match local project id project-local',
+        )
+      }),
+    })
+    const { wrapper } = mountPanel(syncGateway)
+    await flushPromises()
+
+    await wrapper.get('button[name="预览 GitHub 完整同步"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('.github-sync__operation').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('预览完整同步失败')
+    expect(wrapper.get('#github-sync-state-title').text()).toBe('发现可导入的 GitHub 项目')
+    expect(wrapper.get('.github-sync__hero').classes()).toContain('github-sync__hero--info')
+    expect(wrapper.get('.github-sync__hero').classes()).not.toContain('github-sync__hero--danger')
+    expect(wrapper.get('.github-sync__hero').text()).toContain('当前项目为空时，可以检查内容并采用仓库项目')
+    expect(wrapper.find('button[name="用 GitHub 项目替换当前空白项目"]').exists()).toBe(false)
+    expect(wrapper.findAll('button[name="检查并导入 GitHub 项目"]')).toHaveLength(1)
+    expect(wrapper.find('button[name="预览使用 GitHub 版本进行首次同步"]').exists()).toBe(false)
+    expect(syncGateway.apply).not.toHaveBeenCalled()
+
+    await wrapper.get('.github-sync__hero-actions button[name="检查并导入 GitHub 项目"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[role="dialog"]').text()).toContain('用 GitHub 项目覆盖当前空白项目')
+    expect(syncGateway.previewImport).toHaveBeenCalledWith({
+      placeholderProjectId: PROJECT_ID,
+      owner: 'family-owner',
+      repository: 'family-tree',
+      branch: 'main',
+      token: '',
+    })
+    expect(wrapper.find('input[name="githubImportOwner"]').exists()).toBe(false)
+    expect(wrapper.find('input[name="githubImportToken"]').exists()).toBe(false)
+    expect(wrapper.find('input[name="confirmGithubBlankReplacement"]').exists()).toBe(false)
+    expect(wrapper.get('[role="dialog"]').text()).toContain('远端家谱')
+  })
+
   it('previews before apply and forwards the exact fingerprint', async () => {
     const connected: GithubConnectionStatus = {
       owner: 'family-owner',
@@ -216,12 +445,12 @@ describe('GitHub sync panel', () => {
     const { wrapper } = mountPanel(syncGateway)
     await flushPromises()
 
-    await wrapper.get('input[name="githubToken"]').setValue('session-token')
+    await setSessionToken(wrapper)
     await wrapper.get('button[name="预览 GitHub 完整同步"]').trigger('click')
     await flushPromises()
 
     expect(wrapper.text()).toContain('同步预览')
-    expect(wrapper.get('.github-sync__heading .status-badge').text()).toBe('连接正常')
+    expect(wrapper.get('#github-sync-state-title').text()).toBe('同步预览已准备好')
     expect(syncGateway.preview).toHaveBeenCalledWith({
       operationId: expect.any(String),
       projectId: PROJECT_ID,
@@ -259,10 +488,11 @@ describe('GitHub sync panel', () => {
     })
     const { wrapper, store } = mountPanel(syncGateway)
     await flushPromises()
-    await wrapper.get('input[name="githubToken"]').setValue('session-token')
+    await setSessionToken(wrapper)
 
     await wrapper.get('button[name="预览 GitHub 完整同步"]').trigger('click')
     await wrapper.vm.$nextTick()
+    await openConnectionSettings(wrapper)
     expect(wrapper.get('button[name="连接 GitHub 仓库"]').attributes('disabled')).toBeDefined()
 
     previewTask.resolve({
@@ -273,6 +503,7 @@ describe('GitHub sync panel', () => {
       fingerprint: 'sync.v1.preview',
     })
     await flushPromises()
+    await openConnectionSettings(wrapper)
     await wrapper.get('button[name="连接 GitHub 仓库"]').trigger('click')
     await wrapper.vm.$nextTick()
     expect(wrapper.get('button[name="预览 GitHub 完整同步"]').attributes('disabled')).toBeDefined()
@@ -301,7 +532,7 @@ describe('GitHub sync panel', () => {
     })
     const { wrapper, store } = mountPanel(syncGateway)
     await flushPromises()
-    await wrapper.get('input[name="githubToken"]').setValue('session-token')
+    await setSessionToken(wrapper)
 
     await wrapper.get('button[name="预览 GitHub 完整同步"]').trigger('click')
     await wrapper.vm.$nextTick()
@@ -330,8 +561,9 @@ describe('GitHub sync panel', () => {
       fingerprint: 'sync.v1.preview',
     })
     await flushPromises()
-    expect(wrapper.get('.github-sync__operation').text()).toContain('预览完整同步已完成')
-    expect(wrapper.get('.github-sync__operation').text()).toContain('同步预览已生成')
+    expect(wrapper.find('.github-sync__operation').exists()).toBe(false)
+    expect(wrapper.get('#github-sync-state-title').text()).toBe('同步预览已准备好')
+    expect(wrapper.get('.github-sync__hero').text()).toContain('同步预览已生成')
   })
 
   it('requires every conflict choice and re-previews before apply', async () => {
@@ -371,7 +603,7 @@ describe('GitHub sync panel', () => {
     const { wrapper } = mountPanel(syncGateway)
     await flushPromises()
 
-    await wrapper.get('input[name="githubToken"]').setValue('session-token')
+    await setSessionToken(wrapper)
     await wrapper.get('button[name="预览 GitHub 完整同步"]').trigger('click')
     await flushPromises()
 
@@ -404,6 +636,71 @@ describe('GitHub sync panel', () => {
         choice: 'ours',
       }],
     }))
+  })
+
+  it('uses a resolved manual preview instead of falling back to stale automatic conflicts', async () => {
+    const connected: GithubConnectionStatus = {
+      owner: 'family-owner',
+      repository: 'family-tree',
+      branch: 'main',
+    }
+    const conflict = {
+      path: 'data/people/pe/person-test.jsonld',
+      field: '/biography',
+      base: 'base',
+      ours: 'local',
+      theirs: 'remote',
+    }
+    const preview = vi
+      .fn<GithubSyncGateway['preview']>()
+      .mockResolvedValueOnce({
+        pulledCommit: 'remote-commit',
+        changedLocal: true,
+        willPush: false,
+        conflicts: [conflict],
+        fingerprint: 'conflicted',
+      })
+      .mockResolvedValueOnce({
+        pulledCommit: 'remote-commit',
+        changedLocal: false,
+        willPush: true,
+        conflicts: [],
+        fingerprint: 'resolved',
+      })
+    const syncGateway = gateway({
+      connection: vi.fn(async () => connected),
+      preview,
+    })
+    const { wrapper, store } = mountPanel(syncGateway)
+    await flushPromises()
+    store.statusByProject[PROJECT_ID] = {
+      enabled: false,
+      state: 'conflict',
+      message: '自动同步已暂停。',
+      conflicts: [conflict],
+    }
+    await setSessionToken(wrapper)
+
+    await wrapper.get('button[name="处理 GitHub 冲突"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('.github-sync__choice select').setValue('ours')
+    await wrapper.get('button[name="应用 GitHub 冲突选择"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('button[name="确认执行 GitHub 同步"]').exists()).toBe(true)
+    expect(wrapper.find('button[name="重新获取 GitHub 冲突预览"]').exists()).toBe(false)
+
+    await wrapper.get('button[name="确认执行 GitHub 同步"]').trigger('click')
+    await flushPromises()
+
+    expect(syncGateway.apply).toHaveBeenCalledWith(expect.objectContaining({
+      expectedFingerprint: 'resolved',
+    }))
+    expect(store.status(PROJECT_ID)).toMatchObject({
+      enabled: false,
+      state: 'idle',
+      conflicts: [],
+    })
   })
 })
 
@@ -498,6 +795,46 @@ describe('automatic GitHub sync', () => {
     expect(store.status(PROJECT_ID)).toMatchObject({
       enabled: false,
       state: 'conflict',
+      message: '自动同步已暂停，请在“协作同步”中解决冲突。',
     })
+  })
+
+  it('keeps first synchronization as a structured blocker and opens version selection directly', async () => {
+    vi.useFakeTimers()
+    const connected: GithubConnectionStatus = {
+      owner: 'family-owner',
+      repository: 'family-tree',
+      branch: 'main',
+      credentialStored: true,
+    }
+    const syncGateway = gateway({
+      connection: vi.fn(async () => connected),
+      preview: vi.fn(async () => {
+        throw new Error(
+          'project data conflict: remote project has history but no local synchronization baseline',
+        )
+      }),
+    })
+    const { wrapper, store } = mountPanel(syncGateway)
+    await flushPromises()
+    store.start(PROJECT_ID, 'session-token', syncGateway, 60)
+
+    await vi.advanceTimersByTimeAsync(60 * 60 * 1000)
+
+    expect(syncGateway.apply).not.toHaveBeenCalled()
+    expect(store.status(PROJECT_ID)).toMatchObject({
+      enabled: false,
+      state: 'initializationRequired',
+      message: '自动同步已暂停，请先在“协作同步”中选择首次同步版本。',
+    })
+    expect(wrapper.get('#github-sync-state-title').text()).toBe('首次同步需要选择版本')
+    expect(wrapper.get('button[name="切换每小时自动同步"]').text()).toBe('选择版本')
+
+    await wrapper.get('button[name="切换每小时自动同步"]').trigger('click')
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('button[name="预览使用 GitHub 版本进行首次同步"]').exists()).toBe(true)
+    expect(store.hasToken(PROJECT_ID)).toBe(false)
+    expect(store.status(PROJECT_ID).state).toBe('initializationRequired')
   })
 })

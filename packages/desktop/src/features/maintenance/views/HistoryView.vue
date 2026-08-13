@@ -6,7 +6,6 @@ import BaseButton from '../../../design-system/BaseButton.vue'
 import StatusBadge from '../../../design-system/StatusBadge.vue'
 import type { RestoreResult, Snapshot } from '../../../shared/domain/types'
 import { useBranchloomRepository } from '../../../shared/repository/injection'
-import GithubSyncPanel from '../../projects/components/GithubSyncPanel.vue'
 import RestoreDialog from '../components/RestoreDialog.vue'
 import SnapshotDialog from '../components/SnapshotDialog.vue'
 
@@ -66,7 +65,6 @@ watch(projectId, (nextProjectId) => {
 <template>
   <section class="history-view" aria-label="备份与历史">
     <ProjectManagementTabs />
-    <GithubSyncPanel :project-id="projectId" />
     <section class="history-view__actions"><div><strong>可恢复的研究节点</strong><span>每个版本展示原因、备注和数据规模；恢复前会自动保护当前状态。</span></div><BaseButton variant="secondary" @click="snapshotOpen = true">创建手动快照</BaseButton></section>
     <p v-if="restoreResult" class="history-view__result" role="status">恢复完成并重新检查；恢复前状态已保存为“{{ restoreResult.safetySnapshot.note }}”。</p>
     <p v-if="state === 'loading'" class="history-view__state" role="status">正在读取历史版本…</p>
