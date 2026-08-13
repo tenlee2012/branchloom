@@ -28,6 +28,16 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '新建家谱', eyebrow: '建立一份新的家族档案' },
       },
       {
+        path: 'github-import',
+        name: 'github-import',
+        component: () => import('../features/collaboration/views/GithubProjectImportView.vue'),
+        meta: {
+          title: '从 GitHub 导入',
+          eyebrow: '加入已有家族档案',
+          parent: { name: 'home', label: '返回首页' },
+        },
+      },
+      {
         path: 'import/:format',
         name: 'import-project',
         component: () => import('../features/exchange/views/ExchangeView.vue'),
@@ -51,7 +61,7 @@ const routes: RouteRecordRaw[] = [
           title: 'AI 工具',
           eyebrow: '本机 AI 集成',
           allowMissingProject: true,
-          utilityWorkspace: true,
+          workspaceMode: 'management',
         },
       },
     ],
@@ -64,7 +74,7 @@ const routes: RouteRecordRaw[] = [
         path: 'tree',
         name: 'project-tree',
         component: () => import('../features/tree/views/TreeView.vue'),
-        meta: { title: '家谱树', eyebrow: '家族关系工作区' },
+        meta: { title: '家谱树', eyebrow: '家族关系工作区', workspaceMode: 'canvas' },
       },
       {
         path: 'people',
@@ -130,20 +140,30 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '资料来源', eyebrow: '证据、引用与附件' },
       },
       {
+        path: 'collaboration-sync',
+        name: 'project-collaboration-sync',
+        component: () => import('../features/collaboration/views/CollaborationSyncView.vue'),
+        meta: {
+          title: '协作同步',
+          eyebrow: 'GitHub 异步协作',
+          workspaceMode: 'management',
+        },
+      },
+      {
         path: 'ai-tools',
         name: 'project-ai-tools',
         component: () => import('../features/ai-tools/views/AiToolsView.vue'),
         meta: {
           title: 'AI 工具',
           eyebrow: '本机 AI 集成',
-          utilityWorkspace: true,
+          workspaceMode: 'management',
         },
       },
       {
         path: 'manage/overview',
         name: 'project-overview',
         component: () => import('../features/projects/views/ProjectOverviewView.vue'),
-        meta: { title: '项目概览', eyebrow: '项目管理' },
+        meta: { title: '项目概览', eyebrow: '项目管理', workspaceMode: 'management' },
       },
       {
         path: 'manage/new',
@@ -152,6 +172,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '新建项目',
           eyebrow: '项目管理',
+          workspaceMode: 'management',
           parent: {
             name: 'project-overview',
             label: '返回项目管理',
@@ -166,6 +187,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '导入与导出',
           eyebrow: '项目管理',
+          workspaceMode: 'management',
           parent: {
             name: 'project-overview',
             label: '返回项目管理',
@@ -180,6 +202,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '备份与历史',
           eyebrow: '项目管理',
+          workspaceMode: 'management',
           parent: {
             name: 'project-overview',
             label: '返回项目管理',
@@ -194,6 +217,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '数据检查与维护',
           eyebrow: '项目管理',
+          workspaceMode: 'management',
           parent: {
             name: 'project-overview',
             label: '返回项目管理',
@@ -208,6 +232,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '项目设置',
           eyebrow: '项目管理',
+          workspaceMode: 'management',
           parent: {
             name: 'project-overview',
             label: '返回项目管理',

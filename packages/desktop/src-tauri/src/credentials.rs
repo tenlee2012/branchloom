@@ -1,6 +1,28 @@
+use std::collections::HashMap;
+
 use keyring::v1::{Entry, Error};
 
 const GITHUB_TOKEN_SERVICE: &str = "app.branchloom.desktop.github";
+
+#[derive(Default)]
+pub struct GithubCredentialCache {
+    // Tokens stay only in the desktop process and disappear when the app exits.
+    tokens: HashMap<String, String>,
+}
+
+impl GithubCredentialCache {
+    pub fn get(&self, project_id: &str) -> Option<String> {
+        self.tokens.get(project_id).cloned()
+    }
+
+    pub fn remember(&mut self, project_id: &str, token: &str) {
+        self.tokens.insert(project_id.to_owned(), token.to_owned());
+    }
+
+    pub fn forget(&mut self, project_id: &str) {
+        self.tokens.remove(project_id);
+    }
+}
 
 fn github_token_account(project_id: &str) -> String {
     format!("project:{project_id}")
@@ -45,7 +67,7 @@ pub fn is_github_authentication_failure(message: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{github_token_account, is_github_authentication_failure};
+    use super::{github_token_account, is_github_authentication_failure, GithubCredentialCache};
 
     #[test]
     fn credential_account_is_scoped_to_the_project() {
@@ -64,5 +86,18 @@ mod tests {
         assert!(!is_github_authentication_failure(
             "GitHub returned 503 Service Unavailable"
         ));
+    }
+
+    #[test]
+    fn session_cache_reuses_and_forgets_project_credentials() {
+        let mut cache = GithubCredentialCache::default();
+
+        cache.remember("project-one", "token-one");
+
+        assert_eq!(cache.get("project-one").as_deref(), Some("token-one"));
+        assert_eq!(cache.get("project-two"), None);
+
+        cache.forget("project-one");
+        assert_eq!(cache.get("project-one"), None);
     }
 }

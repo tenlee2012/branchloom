@@ -37,6 +37,8 @@ pub fn run() {
             commands::create_manual_snapshot,
             commands::connect_github,
             commands::get_github_connection,
+            commands::preview_github_project_import,
+            commands::apply_github_project_import,
             commands::preview_github_sync,
             commands::apply_github_sync,
             ai_tools::get_ai_tools_status,

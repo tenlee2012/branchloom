@@ -21,3 +21,14 @@ test('opens the latest project tree as the application home', async ({ page }) =
   await page.getByRole('link', { name: '返回当前项目家谱树' }).click()
   await expect(page).toHaveURL('/project/project-demo-family/tree')
 })
+
+test('opens the GitHub import entry from the home project flow', async ({ page }) => {
+  await page.goto('/new')
+
+  await page.getByRole('link', { name: '已有 GitHub 项目？直接导入' }).click()
+
+  await expect(page).toHaveURL('/github-import')
+  await expect(page.getByRole('heading', { name: '从 GitHub 导入' })).toBeVisible()
+  await expect(page.getByText('GitHub 项目导入仅在桌面端可用')).toBeVisible()
+  await expect(page.getByRole('link', { name: '返回首页' })).toBeVisible()
+})

@@ -1,3 +1,4 @@
+use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
@@ -13,16 +14,40 @@ use branchloom_core::data_location::{
 };
 use branchloom_core::sync::{
     load_connection, save_connection, save_sync_baseline, ConflictResolution, GithubConnection,
-    GithubRemote, SyncMode, SyncOutcome, SyncPlanSummary, SyncService,
+    GithubRemote, RemoteProjectImportService, RemoteProjectImportSummary,
+    SyncInitializationStrategy, SyncMode, SyncOutcome, SyncPlanSummary, SyncService,
 };
 
 use crate::credentials::{
     delete_github_token, is_github_authentication_failure, load_github_token, save_github_token,
+    GithubCredentialCache,
 };
+
+const GITHUB_CREDENTIAL_UNAVAILABLE_FILE: &str = ".credential-unavailable";
 
 pub struct DesktopProjectSession {
     pub service: Mutex<ApplicationService>,
     github_operation: Mutex<()>,
+    github_credentials: Mutex<GithubCredentialCache>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum GithubTokenOrigin {
+    Provided,
+    Stored,
+}
+
+impl GithubTokenOrigin {
+    fn uses_stored_credential(self) -> bool {
+        self == Self::Stored
+    }
+
+    fn persist_if_provided<E>(self, persist: impl FnOnce() -> Result<(), E>) -> Result<(), E> {
+        match self {
+            Self::Provided => persist(),
+            Self::Stored => Ok(()),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -153,6 +178,28 @@ pub struct GithubConnectionStatus {
     pub credential_stored: bool,
 }
 
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GithubProjectImportInput {
+    pub placeholder_project_id: Option<String>,
+    pub owner: String,
+    pub repository: String,
+    #[serde(default = "default_github_branch")]
+    pub branch: String,
+    pub token: String,
+    pub expected_fingerprint: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GithubProjectImportResult {
+    pub project_id: String,
+    pub replaced_project_id: Option<String>,
+    pub baseline_updated: bool,
+    pub credential_stored: bool,
+    pub warnings: Vec<String>,
+}
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct GithubOperationProgress<'a> {
@@ -174,6 +221,7 @@ pub struct GithubSyncInput {
     pub pull_only: bool,
     #[serde(default)]
     pub resolutions: Vec<ConflictResolution>,
+    pub initialization_strategy: Option<SyncInitializationStrategy>,
     pub expected_fingerprint: Option<String>,
 }
 
@@ -203,6 +251,7 @@ pub fn open_desktop_project_session(app: &AppHandle) -> Result<DesktopProjectSes
     Ok(DesktopProjectSession {
         service: Mutex::new(service),
         github_operation: Mutex::new(()),
+        github_credentials: Mutex::new(GithubCredentialCache::default()),
     })
 }
 
@@ -495,7 +544,7 @@ fn connect_github_blocking(
             connection.last_synced_commit = previous.last_synced_commit;
         }
     }
-    let (token, used_stored_credential) = resolve_github_token(&input.project_id, &input.token)?;
+    let (token, token_origin) = resolve_github_token(app, &input.project_id, &input.token)?;
     let remote =
         GithubRemote::new(connection.clone(), token.clone()).map_err(|error| error.to_string())?;
     emit_github_progress(
@@ -510,11 +559,7 @@ fn connect_github_blocking(
         Ok(existed) => existed,
         Err(error) => {
             let message = error.to_string();
-            forget_invalid_stored_credential(
-                &input.project_id,
-                used_stored_credential,
-                Some(&message),
-            );
+            forget_invalid_stored_credential(app, &input.project_id, token_origin, Some(&message));
             return Err(message);
         }
     };
@@ -560,7 +605,10 @@ fn connect_github_blocking(
         );
         save_connection(&state_directory, &connection).map_err(|error| error.to_string())?;
     }
-    save_github_token(&input.project_id, &token)?;
+    // A stored token has already been read into the process cache. Writing the same
+    // secret back would make macOS authorize a redundant Keychain read and update.
+    token_origin
+        .persist_if_provided(|| save_session_github_token(app, &input.project_id, &token))?;
     Ok(GithubConnectionResult {
         repository_existed,
         private_repository_created: !repository_existed,
@@ -586,7 +634,7 @@ fn get_github_connection_blocking(
         return Ok(None);
     }
     let connection = load_connection(&state_directory).map_err(|error| error.to_string())?;
-    let credential_stored = load_github_token(project_id)?.is_some();
+    let credential_stored = github_credential_reported_stored(&state_directory);
     Ok(Some(GithubConnectionStatus {
         owner: connection.owner,
         repository: connection.repository,
@@ -594,6 +642,140 @@ fn get_github_connection_blocking(
         last_synced_commit: connection.last_synced_commit,
         credential_stored,
     }))
+}
+
+#[tauri::command]
+pub async fn preview_github_project_import(
+    app: AppHandle,
+    input: GithubProjectImportInput,
+) -> Result<RemoteProjectImportSummary, String> {
+    run_github_operation(app, move |app| {
+        preview_github_project_import_blocking(app, input)
+    })
+    .await
+}
+
+fn preview_github_project_import_blocking(
+    app: &AppHandle,
+    input: GithubProjectImportInput,
+) -> Result<RemoteProjectImportSummary, String> {
+    let (token, token_origin) =
+        resolve_github_import_token(app, input.placeholder_project_id.as_deref(), &input.token)?;
+    let project_scope = input.placeholder_project_id.clone();
+    let result = (|| {
+        let connection = GithubConnection {
+            owner: input.owner,
+            repository: input.repository,
+            branch: input.branch,
+            last_synced_commit: None,
+        };
+        let remote = GithubRemote::new(connection, token).map_err(|error| error.to_string())?;
+        let mut application = open_application_service(app)?;
+        let service = RemoteProjectImportService::new(&mut application, &remote);
+        service
+            .plan(input.placeholder_project_id.as_deref())
+            .map(|plan| plan.summary().clone())
+            .map_err(|error| error.to_string())
+    })();
+    if let Some(project_id) = project_scope.as_deref() {
+        forget_invalid_stored_credential(app, project_id, token_origin, result.as_ref().err());
+    }
+    result
+}
+
+#[tauri::command]
+pub async fn apply_github_project_import(
+    app: AppHandle,
+    input: GithubProjectImportInput,
+) -> Result<GithubProjectImportResult, String> {
+    run_github_operation(app, move |app| {
+        apply_github_project_import_blocking(app, input)
+    })
+    .await
+}
+
+fn apply_github_project_import_blocking(
+    app: &AppHandle,
+    input: GithubProjectImportInput,
+) -> Result<GithubProjectImportResult, String> {
+    let expected = input
+        .expected_fingerprint
+        .as_deref()
+        .ok_or_else(|| "缺少 GitHub 导入预览标识，请重新预览".to_owned())?;
+    let (token, token_origin) =
+        resolve_github_import_token(app, input.placeholder_project_id.as_deref(), &input.token)?;
+    let project_scope = input.placeholder_project_id.clone();
+    let result = (|| {
+        let mut connection = GithubConnection {
+            owner: input.owner,
+            repository: input.repository,
+            branch: input.branch,
+            last_synced_commit: None,
+        };
+        let remote = GithubRemote::new(connection.clone(), token.clone())
+            .map_err(|error| error.to_string())?;
+        let mut application = open_application_service(app)?;
+        let mut service = RemoteProjectImportService::new(&mut application, &remote);
+        let plan = service
+            .plan(input.placeholder_project_id.as_deref())
+            .map_err(|error| error.to_string())?;
+        if plan.summary().fingerprint != expected {
+            return Err("GitHub 导入预览已经过期，请重新预览后再确认".to_owned());
+        }
+        let summary = plan.summary().clone();
+        let tree = plan.tree().clone();
+        let project = service.apply(plan).map_err(|error| error.to_string())?;
+
+        let mut warnings = Vec::new();
+        let state_directory = github_state_directory(app, &project.id)?;
+        let baseline_updated = match save_sync_baseline(
+            &state_directory,
+            &tree,
+            &mut connection,
+            summary.commit.clone(),
+        ) {
+            Ok(()) => true,
+            Err(error) => {
+                warnings.push(format!("项目已导入，但同步基线保存失败：{error}"));
+                false
+            }
+        };
+        let credential_stored = match save_session_github_token(app, &project.id, &token) {
+            Ok(()) => true,
+            Err(error) => {
+                warnings.push(format!("项目已导入，但 GitHub Token 保存失败：{error}"));
+                false
+            }
+        };
+
+        if let Some(replaced_project_id) = summary.replaces_project_id.as_deref() {
+            if credential_stored {
+                if let Err(error) = delete_session_github_token(app, replaced_project_id) {
+                    warnings.push(format!("旧项目凭据清理失败：{error}"));
+                }
+            }
+            if baseline_updated {
+                let previous_state_directory = github_state_directory(app, replaced_project_id)?;
+                if previous_state_directory.exists() {
+                    if let Err(error) = fs::remove_dir_all(&previous_state_directory) {
+                        warnings.push(format!("旧项目同步设置清理失败：{error}"));
+                    }
+                }
+            }
+        }
+
+        Ok(GithubProjectImportResult {
+            project_id: project.id,
+            replaced_project_id: summary.replaces_project_id,
+            baseline_updated,
+            credential_stored,
+            warnings,
+        })
+    })();
+    if let Some(project_id) = project_scope.as_deref() {
+        forget_invalid_stored_credential(app, project_id, token_origin, result.as_ref().err());
+    }
+    result
 }
 
 #[tauri::command]
@@ -623,7 +805,7 @@ fn preview_github_sync_blocking(
     );
     let state_directory = github_state_directory(app, &input.project_id)?;
     let connection = load_connection(&state_directory).map_err(|error| error.to_string())?;
-    let (token, used_stored_credential) = resolve_github_token(&input.project_id, &input.token)?;
+    let (token, token_origin) = resolve_github_token(app, &input.project_id, &input.token)?;
     let remote = GithubRemote::new(connection.clone(), token).map_err(|error| error.to_string())?;
     let mut application = open_application_service(app)?;
     let sync = SyncService::new(&mut application, &remote, state_directory, connection)
@@ -637,14 +819,15 @@ fn preview_github_sync_blocking(
         "正在下载 GitHub 远端资料并生成差异…",
     );
     let result = sync
-        .plan_with_resolutions(&input.project_id, sync_mode(&input), &input.resolutions)
+        .plan_with_resolutions_and_initialization(
+            &input.project_id,
+            sync_mode(&input),
+            &input.resolutions,
+            input.initialization_strategy,
+        )
         .map(|plan| plan.summary().clone())
         .map_err(|error| error.to_string());
-    forget_invalid_stored_credential(
-        &input.project_id,
-        used_stored_credential,
-        result.as_ref().err(),
-    );
+    forget_invalid_stored_credential(app, &input.project_id, token_origin, result.as_ref().err());
     result
 }
 
@@ -677,7 +860,7 @@ fn apply_github_sync_blocking(
         .expected_fingerprint
         .as_deref()
         .ok_or_else(|| "缺少同步预览标识，请重新预览".to_owned())?;
-    let (token, used_stored_credential) = resolve_github_token(&input.project_id, &input.token)?;
+    let (token, token_origin) = resolve_github_token(app, &input.project_id, &input.token)?;
     let result = (|| {
         let state_directory = github_state_directory(app, &input.project_id)?;
         let connection = load_connection(&state_directory).map_err(|error| error.to_string())?;
@@ -688,7 +871,12 @@ fn apply_github_sync_blocking(
             .map_err(|error| error.to_string())?;
         let mode = sync_mode(&input);
         let plan = service
-            .plan_with_resolutions(&input.project_id, mode, &input.resolutions)
+            .plan_with_resolutions_and_initialization(
+                &input.project_id,
+                mode,
+                &input.resolutions,
+                input.initialization_strategy,
+            )
             .map_err(|error| error.to_string())?;
         if plan.summary().fingerprint != expected {
             return Err("同步预览已经过期，请重新预览后再确认".to_owned());
@@ -699,40 +887,152 @@ fn apply_github_sync_blocking(
             &input.project_id,
             operation,
             "applying-sync",
-            if input.pull_only {
-                "检查完成，正在应用 GitHub 资料…"
-            } else {
-                "检查完成，正在合并并上传同步结果…"
+            match input.initialization_strategy {
+                Some(SyncInitializationStrategy::Remote) => {
+                    "检查完成，正在使用 GitHub 版本建立首次同步基线…"
+                }
+                Some(SyncInitializationStrategy::Local) => {
+                    "检查完成，正在使用本地版本更新 GitHub 并建立首次同步基线…"
+                }
+                None if input.pull_only => "检查完成，正在应用 GitHub 资料…",
+                None => "检查完成，正在合并并上传同步结果…",
             },
         );
         service.apply(plan, mode).map_err(|error| error.to_string())
     })();
-    forget_invalid_stored_credential(
-        &input.project_id,
-        used_stored_credential,
-        result.as_ref().err(),
-    );
+    forget_invalid_stored_credential(app, &input.project_id, token_origin, result.as_ref().err());
     result
 }
 
-fn resolve_github_token(project_id: &str, provided: &str) -> Result<(String, bool), String> {
+fn resolve_github_token(
+    app: &AppHandle,
+    project_id: &str,
+    provided: &str,
+) -> Result<(String, GithubTokenOrigin), String> {
     if !provided.trim().is_empty() {
-        return Ok((provided.to_owned(), false));
+        return Ok((provided.to_owned(), GithubTokenOrigin::Provided));
     }
-    load_github_token(project_id)?
-        .map(|token| (token, true))
-        .ok_or_else(|| "没有找到已保存的 GitHub Token，请重新输入并连接仓库".to_owned())
+    if let Some(token) = cached_github_token(app, project_id)? {
+        return Ok((token, GithubTokenOrigin::Stored));
+    }
+    let state_directory = github_state_directory(app, project_id)?;
+    if !github_credential_reported_stored(&state_directory) {
+        return Err("没有找到已保存的 GitHub Token，请重新输入并连接仓库".to_owned());
+    }
+    match load_github_token(project_id)? {
+        Some(token) => {
+            remember_github_token(app, project_id, &token)?;
+            mark_github_credential_available(app, project_id);
+            Ok((token, GithubTokenOrigin::Stored))
+        }
+        None => {
+            mark_github_credential_unavailable(app, project_id);
+            Err("没有找到已保存的 GitHub Token，请重新输入并连接仓库".to_owned())
+        }
+    }
+}
+
+fn resolve_github_import_token(
+    app: &AppHandle,
+    placeholder_project_id: Option<&str>,
+    provided: &str,
+) -> Result<(String, GithubTokenOrigin), String> {
+    if !provided.trim().is_empty() {
+        return Ok((provided.to_owned(), GithubTokenOrigin::Provided));
+    }
+    let project_id = placeholder_project_id
+        .ok_or_else(|| "从 GitHub 导入项目时必须输入 GitHub Token".to_owned())?;
+    resolve_github_token(app, project_id, provided)
 }
 
 fn forget_invalid_stored_credential(
+    app: &AppHandle,
     project_id: &str,
-    used_stored_credential: bool,
+    token_origin: GithubTokenOrigin,
     error: Option<&String>,
 ) {
-    if used_stored_credential
+    if token_origin.uses_stored_credential()
         && error.is_some_and(|message| is_github_authentication_failure(message))
     {
-        let _ = delete_github_token(project_id);
+        invalidate_session_github_token(app, project_id);
+    }
+}
+
+fn cached_github_token(app: &AppHandle, project_id: &str) -> Result<Option<String>, String> {
+    app.state::<DesktopProjectSession>()
+        .github_credentials
+        .lock()
+        .map_err(|_| "GitHub 凭据会话异常，请重新启动应用".to_owned())
+        .map(|cache| cache.get(project_id))
+}
+
+fn remember_github_token(app: &AppHandle, project_id: &str, token: &str) -> Result<(), String> {
+    let state = app.state::<DesktopProjectSession>();
+    let mut cache = state
+        .github_credentials
+        .lock()
+        .map_err(|_| "GitHub 凭据会话异常，请重新启动应用".to_owned())?;
+    cache.remember(project_id, token);
+    Ok(())
+}
+
+fn forget_cached_github_token(app: &AppHandle, project_id: &str) -> Result<(), String> {
+    let state = app.state::<DesktopProjectSession>();
+    let mut cache = state
+        .github_credentials
+        .lock()
+        .map_err(|_| "GitHub 凭据会话异常，请重新启动应用".to_owned())?;
+    cache.forget(project_id);
+    Ok(())
+}
+
+fn save_session_github_token(app: &AppHandle, project_id: &str, token: &str) -> Result<(), String> {
+    if let Err(error) = save_github_token(project_id, token) {
+        mark_github_credential_unavailable(app, project_id);
+        return Err(error);
+    }
+    remember_github_token(app, project_id, token)?;
+    mark_github_credential_available(app, project_id);
+    Ok(())
+}
+
+fn delete_session_github_token(app: &AppHandle, project_id: &str) -> Result<(), String> {
+    invalidate_session_github_token(app, project_id);
+    delete_github_token(project_id)
+}
+
+fn invalidate_session_github_token(app: &AppHandle, project_id: &str) {
+    let _ = forget_cached_github_token(app, project_id);
+    mark_github_credential_unavailable(app, project_id);
+}
+
+fn github_credential_reported_stored(state_directory: &std::path::Path) -> bool {
+    // Avoid opening Keychain merely to render connection status. Existing connections are
+    // treated as available until an actual GitHub operation proves the credential is missing.
+    !state_directory
+        .join(GITHUB_CREDENTIAL_UNAVAILABLE_FILE)
+        .is_file()
+}
+
+fn mark_github_credential_available(app: &AppHandle, project_id: &str) {
+    let Ok(state_directory) = github_state_directory(app, project_id) else {
+        return;
+    };
+    let marker = state_directory.join(GITHUB_CREDENTIAL_UNAVAILABLE_FILE);
+    if marker.is_file() {
+        let _ = fs::remove_file(marker);
+    }
+}
+
+fn mark_github_credential_unavailable(app: &AppHandle, project_id: &str) {
+    let Ok(state_directory) = github_state_directory(app, project_id) else {
+        return;
+    };
+    if fs::create_dir_all(&state_directory).is_ok() {
+        let _ = fs::write(
+            state_directory.join(GITHUB_CREDENTIAL_UNAVAILABLE_FILE),
+            b"credential unavailable\n",
+        );
     }
 }
 
@@ -757,4 +1057,31 @@ fn sync_mode(input: &GithubSyncInput) -> SyncMode {
 
 fn default_github_branch() -> String {
     "main".to_owned()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::GithubTokenOrigin;
+
+    #[test]
+    fn reconnect_only_persists_an_explicitly_provided_token() {
+        let mut persistence_calls = 0;
+
+        GithubTokenOrigin::Stored
+            .persist_if_provided(|| {
+                persistence_calls += 1;
+                Ok::<(), ()>(())
+            })
+            .expect("stored token reuse should succeed without persistence");
+        GithubTokenOrigin::Provided
+            .persist_if_provided(|| {
+                persistence_calls += 1;
+                Ok::<(), ()>(())
+            })
+            .expect("provided token should be persisted");
+
+        assert_eq!(persistence_calls, 1);
+        assert!(!GithubTokenOrigin::Provided.uses_stored_credential());
+        assert!(GithubTokenOrigin::Stored.uses_stored_credential());
+    }
 }

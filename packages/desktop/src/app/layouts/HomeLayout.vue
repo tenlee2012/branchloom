@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { IconRobot } from '@tabler/icons-vue'
+import { IconBrandGithub, IconRobot } from '@tabler/icons-vue'
 import { RouterLink, RouterView } from 'vue-router'
 import DataRefreshButton from '../components/DataRefreshButton.vue'
 import PageBackLink from '../components/PageBackLink.vue'
@@ -14,6 +14,13 @@ import PageBackLink from '../components/PageBackLink.vue'
       </RouterLink>
       <div class="home-layout__header-actions">
         <p>一座属于你们家的私人档案馆</p>
+        <RouterLink
+          class="home-layout__github-import"
+          to="/github-import"
+          aria-label="从 GitHub 导入项目"
+        >
+          <IconBrandGithub :size="17" aria-hidden="true" /><span>从 GitHub 导入</span>
+        </RouterLink>
         <RouterLink class="home-layout__ai-tools" to="/ai-tools">
           <IconRobot :size="17" aria-hidden="true" />AI 工具
         </RouterLink>
@@ -84,7 +91,8 @@ import PageBackLink from '../components/PageBackLink.vue'
   gap: var(--space-4);
 }
 
-.home-layout__ai-tools {
+.home-layout__ai-tools,
+.home-layout__github-import {
   display: inline-flex;
   min-height: 2.25rem;
   align-items: center;
@@ -147,6 +155,10 @@ import PageBackLink from '../components/PageBackLink.vue'
   }
 
   .home-layout__brand strong {
+    display: none;
+  }
+
+  .home-layout__github-import span {
     display: none;
   }
 }

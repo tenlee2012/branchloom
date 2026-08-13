@@ -128,6 +128,11 @@ describe('application shell', () => {
     }
     expect(wrapper.get('nav[aria-label="项目管理导航"] a[aria-label="项目管理"]').text())
       .toContain('项目管理')
+    const projectLinks = wrapper.findAll('nav[aria-label="项目管理导航"] a')
+    expect(projectLinks.map((link) => link.attributes('aria-label')))
+      .toEqual(['项目管理', '协作同步', '数据检查'])
+    expect(wrapper.get('a[aria-label="协作同步"]').attributes('href'))
+      .toBe(`/project/${project!.id}/collaboration-sync`)
     const checksLink = wrapper.get('nav[aria-label="项目管理导航"] a[aria-label="数据检查"]')
     await vi.waitFor(() => expect(checksLink.get('.app-sidebar__badge').text()).toBe('2'))
     expect(checksLink.get('.app-sidebar__badge').attributes('aria-label')).toBe('2 个问题')
@@ -140,6 +145,8 @@ describe('application shell', () => {
     expect(wrapper.get('nav[aria-label="项目列表"]').text()).toContain(project!.name)
     expect(wrapper.get('.app-sidebar__new-project').attributes('href'))
       .toBe(`/project/${project!.id}/manage/new`)
+    expect(wrapper.get('a[aria-label="从 GitHub 导入项目"]').attributes('href'))
+      .toBe('/github-import')
     expect(wrapper.find('[aria-label="打开项目菜单"]').exists()).toBe(false)
 
     inspectProject.mockResolvedValue([])
@@ -241,6 +248,7 @@ describe('application shell', () => {
       'people',
       'timeline',
       'sources',
+      'collaboration-sync',
       'manage/overview',
     ]
 
@@ -268,6 +276,17 @@ describe('application shell', () => {
     }
 
     wrapper.unmount()
+  })
+
+  it('uses content modes without allowing project pages to bypass the shared shell', () => {
+    const router = createAppRouter('memory')
+    const projectRoutes = router.getRoutes()
+      .filter((route) => route.path.startsWith('/project/:projectId'))
+
+    expect(projectRoutes.every((route) => !('contentOnly' in route.meta))).toBe(true)
+    expect(router.resolve('/project/project-demo-family/tree').meta.workspaceMode).toBe('canvas')
+    expect(router.resolve('/project/project-demo-family/collaboration-sync').meta.workspaceMode)
+      .toBe('management')
   })
 
   it('keeps the project shell visible throughout project creation tasks', async () => {
@@ -299,6 +318,7 @@ describe('application shell', () => {
     const router = createAppRouter('memory')
     const expectedParents = [
       ['/import/gedcom', 'home', '返回首页'],
+      ['/github-import', 'home', '返回首页'],
       ['/project/project-demo-family/people/person-demo-1', 'project-people', '返回人物列表'],
       ['/project/project-demo-family/people/person-demo-1/edit', 'person-detail', '返回人物详情'],
       ['/project/project-demo-family/manage/new', 'project-overview', '返回项目管理'],
@@ -374,6 +394,13 @@ describe('application shell', () => {
     const manage = wrapper.get('nav[aria-label="项目管理导航"] a[aria-label="项目管理"]')
     expect(manage.attributes('aria-current')).toBeUndefined()
     expect(manage.classes()).toContain('app-sidebar__link--active')
+
+    await router.push(`/project/${project!.id}/collaboration-sync`)
+    await flushPromises()
+    const collaboration = wrapper.get('nav[aria-label="项目管理导航"] a[aria-label="协作同步"]')
+    expect(collaboration.attributes('aria-current')).toBe('page')
+    expect(collaboration.classes()).toContain('app-sidebar__link--active')
+    expect(manage.classes()).not.toContain('app-sidebar__link--active')
 
     wrapper.unmount()
   })

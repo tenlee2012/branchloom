@@ -221,6 +221,7 @@ impl ProjectTree {
             collections,
         };
         data.validate()?;
+        self.validate_attachment_content(&data)?;
         Ok(data)
     }
 
@@ -445,6 +446,45 @@ impl ProjectTree {
             .get(path)
             .map(Vec::as_slice)
             .ok_or_else(|| CoreError::Validation(format!("project file is missing: {path}")))
+    }
+
+    fn validate_attachment_content(&self, data: &ProjectData) -> CoreResult<()> {
+        let attachments = data
+            .collections
+            .get("attachments")
+            .expect("attachment collection validated");
+        for attachment in attachments {
+            if attachment.get("missing").and_then(Value::as_bool) == Some(true) {
+                continue;
+            }
+            let attachment_id = required_string(attachment, "id")?;
+            let content_hash = required_string(attachment, "contentHash")?;
+            validate_hash(content_hash)?;
+            let media_path = format!("media/sha256/{}/{}", &content_hash[0..2], content_hash);
+            let bytes = self.files.get(&media_path).ok_or_else(|| {
+                CoreError::Validation(format!(
+                    "attachment content is missing: {attachment_id} ({media_path})"
+                ))
+            })?;
+            if sha256_hex(bytes) != content_hash {
+                return Err(CoreError::Validation(format!(
+                    "attachment content checksum does not match: {attachment_id}"
+                )));
+            }
+            if let Some(size) = attachment.get("size") {
+                let expected_size = size.as_u64().ok_or_else(|| {
+                    CoreError::Validation(format!(
+                        "attachment size must be a non-negative integer: {attachment_id}"
+                    ))
+                })?;
+                if u64::try_from(bytes.len()).ok() != Some(expected_size) {
+                    return Err(CoreError::Validation(format!(
+                        "attachment content size does not match: {attachment_id}"
+                    )));
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -778,6 +818,60 @@ mod tests {
     }
 
     #[test]
+    fn rejects_non_missing_attachment_without_media_content() {
+        let (tree, attachment_hash) = test_project_tree(b"family photo");
+        let media_path = attachment_media_path(&attachment_hash);
+        let mut files = tree.into_files();
+        files
+            .remove(&media_path)
+            .expect("remove attachment content");
+        let tree = ProjectTree::rebuild_manifest(files).expect("rebuild project manifest");
+
+        assert!(matches!(
+            tree.parse_project_data(),
+            Err(CoreError::Validation(message))
+                if message.contains("attachment content is missing")
+        ));
+    }
+
+    #[test]
+    fn rejects_non_missing_attachment_with_mismatched_content_hash() {
+        let (tree, attachment_hash) = test_project_tree(b"family photo");
+        let media_path = attachment_media_path(&attachment_hash);
+        let mut files = tree.into_files();
+        files.insert(media_path, b"different family photo".to_vec());
+        let tree = ProjectTree::rebuild_manifest(files).expect("rebuild project manifest");
+
+        assert!(matches!(
+            tree.parse_project_data(),
+            Err(CoreError::Validation(message))
+                if message.contains("attachment content checksum does not match")
+        ));
+    }
+
+    #[test]
+    fn rejects_non_missing_attachment_with_mismatched_size() {
+        let (tree, _) = test_project_tree(b"family photo");
+        let mut files = tree.into_files();
+        let attachment_path = "data/attachments/at/attachment-test.jsonld";
+        let mut attachment: Value =
+            serde_json::from_slice(files.get(attachment_path).expect("attachment metadata"))
+                .expect("parse attachment metadata");
+        attachment["size"] = json!(999);
+        files.insert(
+            attachment_path.to_owned(),
+            canonical_pretty_json(&attachment).expect("serialize attachment metadata"),
+        );
+        let tree = ProjectTree::rebuild_manifest(files).expect("rebuild project manifest");
+
+        assert!(matches!(
+            tree.parse_project_data(),
+            Err(CoreError::Validation(message))
+                if message.contains("attachment content size does not match")
+        ));
+    }
+
+    #[test]
     fn rejects_archive_paths_outside_the_project_root() {
         let directory = tempdir().expect("create temporary directory");
         let archive = directory.path().join("unsafe.blp");
@@ -814,6 +908,8 @@ mod tests {
                 "projectId": "project-test",
                 "contentHash": attachment_hash,
                 "name": "photo.jpg",
+                "size": b"family photo".len(),
+                "missing": false,
                 "updatedAt": "2026-01-01T00:00:00Z"
             }));
         ProjectData {
@@ -826,5 +922,33 @@ mod tests {
             }),
             collections,
         }
+    }
+
+    fn test_project_tree(attachment_bytes: &[u8]) -> (ProjectTree, String) {
+        let directory = tempdir().expect("create temporary directory");
+        let attachments_root = directory.path().join("attachments");
+        fs::create_dir_all(attachments_root.join("project-test"))
+            .expect("create attachment directory");
+        let attachment_hash = sha256_hex(attachment_bytes);
+        fs::write(
+            attachments_root.join("project-test").join(&attachment_hash),
+            attachment_bytes,
+        )
+        .expect("write attachment");
+        let mut data = test_project_data(&attachment_hash);
+        data.collections
+            .get_mut("attachments")
+            .expect("attachment collection")[0]["size"] = json!(attachment_bytes.len());
+        let tree =
+            ProjectTree::from_project_data(&data, &attachments_root).expect("create project tree");
+        (tree, attachment_hash)
+    }
+
+    fn attachment_media_path(attachment_hash: &str) -> String {
+        format!(
+            "media/sha256/{}/{}",
+            &attachment_hash[0..2],
+            attachment_hash
+        )
     }
 }

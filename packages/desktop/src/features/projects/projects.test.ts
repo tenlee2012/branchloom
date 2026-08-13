@@ -98,6 +98,7 @@ describe('project entry', () => {
 
     await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('new-project'))
     expect(wrapper.get('h1').text()).toContain('从一个名字开始')
+    expect(wrapper.get('.new-project-view__github-import').attributes('href')).toBe('/github-import')
 
     wrapper.unmount()
   })

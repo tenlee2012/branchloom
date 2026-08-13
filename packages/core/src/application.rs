@@ -482,6 +482,10 @@ impl ApplicationService {
         self.storage.project_delete_impact(id)
     }
 
+    pub fn project_is_empty_for_replacement(&self, id: &str) -> CoreResult<bool> {
+        self.storage.project_is_empty_for_replacement(id)
+    }
+
     pub fn list_records(&self, resource: Resource, project_id: &str) -> CoreResult<Vec<Value>> {
         self.storage
             .list_records(resource, project_id)
@@ -1817,6 +1821,26 @@ impl ApplicationService {
             tree.install_attachments(&self.data_directory.join("attachments"), &project_id)?;
         self.storage
             .replace_project_data_if_revision(&data, overwrite, expected_revision)?;
+        installed.commit();
+        self.storage.get_project(&project_id)
+    }
+
+    pub fn replace_empty_project_with_tree_if_revision(
+        &mut self,
+        placeholder_project_id: &str,
+        tree: &ProjectTree,
+        expected_revision: i64,
+    ) -> CoreResult<ProjectRecord> {
+        let mut data = tree.parse_project_data()?;
+        sanitize_project_data(&mut data);
+        let project_id = data.project_id()?.to_owned();
+        let installed =
+            tree.install_attachments(&self.data_directory.join("attachments"), &project_id)?;
+        self.storage.replace_empty_project_data_if_revision(
+            placeholder_project_id,
+            &data,
+            expected_revision,
+        )?;
         installed.commit();
         self.storage.get_project(&project_id)
     }

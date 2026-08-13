@@ -110,6 +110,10 @@ export class BrowserRecentProjectLocations {
     this.save(this.list().filter((item) => item.id !== id))
   }
 
+  removeProject(projectId: string): void {
+    this.save(this.list().filter((item) => item.projectId !== projectId))
+  }
+
   private save(items: RecentProjectLocation[]): void {
     if (!this.storage) return
     const state: RecentProjectLocationState = { schemaVersion: 1, items }

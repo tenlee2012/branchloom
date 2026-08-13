@@ -604,6 +604,108 @@ impl Storage {
         Ok(impact)
     }
 
+    pub fn project_is_empty_for_replacement(&self, id: &str) -> CoreResult<bool> {
+        Ok(self.project_delete_impact(id)?.is_empty())
+    }
+
+    pub fn replace_empty_project_data_if_revision(
+        &mut self,
+        placeholder_project_id: &str,
+        data: &ProjectData,
+        expected_revision: i64,
+    ) -> CoreResult<()> {
+        data.validate()?;
+        let imported_project_id = data.project_id()?.to_owned();
+        if imported_project_id == placeholder_project_id {
+            return Err(CoreError::Validation(
+                "replacement project must use a different stable id".to_owned(),
+            ));
+        }
+
+        let mut project = data.project.clone();
+        let project_object = project
+            .as_object_mut()
+            .ok_or_else(|| CoreError::Validation("project must be an object".to_owned()))?;
+        project_object.remove("lastBackupAt");
+        project_object.insert("backupSchedule".to_owned(), json!("off"));
+
+        let transaction = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        ensure_expected_revision(&transaction, Some(expected_revision))?;
+
+        let placeholder_exists = transaction
+            .query_row(
+                "SELECT 1 FROM projects WHERE id = ?1",
+                [placeholder_project_id],
+                |_| Ok(()),
+            )
+            .optional()?
+            .is_some();
+        if !placeholder_exists {
+            return Err(CoreError::NotFound {
+                entity: "project",
+                id: placeholder_project_id.to_owned(),
+            });
+        }
+        let imported_exists = transaction
+            .query_row(
+                "SELECT 1 FROM projects WHERE id = ?1",
+                [&imported_project_id],
+                |_| Ok(()),
+            )
+            .optional()?
+            .is_some();
+        if imported_exists {
+            return Err(CoreError::Conflict(format!(
+                "project already exists: {imported_project_id}"
+            )));
+        }
+
+        for (_, table) in ENTITY_COLLECTIONS {
+            let count: i64 = transaction.query_row(
+                &format!("SELECT count(*) FROM {table} WHERE project_id = ?1"),
+                [placeholder_project_id],
+                |row| row.get(0),
+            )?;
+            if count > 0 {
+                return Err(CoreError::Conflict(
+                    "local project is not empty and cannot be replaced by a GitHub project"
+                        .to_owned(),
+                ));
+            }
+        }
+        let change_set_count: i64 = transaction.query_row(
+            "SELECT count(*) FROM change_sets WHERE project_id = ?1",
+            [placeholder_project_id],
+            |row| row.get(0),
+        )?;
+        if change_set_count > 0 {
+            return Err(CoreError::Conflict(
+                "local project is not empty and cannot be replaced by a GitHub project".to_owned(),
+            ));
+        }
+
+        transaction.execute(
+            "DELETE FROM projects WHERE id = ?1",
+            [placeholder_project_id],
+        )?;
+        insert_project_json(&transaction, &project)?;
+        for (collection, _, _) in PROJECT_COLLECTIONS {
+            let table = collection_table(collection);
+            let entities = data
+                .collections
+                .get(collection)
+                .expect("project collections validated");
+            for entity in entities {
+                insert_entity_json(&transaction, table, entity)?;
+            }
+        }
+        bump_data_revision(&transaction)?;
+        transaction.commit()?;
+        Ok(())
+    }
+
     fn delete_project_internal(
         &mut self,
         id: &str,
