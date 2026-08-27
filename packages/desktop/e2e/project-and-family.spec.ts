@@ -11,12 +11,19 @@ test.beforeEach(async ({ page }) => resetDemo(page))
 
 async function quickAddRelative(
   page: Page,
-  input: { name: string; category?: 'parent' | 'partner'; direction?: 'relative-is-parent' | 'current-is-parent' },
+  input: {
+    name: string
+    category?: 'parent' | 'partner'
+    relationshipType?: 'biological' | 'adoptive' | 'step' | 'guardian' | 'engaged' | 'married' | 'partner' | 'separated' | 'divorced'
+    direction?: 'relative-is-parent' | 'current-is-parent'
+  },
 ) {
   await page.getByRole('button', { name: '添加人物' }).click()
   const dialog = page.getByRole('dialog', { name: '添加人物与关系' })
   await dialog.getByLabel('姓名').fill(input.name)
   if (input.category) await dialog.getByLabel('关系大类').selectOption(input.category)
+  await dialog.getByLabel('关系性质').selectOption(input.relationshipType
+    ?? (input.category === 'partner' ? 'married' : 'biological'))
   if (input.direction) await dialog.getByLabel('关系方向').selectOption(input.direction)
   await dialog.getByRole('button', { name: '添加并关联', exact: true }).click()
   await expect(dialog).toBeHidden()
@@ -53,6 +60,25 @@ test('new project builds a center family with parents, partner and child, then o
   await page.getByRole('link', { name: '家谱树', exact: true }).click()
   await expect(page.getByText('中心人物：测试中心人物')).toBeVisible()
   await expect(page.getByTestId('family-graph')).toBeVisible()
+  expectNoRuntimeErrors(errors)
+})
+
+test('tree person shortcuts preset a child relationship and save it atomically', async ({ page }) => {
+  const errors = watchRuntimeErrors(page)
+  await page.goto(`${DEMO_PROJECT_PATH}/tree?previewPersonId=person-lin-chen`)
+
+  await expect(page.getByRole('complementary', { name: '为林晨添加关系' })).toBeVisible()
+  await page.getByRole('button', { name: '为林晨添加子女' }).click()
+  const dialog = page.getByRole('dialog', { name: '为林晨添加子女' })
+  await expect(dialog.getByLabel('关系大类')).toHaveValue('parent')
+  await expect(dialog.getByLabel('关系方向')).toHaveValue('current-is-parent')
+  await expect(dialog.getByLabel('关系性质')).toHaveValue('')
+  await dialog.getByLabel('姓名').fill('快捷添加子女')
+  await dialog.getByLabel('关系性质').selectOption('biological')
+  await dialog.getByRole('button', { name: '添加并关联', exact: true }).click()
+
+  await expect(dialog).toBeHidden()
+  await expect(page.getByLabel('跳转人物', { exact: true })).toContainText('快捷添加子女')
   expectNoRuntimeErrors(errors)
 })
 

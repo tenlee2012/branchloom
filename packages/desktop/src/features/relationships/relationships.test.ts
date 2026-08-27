@@ -135,14 +135,17 @@ async function mountRelationshipEditor(
   return { wrapper, repository, session: useSessionStore(pinia) }
 }
 
-async function mountQuickAdd(repository: BranchloomRepository = makeRepository()) {
+async function mountQuickAdd(
+  repository: BranchloomRepository = makeRepository(),
+  preset: 'parent' | 'partner' | 'child' | 'custom' = 'custom',
+) {
   const person = await repository.getPerson('person-lin-hai')
   const pinia = createPinia()
   setActivePinia(pinia)
   useSessionStore(pinia).openProject(await repository.getProject(PROJECT_ID))
   const wrapper = mount(QuickAddRelativeDialog, {
     attachTo: document.body,
-    props: { open: true, projectId: PROJECT_ID, person },
+    props: { open: true, projectId: PROJECT_ID, person, preset },
     global: {
       plugins: [pinia],
       provide: { [branchloomRepositoryKey as symbol]: repository },
@@ -452,6 +455,45 @@ describe('relationship editor validation', () => {
 })
 
 describe('atomic quick-add relative workflow', () => {
+  it.each([
+    ['parent', '为林海添加父母', 'parent', 'relative-is-parent'],
+    ['partner', '为林海添加伴侣', 'partner', undefined],
+    ['child', '为林海添加子女', 'parent', 'current-is-parent'],
+  ] as const)('applies the %s shortcut without inferring relationship nature', async (
+    preset,
+    title,
+    expectedCategory,
+    expectedDirection,
+  ) => {
+    const { wrapper } = await mountQuickAdd(makeRepository(), preset)
+    expect(wrapper.text()).toContain(title)
+    expect((wrapper.get('select[name="category"]').element as HTMLSelectElement).value)
+      .toBe(expectedCategory)
+    expect((wrapper.get('select[name="relationshipType"]').element as HTMLSelectElement).value)
+      .toBe('')
+    if (expectedDirection) {
+      expect((wrapper.get('select[name="direction"]').element as HTMLSelectElement).value)
+        .toBe(expectedDirection)
+    } else {
+      expect(wrapper.find('select[name="direction"]').exists()).toBe(false)
+    }
+  })
+
+  it('requires an explicit relationship nature before writing', async () => {
+    const base = makeRepository()
+    const savePersonWithRelationship = vi.spyOn(base, 'savePersonWithRelationship')
+    const { wrapper } = await mountQuickAdd(base, 'parent')
+    await wrapper.get('input[name="relativeName"]').setValue('林岚')
+    await wrapper.get('button[name="添加并关联"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[role="alert"]').text()).toContain('请选择关系性质')
+    expect(wrapper.get('select[name="relationshipType"]').attributes('aria-invalid')).toBe('true')
+    expect(wrapper.get('select[name="relationshipType"]').attributes('aria-describedby'))
+      .toContain('quick-relative-type-error')
+    expect(savePersonWithRelationship).not.toHaveBeenCalled()
+  })
+
   it('persists one valid minimal person and its relationship as one history entry', async () => {
     const repository = makeRepository()
     const beforePeople = await repository.listPeople(PROJECT_ID, {
@@ -558,6 +600,7 @@ describe('atomic quick-add relative workflow', () => {
     const repository = proxyRepository(base, { savePersonWithRelationship })
     const { wrapper } = await mountQuickAdd(repository)
     await wrapper.get('input[name="relativeName"]').setValue('林岚')
+    await wrapper.get('select[name="relationshipType"]').setValue('biological')
     const submit = wrapper.get('button[name="添加并关联"]')
     await submit.trigger('click')
     await submit.trigger('click')

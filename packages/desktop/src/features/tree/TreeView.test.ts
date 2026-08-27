@@ -58,8 +58,13 @@ async function mountTree(
         FamilyGraph: {
           name: 'FamilyGraph',
           props: ['graph', 'density', 'selectedPersonId'],
-          emits: ['node-click', 'node-double-click', 'zoom-change'],
-          template: '<div data-testid="family-graph"><button aria-label="选择林晨" @click="$emit(\'node-click\', \'person-lin-chen\')">选中林晨</button><button aria-label="选择陈芳" @click="$emit(\'node-click\', \'person-chen-fang\')">选中陈芳</button><button aria-label="设林晨为中心" @click="$emit(\'node-double-click\', \'person-lin-chen\')">设为中心</button></div>',
+          emits: ['node-click', 'node-double-click', 'canvas-click', 'selected-node-anchor-change', 'zoom-change'],
+          template: `<div data-testid="family-graph">
+            <button aria-label="选择林晨" @click="$emit('node-click', 'person-lin-chen'); $emit('selected-node-anchor-change', { personId: 'person-lin-chen', x1: 180, x2: 284, y1: 160, y2: 302, canvasWidth: 960, canvasHeight: 640 })">选中林晨</button>
+            <button aria-label="选择陈芳" @click="$emit('node-click', 'person-chen-fang'); $emit('selected-node-anchor-change', { personId: 'person-chen-fang', x1: 360, x2: 464, y1: 160, y2: 302, canvasWidth: 960, canvasHeight: 640 })">选中陈芳</button>
+            <button aria-label="设林晨为中心" @click="$emit('node-double-click', 'person-lin-chen')">设为中心</button>
+            <button aria-label="点击画布空白处" @click="$emit('canvas-click')">画布空白</button>
+          </div>`,
           methods: { fit, relayout, zoomIn, zoomOut, zoomTo },
         },
       },
@@ -127,6 +132,7 @@ describe('TreeView', () => {
     await wrapper.get('button[aria-label="选择林晨"]').trigger('click')
     expect(document.body.textContent).toContain('林晨的人物预览')
     expect(document.body.textContent).toContain('添加人物')
+    expect(wrapper.get('[aria-label="为林晨添加关系"]').attributes('data-placement')).toBe('right')
 
     await wrapper.get('button[aria-label="设林晨为中心"]').trigger('click')
     await flushPromises()
@@ -136,6 +142,36 @@ describe('TreeView', () => {
       generationsUp: 2,
       generationsDown: 2,
     })
+  })
+
+  it('opens role-aware quick-add presets and dismisses them from the canvas', async () => {
+    const { wrapper } = await mountTree()
+    await wrapper.get('button[aria-label="选择林晨"]').trigger('click')
+
+    const quickAdd = wrapper.getComponent(QuickAddRelativeDialog)
+    await wrapper.get('button[aria-label="为林晨添加父母"]').trigger('click')
+    expect(quickAdd.props()).toMatchObject({ open: true, preset: 'parent' })
+    expect(document.body.textContent).toContain('为林晨添加父母')
+    expect((document.querySelector('select[name="category"]') as HTMLSelectElement).value).toBe('parent')
+    expect((document.querySelector('select[name="direction"]') as HTMLSelectElement).value).toBe('relative-is-parent')
+
+    quickAdd.vm.$emit('close')
+    await wrapper.vm.$nextTick()
+    await wrapper.get('button[aria-label="为林晨添加伴侣"]').trigger('click')
+    expect(quickAdd.props()).toMatchObject({ open: true, preset: 'partner' })
+    expect(document.body.textContent).toContain('为林晨添加伴侣')
+    expect((document.querySelector('select[name="category"]') as HTMLSelectElement).value).toBe('partner')
+
+    quickAdd.vm.$emit('close')
+    await wrapper.vm.$nextTick()
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[aria-label="为林晨添加关系"]').exists()).toBe(false)
+
+    await wrapper.get('button[aria-label="选择林晨"]').trigger('click')
+    await wrapper.get('button[aria-label="点击画布空白处"]').trigger('click')
+    expect(wrapper.find('[aria-label="为林晨添加关系"]').exists()).toBe(false)
+    expect(wrapper.find('article.person-preview').exists()).toBe(false)
   })
 
   it('opens the selected person edit page from the preview header', async () => {
@@ -309,6 +345,9 @@ describe('TreeView', () => {
     const input = document.querySelector<HTMLInputElement>('#quick-relative-name')!
     input.value = '林小满'
     input.dispatchEvent(new Event('input', { bubbles: true }))
+    const relationshipType = document.querySelector<HTMLSelectElement>('select[name="relationshipType"]')!
+    relationshipType.value = 'biological'
+    relationshipType.dispatchEvent(new Event('change', { bubbles: true }))
     document.querySelector<HTMLButtonElement>('button[name="添加并关联"]')!.click()
     await flushPromises()
     const saved = await repository.listPeople('project-demo-family', {
@@ -335,14 +374,16 @@ describe('TreeView', () => {
   it('keeps a child quick-added from a direct partner visible in the refreshed graph', async () => {
     const { wrapper } = await mountTree()
     await wrapper.get('button[aria-label="选择陈芳"]').trigger('click')
-    document.querySelector<HTMLButtonElement>('button[name="添加人物"]')!.click()
+    await wrapper.get('button[aria-label="为陈芳添加子女"]').trigger('click')
     await flushPromises()
     const input = document.querySelector<HTMLInputElement>('#quick-relative-name')!
     input.value = '陈小禾'
     input.dispatchEvent(new Event('input', { bubbles: true }))
+    const relationshipType = document.querySelector<HTMLSelectElement>('select[name="relationshipType"]')!
+    relationshipType.value = 'biological'
+    relationshipType.dispatchEvent(new Event('change', { bubbles: true }))
     const direction = document.querySelector<HTMLSelectElement>('select[name="direction"]')!
-    direction.value = 'current-is-parent'
-    direction.dispatchEvent(new Event('change', { bubbles: true }))
+    expect(direction.value).toBe('current-is-parent')
     document.querySelector<HTMLButtonElement>('button[name="添加并关联"]')!.click()
     await flushPromises()
 
@@ -420,11 +461,19 @@ describe('FamilyGraph lifecycle', () => {
     })
     await flushPromises()
     const callbacks = create.mock.calls[0]![0]
+    const anchor = {
+      personId: 'person-lin-chen', x1: 10, x2: 114, y1: 20, y2: 162,
+      canvasWidth: 800, canvasHeight: 600,
+    }
     callbacks.onNodeClick('person-lin-chen')
     callbacks.onNodeDoubleClick('person-lin-chen')
+    callbacks.onCanvasClick()
+    callbacks.onSelectedNodeAnchorChange(anchor)
     callbacks.onZoomChange(1.25)
     expect(wrapper.emitted('nodeClick')).toEqual([['person-lin-chen']])
     expect(wrapper.emitted('nodeDoubleClick')).toEqual([['person-lin-chen']])
+    expect(wrapper.emitted('canvasClick')).toEqual([[]])
+    expect(wrapper.emitted('selectedNodeAnchorChange')).toEqual([[anchor]])
     expect(wrapper.emitted('zoomChange')).toEqual([[1.25]])
 
     await wrapper.setProps({ density: { avatars: false, dates: true, places: true, relationships: true } })

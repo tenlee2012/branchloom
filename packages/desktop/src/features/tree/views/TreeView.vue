@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
   IconArrowsMove,
@@ -22,7 +22,8 @@ import { getPrimaryName } from '../../../shared/domain/personNames'
 import { useBranchloomRepository } from '../../../shared/repository/injection'
 import QuickAddRelativeDialog from '../../relationships/components/QuickAddRelativeDialog.vue'
 import RelationshipEditor from '../../relationships/components/RelationshipEditor.vue'
-import FamilyGraph, { type GraphDensity } from '../components/FamilyGraph.vue'
+import FamilyGraph, { type GraphDensity, type GraphNodeAnchor } from '../components/FamilyGraph.vue'
+import PersonQuickActions from '../components/PersonQuickActions.vue'
 import PersonPreviewDrawer from '../components/PersonPreviewDrawer.vue'
 import RelationshipResearchPanel from '../components/RelationshipResearchPanel.vue'
 import TreeToolbar from '../components/TreeToolbar.vue'
@@ -60,9 +61,11 @@ const density = ref<GraphDensity>({
   names: false,
 })
 const quickAddOpen = ref(false)
+const quickAddPreset = ref<'parent' | 'partner' | 'child' | 'custom'>('custom')
 const relationshipEditorOpen = ref(false)
 const researchClosed = ref(false)
 const zoomLevel = ref(1)
+const selectedNodeAnchor = ref<GraphNodeAnchor>()
 const graphComponent = ref<{
   fit(): void
   relayout(): void
@@ -154,6 +157,7 @@ watch(
     if (nextCenter !== centerPersonId.value) {
       centerPersonId.value = nextCenter
       selectedPersonId.value = ''
+      selectedNodeAnchor.value = undefined
       void refreshFamilySlice(nextCenter)
     }
     if (typeof personId !== 'string' && typeof legacyPersonId === 'string') {
@@ -170,7 +174,10 @@ watch(locatedRelationshipId, (nextId, previousId) => {
 watch(previewPersonId, (nextId, previousId) => {
   if (loadState.value !== 'ready' || nextId === previousId) return
   if (nextId) void load()
-  else selectedPersonId.value = ''
+  else {
+    selectedPersonId.value = ''
+    selectedNodeAnchor.value = undefined
+  }
 })
 watch([mode, generationsUp, generationsDown], () => {
   if (loadState.value === 'ready' && centerPersonId.value) {
@@ -193,7 +200,9 @@ async function load() {
   const requestedPreviewPersonId = previewPersonId.value
   loadState.value = 'loading'
   loadError.value = ''
+  quickAddOpen.value = false
   selectedPersonId.value = ''
+  selectedNodeAnchor.value = undefined
   try {
     const [loadedProject, peoplePage, loadedSources, loadedCitations, loadedPlaces] = await Promise.all([
       repository.getProject(scopedProjectId),
@@ -248,6 +257,7 @@ async function load() {
     locatedRelationshipRecord.value = targetRelationship
     centerPersonId.value = nextCenterPersonId
     selectedPersonId.value = ''
+    selectedNodeAnchor.value = undefined
     applySlice(loadedProject, slice, locatedPeople, targetRelationship)
     if (typeof route.query.personId !== 'string' && typeof route.query.person === 'string') {
       const { person: legacyPersonId, ...query } = route.query
@@ -360,7 +370,9 @@ async function changeCenter(personId: string) {
 }
 
 async function closePersonPreview() {
+  quickAddOpen.value = false
   selectedPersonId.value = ''
+  selectedNodeAnchor.value = undefined
   if (!previewPersonId.value) return
   const { previewPersonId: _previewPersonId, ...query } = route.query
   await router.replace({ query })
@@ -374,7 +386,16 @@ async function changeMode(nextMode: TreeMode) {
 }
 
 function selectPerson(personId: string) {
+  if (personId !== selectedPersonId.value) selectedNodeAnchor.value = undefined
   selectedPersonId.value = personId
+}
+
+function updateSelectedNodeAnchor(anchor: GraphNodeAnchor | undefined) {
+  if (!anchor || anchor.personId !== selectedPersonId.value) {
+    if (!anchor) selectedNodeAnchor.value = undefined
+    return
+  }
+  selectedNodeAnchor.value = anchor
 }
 
 function toggleBranch(personId: string) {
@@ -405,9 +426,11 @@ function handleRelationshipSaved(relationship: Relationship) {
   relationshipEditorOpen.value = false
 }
 
-function openQuickAdd() {
+function openQuickAdd(preset: 'parent' | 'partner' | 'child' | 'custom' = 'custom') {
   selectedPersonId.value ||= centerPersonId.value
-  if (selectedPersonId.value) quickAddOpen.value = true
+  if (!selectedPersonId.value) return
+  quickAddPreset.value = preset
+  quickAddOpen.value = true
 }
 
 function fitCanvas() {
@@ -423,7 +446,18 @@ function shrinkRange() {
   else if (generationsDown.value > 0) generationsDown.value -= 1
 }
 
-onBeforeUnmount(() => { latestRequest += 1 })
+function handleTreeEscape(event: KeyboardEvent) {
+  if (event.key !== 'Escape' || event.defaultPrevented || !selectedPersonId.value) return
+  if (quickAddOpen.value || relationshipEditorOpen.value) return
+  if (document.querySelector('[role="dialog"][aria-modal="true"]')) return
+  void closePersonPreview()
+}
+
+onMounted(() => document.addEventListener('keydown', handleTreeEscape))
+onBeforeUnmount(() => {
+  latestRequest += 1
+  document.removeEventListener('keydown', handleTreeEscape)
+})
 
 defineExpose({ fitCanvas, addPerson })
 </script>
@@ -516,7 +550,16 @@ defineExpose({ fitCanvas, addPerson })
           :selected-person-id="selectedPersonId"
           @node-click="selectPerson"
           @node-double-click="changeCenter"
+          @canvas-click="closePersonPreview"
+          @selected-node-anchor-change="updateSelectedNodeAnchor"
           @zoom-change="zoomLevel = $event"
+        />
+        <PersonQuickActions
+          v-if="selectedPerson && selectedNodeAnchor"
+          :person-name="primaryName(selectedPerson)"
+          :anchor="selectedNodeAnchor"
+          @action="openQuickAdd"
+          @close="closePersonPreview"
         />
         <div v-if="centerPerson" class="visually-hidden" aria-live="polite">
           中心人物：<strong>{{ primaryName(centerPerson) }}</strong>
@@ -545,7 +588,7 @@ defineExpose({ fitCanvas, addPerson })
         @close="closePersonPreview"
         @center="changeCenter"
         @toggle-branch="toggleBranch"
-        @quick-add="quickAddOpen = true"
+        @quick-add="openQuickAdd('custom')"
       />
       <RelationshipResearchPanel
         v-else-if="researchRelationship && !researchClosed"
@@ -564,6 +607,7 @@ defineExpose({ fitCanvas, addPerson })
       :open="quickAddOpen"
       :project-id="projectId"
       :person="selectedPerson"
+      :preset="quickAddPreset"
       @close="quickAddOpen = false"
       @saved="handleRelativeSaved"
     />

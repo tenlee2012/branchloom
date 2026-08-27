@@ -1,5 +1,10 @@
-import type { Core, ElementDefinition, EventObjectNode, StylesheetStyle } from 'cytoscape'
-import type { GraphAdapter, GraphDensity, GraphRuntime } from '../components/FamilyGraph.vue'
+import type { Core, ElementDefinition, EventObject, EventObjectNode, StylesheetStyle } from 'cytoscape'
+import type {
+  GraphAdapter,
+  GraphDensity,
+  GraphNodeAnchor,
+  GraphRuntime,
+} from '../components/FamilyGraph.vue'
 import type { VisibleGraph } from '../model/buildVisibleGraph'
 import personPlaceholder from '../../../assets/person-placeholder-round.png'
 import { isPrimaryName, personNameTypeLabels } from '../../../shared/domain/personNames'
@@ -11,6 +16,8 @@ export interface GraphCreateOptions {
   selectedPersonId?: string
   onNodeClick(personId: string): void
   onNodeDoubleClick(personId: string): void
+  onCanvasClick(): void
+  onSelectedNodeAnchorChange(anchor: GraphNodeAnchor | undefined): void
   onZoomChange(zoomLevel: number): void
 }
 
@@ -464,20 +471,56 @@ async function createRuntime(options: GraphCreateOptions): Promise<GraphRuntime>
     userPanningEnabled: true,
     boxSelectionEnabled: false,
   })
+  let currentGraph = options.graph
+  let selectedPersonId = options.selectedPersonId ?? ''
+  const notifySelectedNodeAnchor = () => {
+    if (!selectedPersonId) {
+      options.onSelectedNodeAnchorChange(undefined)
+      return
+    }
+    const selected = cy.getElementById(selectedPersonId)
+    if (selected.empty()) {
+      options.onSelectedNodeAnchorChange(undefined)
+      return
+    }
+    const bounds = selected.renderedBoundingBox()
+    options.onSelectedNodeAnchorChange({
+      personId: selectedPersonId,
+      x1: bounds.x1,
+      x2: bounds.x2,
+      y1: bounds.y1,
+      y2: bounds.y2,
+      canvasWidth: cy.width(),
+      canvasHeight: cy.height(),
+    })
+  }
+  const focusPerson = (personId: string) => {
+    selectedPersonId = personId
+    applyRelationshipFocus(cy, selectedPersonId)
+    notifySelectedNodeAnchor()
+  }
   const taps = createNodeTapController({
-    onClick: options.onNodeClick,
+    onClick(personId) {
+      focusPerson(personId)
+      options.onNodeClick(personId)
+    },
     onDoubleClick: options.onNodeDoubleClick,
   })
   const onTap = (event: EventObjectNode) => {
     taps.tap(event.target.id())
   }
+  const onCanvasTap = (event: EventObject) => {
+    if (event.target === cy) options.onCanvasClick()
+  }
   const onZoom = () => {
     options.onZoomChange(cy.zoom())
+    notifySelectedNodeAnchor()
   }
+  const onViewportChange = () => notifySelectedNodeAnchor()
   cy.on('tap', 'node[isPerson = "yes"]', onTap)
+  cy.on('tap', onCanvasTap)
   cy.on('zoom', onZoom)
-  let currentGraph = options.graph
-  let selectedPersonId = options.selectedPersonId ?? ''
+  cy.on('pan resize', onViewportChange)
   runLayout(cy, currentGraph)
   applyRelationshipFocus(cy, selectedPersonId)
   onZoom()
@@ -489,13 +532,19 @@ async function createRuntime(options: GraphCreateOptions): Promise<GraphRuntime>
       cy.add(elements(graph, density))
       runLayout(cy, graph)
       applyRelationshipFocus(cy, selectedPersonId)
+      notifySelectedNodeAnchor()
     },
     focus(personId) {
-      selectedPersonId = personId
-      applyRelationshipFocus(cy, selectedPersonId)
+      focusPerson(personId)
     },
-    fit() { cy.fit(undefined, 42) },
-    relayout() { runLayout(cy, currentGraph) },
+    fit() {
+      cy.fit(undefined, 42)
+      notifySelectedNodeAnchor()
+    },
+    relayout() {
+      runLayout(cy, currentGraph)
+      notifySelectedNodeAnchor()
+    },
     zoomIn() {
       cy.zoom({ level: Math.min(cy.maxZoom(), cy.zoom() * 1.2), renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 } })
     },
@@ -511,7 +560,9 @@ async function createRuntime(options: GraphCreateOptions): Promise<GraphRuntime>
     destroy() {
       taps.destroy()
       cy.off('tap', 'node[isPerson = "yes"]', onTap)
+      cy.off('tap', onCanvasTap)
       cy.off('zoom', onZoom)
+      cy.off('pan resize', onViewportChange)
       cy.destroy()
     },
   }

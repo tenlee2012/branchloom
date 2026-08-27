@@ -11,6 +11,7 @@ import type {
   Person,
   Relationship,
 } from '../../../shared/domain/types'
+import { getPrimaryName } from '../../../shared/domain/personNames'
 import { useBranchloomRepository } from '../../../shared/repository/injection'
 import {
   createRelationshipId,
@@ -18,7 +19,14 @@ import {
   partnerRelationshipOptions,
 } from '../composables/useRelationshipEditor'
 
-const props = defineProps<{ open: boolean; projectId: string; person: Person }>()
+type QuickRelativePreset = 'parent' | 'partner' | 'child' | 'custom'
+
+const props = withDefaults(defineProps<{
+  open: boolean
+  projectId: string
+  person: Person
+  preset?: QuickRelativePreset
+}>(), { preset: 'custom' })
 const emit = defineEmits<{
   close: []
   saved: [person: Person, relationship: Relationship]
@@ -27,11 +35,12 @@ const repository = useBranchloomRepository()
 const session = useSessionStore()
 const relativeName = ref('')
 const category = ref<Relationship['category']>('parent')
-const parentType = ref<ParentRelation>('biological')
-const partnerType = ref<PartnerRelation>('married')
+const parentType = ref<ParentRelation | ''>('')
+const partnerType = ref<PartnerRelation | ''>('')
 const direction = ref<'relative-is-parent' | 'current-is-parent'>('relative-is-parent')
 const saving = ref(false)
 const validationError = ref('')
+const relationshipTypeError = ref('')
 const saveFailure = ref('')
 const confirmClose = ref(false)
 const baseline = ref('')
@@ -39,19 +48,30 @@ const dirty = computed(() => draftFingerprint() !== baseline.value)
 const typeOptions = computed(() => category.value === 'parent'
   ? parentRelationshipOptions
   : partnerRelationshipOptions)
+const personName = computed(() => getPrimaryName(props.person))
+const dialogTitle = computed(() => {
+  if (props.preset === 'parent') return `为${personName.value}添加父母`
+  if (props.preset === 'partner') return `为${personName.value}添加伴侣`
+  if (props.preset === 'child') return `为${personName.value}添加子女`
+  return '添加人物与关系'
+})
+const dialogDescription = computed(() => props.preset === 'custom'
+  ? '创建一个新人物，并设置其与当前人物的关系。'
+  : '快捷项已带入关系方向，请补充姓名并确认关系性质。')
 
-watch(() => [props.open, props.person.id, props.projectId] as const, ([open]) => {
+watch(() => [props.open, props.person.id, props.projectId, props.preset] as const, ([open]) => {
   if (open) reset()
   else confirmClose.value = false
 }, { immediate: true })
 
 function reset() {
   relativeName.value = ''
-  category.value = 'parent'
-  parentType.value = 'biological'
-  partnerType.value = 'married'
-  direction.value = 'relative-is-parent'
+  category.value = props.preset === 'partner' ? 'partner' : 'parent'
+  parentType.value = ''
+  partnerType.value = ''
+  direction.value = props.preset === 'child' ? 'current-is-parent' : 'relative-is-parent'
   validationError.value = ''
+  relationshipTypeError.value = ''
   saveFailure.value = ''
   baseline.value = draftFingerprint()
 }
@@ -93,6 +113,7 @@ function createDrafts(name: string): { person: Person; relationship: Relationshi
   }
   const relationshipId = createRelationshipId('relationship')
   if (category.value === 'partner') {
+    if (!partnerType.value) throw new Error('请选择关系性质。')
     return {
       person,
       relationship: {
@@ -107,6 +128,7 @@ function createDrafts(name: string): { person: Person; relationship: Relationshi
       },
     }
   }
+  if (!parentType.value) throw new Error('请选择关系性质。')
   return {
     person,
     relationship: {
@@ -125,13 +147,17 @@ function createDrafts(name: string): { person: Person; relationship: Relationshi
 async function submit() {
   if (saving.value) return
   const name = relativeName.value.trim()
+  validationError.value = ''
+  relationshipTypeError.value = ''
   if (!name) {
     validationError.value = '请填写人物姓名。'
-    return
   }
+  if (!(category.value === 'parent' ? parentType.value : partnerType.value)) {
+    relationshipTypeError.value = '请选择关系性质。'
+  }
+  if (validationError.value || relationshipTypeError.value) return
   const drafts = createDrafts(name)
   saving.value = true
-  validationError.value = ''
   saveFailure.value = ''
   session.saveStatus = 'saving'
   session.saveError = undefined
@@ -155,8 +181,8 @@ async function submit() {
 <template>
   <BaseDialog
     :open="open"
-    title="添加人物与关系"
-    description="创建一个新人物，并设置其与当前人物的关系。"
+    :title="dialogTitle"
+    :description="dialogDescription"
     close-label="关闭添加人物与关系"
     @close="requestClose"
   >
@@ -178,14 +204,24 @@ async function submit() {
               <option value="partner">伴侣</option>
             </select></BaseSelectControl>
         </BaseField>
-        <BaseField id="quick-relative-type" label="关系性质">
+        <BaseField
+          id="quick-relative-type"
+          v-slot="{ describedBy, invalid }"
+          label="关系性质"
+          required
+          :error="relationshipTypeError"
+        >
           <BaseSelectControl>
             <select
               v-if="category === 'parent'"
               id="quick-relative-type"
               v-model="parentType"
               name="relationshipType"
+              required
+              :aria-describedby="describedBy"
+              :aria-invalid="invalid || undefined"
             >
+              <option value="" disabled>请选择关系性质</option>
               <option v-for="option in typeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
             </select>
             <select
@@ -193,7 +229,11 @@ async function submit() {
               id="quick-relative-type"
               v-model="partnerType"
               name="relationshipType"
+              required
+              :aria-describedby="describedBy"
+              :aria-invalid="invalid || undefined"
             >
+              <option value="" disabled>请选择关系性质</option>
               <option v-for="option in typeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
             </select>
           </BaseSelectControl>

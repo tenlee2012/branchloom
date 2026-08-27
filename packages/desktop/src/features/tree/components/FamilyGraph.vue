@@ -11,6 +11,16 @@ export interface GraphDensity {
   names?: boolean
 }
 
+export interface GraphNodeAnchor {
+  personId: string
+  x1: number
+  x2: number
+  y1: number
+  y2: number
+  canvasWidth: number
+  canvasHeight: number
+}
+
 export interface GraphRuntime {
   update(graph: VisibleGraph, density: GraphDensity): void
   focus?(personId: string): void
@@ -35,6 +45,8 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   nodeClick: [personId: string]
   nodeDoubleClick: [personId: string]
+  canvasClick: []
+  selectedNodeAnchorChange: [anchor: GraphNodeAnchor | undefined]
   zoomChange: [zoomLevel: number]
 }>()
 const container = ref<HTMLElement | null>(null)
@@ -68,6 +80,8 @@ onMounted(async () => {
       selectedPersonId: props.selectedPersonId,
       onNodeClick: (personId) => emit('nodeClick', personId),
       onNodeDoubleClick: (personId) => emit('nodeDoubleClick', personId),
+      onCanvasClick: () => emit('canvasClick'),
+      onSelectedNodeAnchorChange: (anchor) => emit('selectedNodeAnchorChange', anchor),
       onZoomChange: (zoomLevel) => emit('zoomChange', zoomLevel),
     })
     if (disposed) {
