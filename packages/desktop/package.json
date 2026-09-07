@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "node scripts/run-web.mjs dev",
+    "dev:mobile": "vite --host 0.0.0.0",
     "build": "vue-tsc -b && vite build",
     "prepare:ai-tools": "node scripts/prepare-ai-tools.mjs --build",
     "prepare:ai-tools:release": "node scripts/prepare-ai-tools.mjs --build --release",

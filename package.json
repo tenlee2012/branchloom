@@ -10,6 +10,10 @@
   "scripts": {
     "dev": "pnpm --dir packages/desktop dev",
     "build": "pnpm --dir packages/desktop build",
+    "android:init": "pnpm --dir packages/desktop tauri android init && pnpm android:icons",
+    "android:icons": "pnpm --dir packages/desktop tauri icon src-tauri/app-icon-manifest.json",
+    "build:android": "pnpm android:icons && pnpm --dir packages/desktop tauri android build --apk --debug --target aarch64",
+    "build:android:release": "pnpm android:icons && pnpm --dir packages/desktop tauri android build --apk --target aarch64",
     "build:mac": "pnpm --dir packages/desktop tauri build --bundles dmg",
     "build:cli": "cargo build -p branchloom-cli",
     "prepare:ai-tools": "pnpm --dir packages/desktop prepare:ai-tools",

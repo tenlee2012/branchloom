@@ -1,11 +1,15 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::error::Error as StdError;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{mpsc, Arc};
+use std::thread;
 use std::time::Duration;
 
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
-use reqwest::blocking::{Client, RequestBuilder};
+use reqwest::blocking::{Client, ClientBuilder, RequestBuilder, Response};
 use reqwest::{Method, StatusCode};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
@@ -22,6 +26,16 @@ const DEFAULT_GITHUB_LFS: &str = "https://github.com";
 const USER_AGENT: &str = "Branchloom/0.1";
 const GITHUB_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const GITHUB_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
+const GITHUB_GET_RETRY_DELAYS: [Duration; 2] =
+    [Duration::from_millis(250), Duration::from_millis(750)];
+#[cfg(any(target_os = "android", target_os = "ios"))]
+const GITHUB_FILE_CONCURRENCY: usize = 4;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+const GITHUB_FILE_CONCURRENCY: usize = 8;
+#[cfg(any(target_os = "android", target_os = "ios"))]
+const GITHUB_ATTACHMENT_CONCURRENCY: usize = 2;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+const GITHUB_ATTACHMENT_CONCURRENCY: usize = 4;
 const SYNC_STATE_FILE: &str = "connection.json";
 const SYNC_BASE_FILE: &str = "base.blp";
 
@@ -294,7 +308,16 @@ impl SyncPlan {
 }
 
 pub trait ProjectRemote {
+    fn head(&self) -> CoreResult<Option<String>> {
+        Ok(None)
+    }
+
     fn pull(&self) -> CoreResult<RemoteProject>;
+
+    fn pull_at_head(&self, _head: Option<&str>) -> CoreResult<RemoteProject> {
+        self.pull()
+    }
+
     fn push(&self, expected_commit: Option<&str>, tree: &ProjectTree) -> CoreResult<String>;
 }
 
@@ -348,7 +371,19 @@ impl<'a, R: ProjectRemote> SyncService<'a, R> {
     ) -> CoreResult<SyncPlan> {
         let data_revision = self.application.data_revision()?;
         let local_tree = self.application.export_project_tree(project_id)?;
-        let remote = self.remote.pull()?;
+        let base = self.load_base()?;
+        let remote_head = self.remote.head()?;
+        let remote = if remote_head.is_some()
+            && remote_head == self.connection.last_synced_commit
+            && base.is_some()
+        {
+            RemoteProject {
+                commit: remote_head,
+                tree: base.clone(),
+            }
+        } else {
+            self.remote.pull_at_head(remote_head.as_deref())?
+        };
         if let Some(remote_tree) = remote.tree.as_ref() {
             let remote_data = remote_tree.parse_project_data()?;
             let remote_project_id = remote_data.project_id()?;
@@ -358,7 +393,6 @@ impl<'a, R: ProjectRemote> SyncService<'a, R> {
                 )));
             }
         }
-        let base = self.load_base()?;
         let initialization_required = self.connection.last_synced_commit != remote.commit
             && base.is_none()
             && remote
@@ -921,6 +955,52 @@ pub struct GithubRemote {
     token: String,
     api_base: String,
     lfs_base: String,
+    file_concurrency: usize,
+    attachment_concurrency: usize,
+    progress: Option<Arc<dyn Fn(GithubTransferProgress) + Send + Sync>>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GithubTransferPhase {
+    ListingFiles,
+    DownloadingFiles,
+    DownloadingAttachments,
+    ValidatingProject,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GithubTransferProgress {
+    pub phase: GithubTransferPhase,
+    pub completed: usize,
+    pub total: usize,
+}
+
+struct LoadedBlob {
+    path: String,
+    bytes: Vec<u8>,
+    lfs_pointer: Option<LfsPointer>,
+}
+
+fn github_client_builder() -> ClientBuilder {
+    let builder = Client::builder();
+
+    #[cfg(target_os = "android")]
+    {
+        // reqwest 0.13 defaults to rustls-platform-verifier. On Android that verifier
+        // requires a separately bundled JVM component and explicit JNI initialization;
+        // without them its internal event-loop thread panics on the first TLS request.
+        // GitHub uses public WebPKI certificates, so the mobile client uses the bundled
+        // Mozilla trust anchors and never enters the uninitialized platform verifier.
+        let roots =
+            rustls::RootCertStore::from_iter(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+        let tls = rustls::ClientConfig::builder()
+            .with_root_certificates(roots)
+            .with_no_client_auth();
+        return builder.tls_backend_preconfigured(tls);
+    }
+
+    #[cfg(not(target_os = "android"))]
+    builder
 }
 
 impl GithubRemote {
@@ -941,7 +1021,7 @@ impl GithubRemote {
                 "GitHub access token is required".to_owned(),
             ));
         }
-        let client = Client::builder()
+        let client = github_client_builder()
             .user_agent(USER_AGENT)
             .connect_timeout(GITHUB_CONNECT_TIMEOUT)
             .timeout(GITHUB_REQUEST_TIMEOUT)
@@ -953,14 +1033,22 @@ impl GithubRemote {
             token,
             api_base: api_base.into().trim_end_matches('/').to_owned(),
             lfs_base: lfs_base.into().trim_end_matches('/').to_owned(),
+            file_concurrency: GITHUB_FILE_CONCURRENCY,
+            attachment_concurrency: GITHUB_ATTACHMENT_CONCURRENCY,
+            progress: None,
         })
     }
 
+    pub fn with_progress(
+        mut self,
+        progress: impl Fn(GithubTransferProgress) + Send + Sync + 'static,
+    ) -> Self {
+        self.progress = Some(Arc::new(progress));
+        self
+    }
+
     pub fn repository_exists(&self) -> CoreResult<bool> {
-        let response = self
-            .request(Method::GET, &self.repository_path())
-            .send()
-            .map_err(remote_error)?;
+        let response = self.send_get(&self.repository_path())?;
         match response.status() {
             StatusCode::OK => Ok(true),
             StatusCode::NOT_FOUND => Ok(false),
@@ -1039,12 +1127,19 @@ impl GithubRemote {
         self.pull_branch_head(&self.connection.branch)
     }
 
+    fn emit_progress(&self, phase: GithubTransferPhase, completed: usize, total: usize) {
+        if let Some(progress) = self.progress.as_ref() {
+            progress(GithubTransferProgress {
+                phase,
+                completed,
+                total,
+            });
+        }
+    }
+
     fn pull_branch_head(&self, branch: &str) -> CoreResult<Option<String>> {
         let path = format!("{}/git/ref/heads/{}", self.repository_path(), branch);
-        let response = self
-            .request(Method::GET, &path)
-            .send()
-            .map_err(remote_error)?;
+        let response = self.send_get(&path)?;
         match response.status() {
             StatusCode::OK => {
                 let reference: RefResponse = response.json().map_err(remote_error)?;
@@ -1056,6 +1151,7 @@ impl GithubRemote {
     }
 
     fn load_tree(&self, commit_sha: &str) -> CoreResult<ProjectTree> {
+        self.emit_progress(GithubTransferPhase::ListingFiles, 0, 0);
         let commit: CommitResponse = self.get_json(&format!(
             "{}/git/commits/{commit_sha}",
             self.repository_path()
@@ -1070,36 +1166,88 @@ impl GithubRemote {
                 "GitHub returned a truncated project tree".to_owned(),
             ));
         }
-        let mut files = BTreeMap::new();
-        for item in tree.tree {
-            if item.kind != "blob" {
-                continue;
+        let items = tree
+            .tree
+            .into_iter()
+            .filter(|item| item.kind == "blob")
+            .collect::<Vec<_>>();
+        self.emit_progress(GithubTransferPhase::DownloadingFiles, 0, items.len());
+        let mut blobs = parallel_map_ordered(
+            &items,
+            self.file_concurrency,
+            |item| self.load_blob(item),
+            |completed| {
+                self.emit_progress(
+                    GithubTransferPhase::DownloadingFiles,
+                    completed,
+                    items.len(),
+                );
+            },
+        )?;
+        let attachments = blobs
+            .iter()
+            .enumerate()
+            .filter_map(|(index, blob)| blob.lfs_pointer.clone().map(|pointer| (index, pointer)))
+            .collect::<Vec<_>>();
+        if !attachments.is_empty() {
+            self.emit_progress(
+                GithubTransferPhase::DownloadingAttachments,
+                0,
+                attachments.len(),
+            );
+            let downloaded = parallel_map_ordered(
+                &attachments,
+                self.attachment_concurrency,
+                |(_, pointer)| self.download_lfs(pointer),
+                |completed| {
+                    self.emit_progress(
+                        GithubTransferPhase::DownloadingAttachments,
+                        completed,
+                        attachments.len(),
+                    );
+                },
+            )?;
+            for ((index, _), bytes) in attachments.into_iter().zip(downloaded) {
+                blobs[index].bytes = bytes;
+                blobs[index].lfs_pointer = None;
             }
-            let blob: BlobResponse = self.get_json(&format!(
-                "{}/git/blobs/{}",
-                self.repository_path(),
-                item.sha
-            ))?;
-            if blob.encoding != "base64" {
-                return Err(CoreError::Remote(format!(
-                    "unsupported GitHub blob encoding for {}",
-                    item.path
-                )));
-            }
-            let encoded = blob.content.replace(['\r', '\n'], "");
-            let mut bytes = BASE64.decode(encoded).map_err(|error| {
-                CoreError::Remote(format!("invalid GitHub blob for {}: {error}", item.path))
-            })?;
-            if item.path.starts_with("media/") {
-                if let Some(pointer) = LfsPointer::parse(&bytes)? {
-                    bytes = self.download_lfs(&pointer)?;
-                }
-            }
-            files.insert(item.path, bytes);
         }
+        let files = blobs
+            .into_iter()
+            .map(|blob| (blob.path, blob.bytes))
+            .collect::<BTreeMap<_, _>>();
+        self.emit_progress(GithubTransferPhase::ValidatingProject, 0, 0);
         let tree = ProjectTree::new(files)?;
         tree.validate_manifest()?;
         Ok(tree)
+    }
+
+    fn load_blob(&self, item: &TreeItem) -> CoreResult<LoadedBlob> {
+        let blob: BlobResponse = self.get_json(&format!(
+            "{}/git/blobs/{}",
+            self.repository_path(),
+            item.sha
+        ))?;
+        if blob.encoding != "base64" {
+            return Err(CoreError::Remote(format!(
+                "unsupported GitHub blob encoding for {}",
+                item.path
+            )));
+        }
+        let encoded = blob.content.replace(['\r', '\n'], "");
+        let bytes = BASE64.decode(encoded).map_err(|error| {
+            CoreError::Remote(format!("invalid GitHub blob for {}: {error}", item.path))
+        })?;
+        let lfs_pointer = if item.path.starts_with("media/") {
+            LfsPointer::parse(&bytes)?
+        } else {
+            None
+        };
+        Ok(LoadedBlob {
+            path: item.path.clone(),
+            bytes,
+            lfs_pointer,
+        })
     }
 
     fn push_tree(&self, expected_commit: Option<&str>, tree: &ProjectTree) -> CoreResult<String> {
@@ -1279,15 +1427,62 @@ impl GithubRemote {
             .header("X-GitHub-Api-Version", "2026-03-10")
     }
 
-    fn get_json<T: for<'de> Deserialize<'de>>(&self, path: &str) -> CoreResult<T> {
-        let response = self
-            .request(Method::GET, path)
-            .send()
-            .map_err(remote_error)?;
-        if !response.status().is_success() {
-            return Err(response_error(response));
+    fn send_get(&self, path: &str) -> CoreResult<Response> {
+        for retry_delay in GITHUB_GET_RETRY_DELAYS
+            .iter()
+            .copied()
+            .map(Some)
+            .chain(std::iter::once(None))
+        {
+            match self.request(Method::GET, path).send() {
+                Ok(response) if is_retryable_github_status(response.status()) => {
+                    if let Some(delay) = retry_delay {
+                        thread::sleep(delay);
+                    } else {
+                        return Ok(response);
+                    }
+                }
+                Ok(response) => return Ok(response),
+                Err(error) if is_retryable_github_get_error(&error) => {
+                    // Reading a project requires several small GitHub requests. Mobile
+                    // networks can drop a reused connection between two blobs, so retry
+                    // idempotent reads with a fresh request before failing the operation.
+                    if let Some(delay) = retry_delay {
+                        thread::sleep(delay);
+                    } else {
+                        return Err(remote_error(error));
+                    }
+                }
+                Err(error) => return Err(remote_error(error)),
+            }
         }
-        response.json().map_err(remote_error)
+        unreachable!("the GitHub GET retry loop always returns")
+    }
+
+    fn get_json<T: for<'de> Deserialize<'de>>(&self, path: &str) -> CoreResult<T> {
+        for retry_delay in GITHUB_GET_RETRY_DELAYS
+            .iter()
+            .copied()
+            .map(Some)
+            .chain(std::iter::once(None))
+        {
+            let response = self.send_get(path)?;
+            if !response.status().is_success() {
+                return Err(response_error(response));
+            }
+            match response.json() {
+                Ok(value) => return Ok(value),
+                Err(_) if retry_delay.is_some() => {
+                    // A dropped mobile connection can leave an otherwise successful JSON
+                    // response incomplete. Re-fetching the same GET is safe.
+                    if let Some(delay) = retry_delay {
+                        thread::sleep(delay);
+                    }
+                }
+                Err(error) => return Err(remote_error(error)),
+            }
+        }
+        unreachable!("the GitHub JSON retry loop always returns")
     }
 
     fn post_json<T: for<'de> Deserialize<'de>>(
@@ -1309,6 +1504,10 @@ impl GithubRemote {
 }
 
 impl ProjectRemote for GithubRemote {
+    fn head(&self) -> CoreResult<Option<String>> {
+        self.pull_head()
+    }
+
     fn pull(&self) -> CoreResult<RemoteProject> {
         if !self.repository_exists()? {
             return Err(CoreError::Remote(format!(
@@ -1321,6 +1520,18 @@ impl ProjectRemote for GithubRemote {
             .as_deref()
             .map(|sha| self.load_tree(sha))
             .transpose()?;
+        Ok(RemoteProject { commit, tree })
+    }
+
+    fn pull_at_head(&self, head: Option<&str>) -> CoreResult<RemoteProject> {
+        if head.is_none() && !self.repository_exists()? {
+            return Err(CoreError::Remote(format!(
+                "GitHub repository does not exist: {}/{}",
+                self.connection.owner, self.connection.repository
+            )));
+        }
+        let commit = head.map(str::to_owned);
+        let tree = head.map(|sha| self.load_tree(sha)).transpose()?;
         Ok(RemoteProject { commit, tree })
     }
 
@@ -1505,8 +1716,139 @@ fn default_branch() -> String {
     "main".to_owned()
 }
 
+fn is_retryable_github_get_error(error: &reqwest::Error) -> bool {
+    error.is_timeout() || error.is_connect() || error.is_request() || error.is_body()
+}
+
+fn is_retryable_github_status(status: StatusCode) -> bool {
+    matches!(
+        status,
+        StatusCode::BAD_GATEWAY | StatusCode::SERVICE_UNAVAILABLE | StatusCode::GATEWAY_TIMEOUT
+    )
+}
+
+fn parallel_map_ordered<T, R, F, P>(
+    items: &[T],
+    concurrency: usize,
+    operation: F,
+    mut progress: P,
+) -> CoreResult<Vec<R>>
+where
+    T: Sync,
+    R: Send,
+    F: Fn(&T) -> CoreResult<R> + Sync,
+    P: FnMut(usize),
+{
+    if items.is_empty() {
+        return Ok(Vec::new());
+    }
+    let worker_count = concurrency.max(1).min(items.len());
+    let next = AtomicUsize::new(0);
+    let cancelled = AtomicBool::new(false);
+    let (sender, receiver) = mpsc::channel();
+    let mut results = (0..items.len()).map(|_| None).collect::<Vec<_>>();
+    let mut worker_panicked = false;
+
+    thread::scope(|scope| {
+        let mut workers = Vec::with_capacity(worker_count);
+        for _ in 0..worker_count {
+            let sender = sender.clone();
+            let operation = &operation;
+            let next = &next;
+            let cancelled = &cancelled;
+            workers.push(scope.spawn(move || {
+                while !cancelled.load(Ordering::Acquire) {
+                    let index = next.fetch_add(1, Ordering::AcqRel);
+                    if index >= items.len() {
+                        break;
+                    }
+                    let result = operation(&items[index]);
+                    if result.is_err() {
+                        cancelled.store(true, Ordering::Release);
+                    }
+                    if sender.send((index, result)).is_err() {
+                        break;
+                    }
+                }
+            }));
+        }
+        drop(sender);
+
+        let mut completed = 0;
+        for (index, result) in receiver {
+            completed += 1;
+            results[index] = Some(result);
+            progress(completed);
+        }
+        for worker in workers {
+            if worker.join().is_err() {
+                worker_panicked = true;
+            }
+        }
+    });
+
+    if worker_panicked {
+        return Err(CoreError::Remote(
+            "GitHub download worker stopped unexpectedly".to_owned(),
+        ));
+    }
+    if let Some(index) = results
+        .iter()
+        .position(|result| matches!(result, Some(Err(_))))
+    {
+        if let Some(Err(error)) = results[index].take() {
+            return Err(error);
+        }
+    }
+    let mut ordered = Vec::with_capacity(results.len());
+    for result in results {
+        match result {
+            Some(Ok(value)) => ordered.push(value),
+            Some(Err(error)) => return Err(error),
+            None => {
+                return Err(CoreError::Remote(
+                    "GitHub download stopped before all files were read".to_owned(),
+                ));
+            }
+        }
+    }
+    Ok(ordered)
+}
+
 fn remote_error(error: reqwest::Error) -> CoreError {
-    CoreError::Remote(error.to_string())
+    let category = if error.is_timeout() {
+        "timeout"
+    } else if error.is_connect() {
+        "connection"
+    } else if error.is_body() {
+        "response body"
+    } else if error.is_decode() {
+        "response decoding"
+    } else {
+        "request"
+    };
+    let host = error
+        .url()
+        .and_then(|url| url.host_str())
+        .unwrap_or("remote host")
+        .to_owned();
+    let error = error.without_url();
+    let mut details = vec![error.to_string()];
+    let mut source = error.source();
+    while let Some(cause) = source {
+        let detail = cause.to_string();
+        if !detail.is_empty() && details.last() != Some(&detail) {
+            details.push(detail);
+        }
+        if details.len() == 5 {
+            break;
+        }
+        source = cause.source();
+    }
+    CoreError::Remote(format!(
+        "GitHub request failed ({category}, {host}): {}",
+        details.join(": ")
+    ))
 }
 
 fn response_error(response: reqwest::blocking::Response) -> CoreError {
@@ -1520,11 +1862,42 @@ fn response_error(response: reqwest::blocking::Response) -> CoreError {
 #[cfg(test)]
 mod tests {
     use std::cell::RefCell;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     use serde_json::json;
     use tempfile::tempdir;
 
     use super::*;
+
+    #[test]
+    fn parallel_downloads_respect_the_limit_and_preserve_repository_order() {
+        let items = (0usize..12).collect::<Vec<_>>();
+        let active = AtomicUsize::new(0);
+        let maximum = AtomicUsize::new(0);
+        let mut progress = Vec::new();
+
+        let results = parallel_map_ordered(
+            &items,
+            4,
+            |value| {
+                let now_active = active.fetch_add(1, Ordering::AcqRel) + 1;
+                maximum.fetch_max(now_active, Ordering::AcqRel);
+                thread::sleep(Duration::from_millis(5));
+                active.fetch_sub(1, Ordering::AcqRel);
+                Ok(value * 2)
+            },
+            |completed| progress.push(completed),
+        )
+        .expect("download in parallel");
+
+        assert_eq!(
+            results,
+            items.iter().map(|value| value * 2).collect::<Vec<_>>()
+        );
+        assert!(maximum.load(Ordering::Acquire) >= 2);
+        assert!(maximum.load(Ordering::Acquire) <= 4);
+        assert_eq!(progress, (1usize..=items.len()).collect::<Vec<_>>());
+    }
 
     #[test]
     fn merges_changes_to_different_fields() {
@@ -2091,6 +2464,55 @@ mod tests {
     }
 
     #[test]
+    fn synchronization_reuses_the_baseline_when_the_remote_head_is_unchanged() {
+        let directory = tempdir().expect("create temporary directory");
+        let database = directory.path().join("branchloom.sqlite3");
+        let mut application =
+            ApplicationService::open(&database).expect("open application service");
+        application
+            .create_project_with_id(
+                "project-test".to_owned(),
+                crate::core::project::NewProject {
+                    name: "Family".to_owned(),
+                    description: String::new(),
+                },
+            )
+            .expect("create project");
+        let local = application
+            .export_project_tree("project-test")
+            .expect("export project");
+        let state_directory = directory.path().join("sync");
+        let mut connection = GithubConnection {
+            owner: "alice".to_owned(),
+            repository: "family".to_owned(),
+            branch: "main".to_owned(),
+            last_synced_commit: None,
+        };
+        save_sync_baseline(
+            &state_directory,
+            &local,
+            &mut connection,
+            Some("commit-base".to_owned()),
+        )
+        .expect("save baseline");
+        let remote = HeadAwareRemote {
+            commit: Some("commit-base".to_owned()),
+            calls: RefCell::new(Vec::new()),
+        };
+        let service = SyncService::new(&mut application, &remote, &state_directory, connection)
+            .expect("create sync service");
+
+        let plan = service
+            .plan("project-test", SyncMode::PullThenPush)
+            .expect("plan synchronization");
+
+        assert!(!plan.summary().changed_local);
+        assert!(!plan.summary().will_push);
+        assert_eq!(plan.summary().pulled_commit.as_deref(), Some("commit-base"));
+        assert_eq!(remote.calls.borrow().as_slice(), ["head"]);
+    }
+
+    #[test]
     fn failed_push_does_not_apply_remote_changes_locally() {
         let directory = tempdir().expect("create temporary directory");
         let database = directory.path().join("branchloom.sqlite3");
@@ -2255,6 +2677,32 @@ mod tests {
             self.calls.borrow_mut().push("push");
             *self.pushed.borrow_mut() = Some(tree.clone());
             Ok("commit-new".to_owned())
+        }
+    }
+
+    struct HeadAwareRemote {
+        commit: Option<String>,
+        calls: RefCell<Vec<&'static str>>,
+    }
+
+    impl ProjectRemote for HeadAwareRemote {
+        fn head(&self) -> CoreResult<Option<String>> {
+            self.calls.borrow_mut().push("head");
+            Ok(self.commit.clone())
+        }
+
+        fn pull(&self) -> CoreResult<RemoteProject> {
+            self.calls.borrow_mut().push("pull");
+            Err(CoreError::Conflict(
+                "the unchanged baseline shortcut should avoid a full pull".to_owned(),
+            ))
+        }
+
+        fn push(&self, _expected_commit: Option<&str>, _tree: &ProjectTree) -> CoreResult<String> {
+            self.calls.borrow_mut().push("push");
+            Err(CoreError::Conflict(
+                "the unchanged baseline shortcut should avoid a push".to_owned(),
+            ))
         }
     }
 

@@ -1,8 +1,20 @@
 <script setup lang="ts">
 import { IconBrandGithub, IconRobot } from '@tabler/icons-vue'
+import { onMounted, ref } from 'vue'
 import { RouterLink, RouterView } from 'vue-router'
+import { loadRuntimeCapabilities } from '../../shared/runtimeCapabilities'
 import DataRefreshButton from '../components/DataRefreshButton.vue'
 import PageBackLink from '../components/PageBackLink.vue'
+
+const aiToolsAvailable = ref(false)
+
+onMounted(async () => {
+  try {
+    aiToolsAvailable.value = (await loadRuntimeCapabilities()).aiTools
+  } catch {
+    aiToolsAvailable.value = false
+  }
+})
 </script>
 
 <template>
@@ -21,7 +33,7 @@ import PageBackLink from '../components/PageBackLink.vue'
         >
           <IconBrandGithub :size="17" aria-hidden="true" /><span>从 GitHub 导入</span>
         </RouterLink>
-        <RouterLink class="home-layout__ai-tools" to="/ai-tools">
+        <RouterLink v-if="aiToolsAvailable" class="home-layout__ai-tools" to="/ai-tools">
           <IconRobot :size="17" aria-hidden="true" />AI 工具
         </RouterLink>
         <DataRefreshButton />
@@ -39,7 +51,8 @@ import PageBackLink from '../components/PageBackLink.vue'
 .home-layout {
   position: relative;
   display: grid;
-  min-height: calc(100dvh - 2rem);
+  height: 100dvh;
+  min-height: 0;
   grid-template-rows: auto 1fr auto;
   overflow: hidden;
 }
@@ -127,6 +140,8 @@ import PageBackLink from '../components/PageBackLink.vue'
 .home-layout__main {
   display: grid;
   width: min(76rem, 100%);
+  min-height: 0;
+  overflow: auto;
   place-items: center;
   margin: 0 auto;
   padding: clamp(2rem, 8vw, 7rem) clamp(1.25rem, 6vw, 5rem);
@@ -138,6 +153,10 @@ import PageBackLink from '../components/PageBackLink.vue'
 }
 
 @media (max-width: 52rem) {
+  .home-layout__main {
+    place-items: start center;
+  }
+
   .home-layout__header p {
     display: none;
   }
@@ -146,6 +165,7 @@ import PageBackLink from '../components/PageBackLink.vue'
 @media (max-width: 40rem) {
   .home-layout__header {
     gap: var(--space-2);
+    padding-top: calc(var(--space-4) + env(safe-area-inset-top));
     padding-right: var(--space-4);
     padding-left: var(--space-4);
   }

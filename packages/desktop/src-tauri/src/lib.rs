@@ -1,7 +1,14 @@
+#[cfg(desktop)]
 mod ai_tools;
+#[cfg(mobile)]
+mod ai_tools_mobile;
 mod commands;
 mod credentials;
 mod external_links;
+mod runtime;
+
+#[cfg(mobile)]
+use ai_tools_mobile as ai_tools;
 
 pub use branchloom_core::{core, storage};
 
@@ -15,9 +22,12 @@ pub fn run() {
             let session = commands::open_desktop_project_session(app.handle())
                 .map_err(std::io::Error::other)?;
             app.manage(session);
-            let ai_tools =
-                ai_tools::AiToolsState::from_app(app.handle()).map_err(std::io::Error::other)?;
-            app.manage(ai_tools);
+            #[cfg(desktop)]
+            {
+                let ai_tools = ai_tools::AiToolsState::from_app(app.handle())
+                    .map_err(std::io::Error::other)?;
+                app.manage(ai_tools);
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -41,6 +51,7 @@ pub fn run() {
             commands::apply_github_project_import,
             commands::preview_github_sync,
             commands::apply_github_sync,
+            runtime::runtime_capabilities,
             ai_tools::get_ai_tools_status,
             ai_tools::preview_ai_tools_change,
             ai_tools::apply_ai_tools_change,

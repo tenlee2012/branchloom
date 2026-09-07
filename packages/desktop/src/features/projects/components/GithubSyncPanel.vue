@@ -56,6 +56,7 @@ import {
   refreshNativeRepository,
 } from '../../../shared/repository/TauriRepository'
 import { openExternalUrl } from '../../../shared/externalLinks'
+import { loadRuntimeCapabilities } from '../../../shared/runtimeCapabilities'
 
 const props = withDefaults(defineProps<{
   projectId: string
@@ -71,6 +72,7 @@ const emit = defineEmits<{
 const syncStore = useGithubSyncStore()
 const repository = inject(branchloomRepositoryKey, undefined)
 const desktopRuntime = computed(() => props.gateway.available())
+const scheduledSyncAvailable = ref(false)
 const connection = ref<GithubConnectionStatus>()
 const loading = ref(false)
 const failure = ref('')
@@ -124,6 +126,8 @@ const operationTitle = computed(() => {
     previewFull: '预览完整同步',
     applyPull: '执行 GitHub Pull',
     applyFull: '执行 GitHub 完整同步',
+    previewImport: '预览 GitHub 项目导入',
+    applyImport: '导入 GitHub 项目',
   }
   const operation = manualOperation.value
   if (!operation) return ''
@@ -215,7 +219,9 @@ const heroDescription = computed(() => {
   }
   if (manualOperation.value?.state === 'success'
     && ['applyPull', 'applyFull'].includes(manualOperation.value.operation)) {
-    return `${lastSyncLabel.value}；下一次自动同步会继续先 Pull 并检查冲突。`
+    return scheduledSyncAvailable.value
+      ? `${lastSyncLabel.value}；下一次自动同步会继续先 Pull 并检查冲突。`
+      : `${lastSyncLabel.value}；移动端只会在你手动操作时连接 GitHub。`
   }
   return '先生成同步预览，再决定是否写入本地资料或上传 GitHub。'
 })
@@ -356,6 +362,14 @@ watch(() => props.projectId, () => {
 
 onMounted(async () => {
   clockTimer = window.setInterval(() => { clock.value = Date.now() }, 1000)
+  try {
+    scheduledSyncAvailable.value = (await loadRuntimeCapabilities()).scheduledSync
+  } catch {
+    scheduledSyncAvailable.value = false
+  }
+  if (!scheduledSyncAvailable.value && automaticStatus.value.enabled) {
+    syncStore.stop(props.projectId)
+  }
   if (!props.gateway.subscribeProgress) return
   try {
     const unlisten = await props.gateway.subscribeProgress((progress) => {
@@ -402,10 +416,16 @@ async function connect() {
       createIfMissing: draft.createIfMissing,
     })
     applyConnection(await props.gateway.connection(props.projectId))
-    syncStore.start(props.projectId, '', props.gateway, 60, refreshLocalState)
-    const message = result.privateRepositoryCreated
-      ? '私有仓库已创建，当前项目已完成首次同步；每小时自动同步已开启。'
-      : 'GitHub 仓库已连接；每小时自动同步已开启。'
+    if (scheduledSyncAvailable.value) {
+      syncStore.start(props.projectId, '', props.gateway, 60, refreshLocalState)
+    }
+    const message = scheduledSyncAvailable.value
+      ? result.privateRepositoryCreated
+        ? '私有仓库已创建，当前项目已完成首次同步；每小时自动同步已开启。'
+        : 'GitHub 仓库已连接；每小时自动同步已开启。'
+      : result.privateRepositoryCreated
+        ? '私有仓库已创建，当前项目已完成首次同步。移动端只进行手动同步，Token 仅在本次运行期间保留。'
+        : 'GitHub 仓库已连接。移动端只进行手动同步，Token 仅在本次运行期间保留。'
     syncStore.finishManual(props.projectId, 'success', message)
     syncStore.markConnectionHealthy?.(props.projectId)
     draft.token = ''
@@ -654,6 +674,7 @@ async function runPrimaryAction() {
 
 function toggleAutomaticSync() {
   resetMessages()
+  if (!scheduledSyncAvailable.value) return
   if (automaticStatus.value.enabled) {
     syncStore.stop(props.projectId)
     return
@@ -1031,6 +1052,7 @@ async function openTokenHelpUrl(url: string) {
     </section>
 
     <section
+      v-if="scheduledSyncAvailable"
       class="github-sync__automatic"
       :class="{ 'github-sync__automatic--paused': initializationRequired || automaticStatus.state === 'conflict' || pendingCount > 0 }"
       aria-labelledby="github-sync-automatic-title"

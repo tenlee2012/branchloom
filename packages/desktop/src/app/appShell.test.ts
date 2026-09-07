@@ -149,6 +149,11 @@ describe('application shell', () => {
       .toBe('/github-import')
     expect(wrapper.find('[aria-label="打开项目菜单"]').exists()).toBe(false)
 
+    const mobileNavigation = wrapper.get('nav[aria-label="移动端项目导航"]')
+    expect(mobileNavigation.findAll('a').map((link) => link.text()))
+      .toEqual(['家谱', '人物', '时间', '资料', '项目'])
+    expect(mobileNavigation.get('a[aria-current="page"]').text()).toBe('人物')
+
     inspectProject.mockResolvedValue([])
     window.dispatchEvent(new Event(PROJECT_DATA_CHANGED_EVENT))
     await vi.waitFor(() => expect(checksLink.find('.app-sidebar__badge').exists()).toBe(false))
@@ -193,6 +198,21 @@ describe('application shell', () => {
     expect(wrapper.get('#ai-tools-title').text()).toBe('AI 工具')
 
     wrapper.unmount()
+  })
+
+  it('redirects AI routes away from mobile runtimes', async () => {
+    const capabilities = async () => ({
+      mobile: true,
+      aiTools: false,
+      scheduledSync: false,
+    })
+    const router = createAppRouter('memory', capabilities)
+
+    await router.push('/project/project-demo-family/ai-tools')
+    expect(router.currentRoute.value.name).toBe('project-tree')
+
+    await router.push('/ai-tools')
+    expect(router.currentRoute.value.name).toBe('home')
   })
 
   it('records each successfully opened project as the most recent project', async () => {

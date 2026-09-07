@@ -1,0 +1,115 @@
+name: Build Android APK
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/android.yml"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "packages/core/**"
+      - "packages/desktop/**"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/android.yml"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "packages/core/**"
+      - "packages/desktop/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-android:
+    name: Android arm64 debug APK
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+
+    env:
+      ANDROID_API_LEVEL: "36"
+      ANDROID_BUILD_TOOLS_VERSION: "36.0.0"
+      ANDROID_NDK_VERSION: "27.0.12077973"
+      APK_PATH: packages/desktop/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.1
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Android SDK and NDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: >-
+            tools
+            platform-tools
+            platforms;android-${{ env.ANDROID_API_LEVEL }}
+            build-tools;${{ env.ANDROID_BUILD_TOOLS_VERSION }}
+            ndk;${{ env.ANDROID_NDK_VERSION }}
+
+      - name: Export Android NDK paths
+        shell: bash
+        run: |
+          echo "NDK_HOME=$ANDROID_SDK_ROOT/ndk/$ANDROID_NDK_VERSION" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/$ANDROID_NDK_VERSION" >> "$GITHUB_ENV"
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: android-arm64
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Initialize generated Android project
+        run: pnpm --dir packages/desktop tauri android init
+
+      - name: Build installable APK
+        run: pnpm build:android
+
+      - name: Verify APK signature and alignment
+        shell: bash
+        run: |
+          test -s "$APK_PATH"
+          "$ANDROID_SDK_ROOT/build-tools/$ANDROID_BUILD_TOOLS_VERSION/apksigner" verify --verbose "$APK_PATH"
+          "$ANDROID_SDK_ROOT/build-tools/$ANDROID_BUILD_TOOLS_VERSION/zipalign" -c -P 16 4 "$APK_PATH"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: branchloom-android-arm64-debug-${{ github.sha }}
+          path: ${{ env.APK_PATH }}
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
