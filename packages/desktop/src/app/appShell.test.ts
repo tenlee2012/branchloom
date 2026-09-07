@@ -185,6 +185,37 @@ describe('application shell', () => {
     wrapper.unmount()
   })
 
+  it('reaches collaboration and another project through the mobile project destination', async () => {
+    const repository = makeRepository()
+    const [first] = await repository.listProjects()
+    const second = await repository.createProject({ name: '移动端第二份家谱', description: '' })
+    const { wrapper, router, session } = await mountShell(`/project/${first!.id}/tree`, repository)
+
+    const openProjectPage = async () => {
+      await wrapper.get('nav[aria-label="移动端项目导航"] a[href$="/manage/overview"]').trigger('click')
+      await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('project-overview'))
+      await flushPromises()
+      expect(wrapper.find('.app-topbar button[name="刷新资料"]').exists()).toBe(true)
+    }
+    await openProjectPage()
+    await wrapper.get('a[aria-label="打开协作同步"]').trigger('click')
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('project-collaboration-sync'))
+    await flushPromises()
+    expect(wrapper.find('.app-topbar button[name="刷新资料"]').exists()).toBe(true)
+
+    await openProjectPage()
+    const switcher = wrapper.get<HTMLDetailsElement>('.project-switcher')
+    switcher.element.open = true
+    await switcher.trigger('toggle')
+    await flushPromises()
+    await switcher.get(`a[aria-label="打开项目：${second.name}"]`).trigger('click')
+    await vi.waitFor(() => expect(router.currentRoute.value.params.projectId).toBe(second.id))
+    await flushPromises()
+    expect(session.currentProjectName).toBe(second.name)
+    expect(wrapper.find('.app-topbar button[name="刷新资料"]').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
   it('uses the same shell for the global AI tools route', async () => {
     const repository = makeRepository()
     const [project] = await repository.listProjects()

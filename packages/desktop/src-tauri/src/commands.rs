@@ -140,7 +140,7 @@ pub struct SetLocalAttachmentInput {
 #[serde(rename_all = "camelCase")]
 pub struct ProjectArchiveInput {
     pub project_id: String,
-    pub path: PathBuf,
+    pub path: tauri_plugin_fs::FilePath,
     #[serde(default)]
     pub overwrite: bool,
 }
@@ -538,76 +538,86 @@ pub fn read_attachment(
 }
 
 #[tauri::command]
-pub fn export_project_archive(
-    state: State<'_, DesktopProjectSession>,
+pub async fn export_project_archive(
+    app: AppHandle,
     input: ProjectArchiveInput,
 ) -> Result<(), String> {
-    if !input.path.is_absolute() {
-        return Err("导出路径必须是绝对路径".to_owned());
-    }
-    lock_session(&state)?
-        .export_project_archive(&input.project_id, input.path)
-        .map_err(|error| format!("无法导出 Branchloom 项目包：{error}"))
+    crate::exchange_files::run(app, move |app| {
+        crate::exchange_files::export(app, input.path, "blp", |path| {
+            lock_session(&app.state::<DesktopProjectSession>())?
+                .export_project_archive(&input.project_id, path)
+                .map_err(|error| format!("无法导出 Branchloom 项目包：{error}"))
+        })
+    })
+    .await
 }
 
 #[tauri::command]
-pub fn import_project_archive(
-    state: State<'_, DesktopProjectSession>,
+pub async fn import_project_archive(
+    app: AppHandle,
     input: ProjectArchiveInput,
 ) -> Result<ProjectArchiveImportResult, String> {
-    if !input.path.is_absolute() {
-        return Err("导入路径必须是绝对路径".to_owned());
-    }
-    let mut service = lock_session(&state)?;
-    let imported = service
-        .import_project_archive(input.path, input.overwrite)
-        .map_err(|error| format!("无法导入 Branchloom 项目包：{error}"))?;
-    let state = service
-        .load_state()
-        .map_err(|error| format!("无法读取导入后的本地资料：{error}"))?
-        .map(NormalizedStatePayload::from)
-        .ok_or_else(|| "导入后未找到项目资料".to_owned())?;
-    Ok(ProjectArchiveImportResult {
-        project_id: imported.id,
-        state,
+    crate::exchange_files::run(app, move |app| {
+        crate::exchange_files::import(app, input.path, "blp", |path| {
+            let session = app.state::<DesktopProjectSession>();
+            let mut service = lock_session(&session)?;
+            let imported = service
+                .import_project_archive(path, input.overwrite)
+                .map_err(|error| format!("无法导入 Branchloom 项目包：{error}"))?;
+            let state = service
+                .load_state()
+                .map_err(|error| format!("无法读取导入后的本地资料：{error}"))?
+                .map(NormalizedStatePayload::from)
+                .ok_or_else(|| "导入后未找到项目资料".to_owned())?;
+            Ok(ProjectArchiveImportResult {
+                project_id: imported.id,
+                state,
+            })
+        })
     })
+    .await
 }
 
 #[tauri::command]
-pub fn export_project_gedcom(
-    state: State<'_, DesktopProjectSession>,
+pub async fn export_project_gedcom(
+    app: AppHandle,
     input: ProjectArchiveInput,
 ) -> Result<branchloom_core::gedcom::GedcomSummary, String> {
-    if !input.path.is_absolute() {
-        return Err("导出路径必须是绝对路径".to_owned());
-    }
-    lock_session(&state)?
-        .export_project_gedcom(&input.project_id, input.path)
-        .map_err(|error| format!("无法导出 GEDCOM 文件：{error}"))
+    crate::exchange_files::run(app, move |app| {
+        crate::exchange_files::export(app, input.path, "ged", |path| {
+            lock_session(&app.state::<DesktopProjectSession>())?
+                .export_project_gedcom(&input.project_id, path)
+                .map_err(|error| format!("无法导出 GEDCOM 文件：{error}"))
+        })
+    })
+    .await
 }
 
 #[tauri::command]
-pub fn import_project_gedcom(
-    state: State<'_, DesktopProjectSession>,
+pub async fn import_project_gedcom(
+    app: AppHandle,
     input: ProjectArchiveInput,
 ) -> Result<GedcomDesktopImportResult, String> {
-    if !input.path.is_absolute() {
-        return Err("导入路径必须是绝对路径".to_owned());
-    }
-    let mut service = lock_session(&state)?;
-    let GedcomImportResult { project, summary } = service
-        .import_project_gedcom(input.path, input.overwrite)
-        .map_err(|error| format!("无法导入 GEDCOM 文件：{error}"))?;
-    let state = service
-        .load_state()
-        .map_err(|error| format!("无法读取导入后的本地资料：{error}"))?
-        .map(NormalizedStatePayload::from)
-        .ok_or_else(|| "导入后未找到项目资料".to_owned())?;
-    Ok(GedcomDesktopImportResult {
-        project_id: project.id,
-        state,
-        summary,
+    crate::exchange_files::run(app, move |app| {
+        crate::exchange_files::import(app, input.path, "ged", |path| {
+            let session = app.state::<DesktopProjectSession>();
+            let mut service = lock_session(&session)?;
+            let GedcomImportResult { project, summary } = service
+                .import_project_gedcom(path, input.overwrite)
+                .map_err(|error| format!("无法导入 GEDCOM 文件：{error}"))?;
+            let state = service
+                .load_state()
+                .map_err(|error| format!("无法读取导入后的本地资料：{error}"))?
+                .map(NormalizedStatePayload::from)
+                .ok_or_else(|| "导入后未找到项目资料".to_owned())?;
+            Ok(GedcomDesktopImportResult {
+                project_id: project.id,
+                state,
+                summary,
+            })
+        })
     })
+    .await
 }
 
 #[tauri::command]

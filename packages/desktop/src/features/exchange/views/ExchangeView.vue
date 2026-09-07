@@ -9,7 +9,7 @@ import { useSessionStore } from '../../../app/stores/session'
 import BaseButton from '../../../design-system/BaseButton.vue'
 import type { Project } from '../../../shared/domain/types'
 import { useBranchloomRepository } from '../../../shared/repository/injection'
-import { exchangeErrorMessage, exchangeFileName, selectedFileName } from '../model/exchangeFile'
+import { exchangeDestination, exchangeErrorMessage, exchangeFileName, selectedFileName } from '../model/exchangeFile'
 import {
   exportProjectGedcom,
   exportProjectArchive,
@@ -116,8 +116,7 @@ async function chooseExportDestination() {
     canCreateDirectories: true,
   })
   if (!selected) return
-  const extension = selectedFormat === 'gedcom' ? '.ged' : '.blp'
-  const destination = selected.toLowerCase().endsWith(extension) ? selected : `${selected}${extension}`
+  const destination = exchangeDestination(selected, selectedFormat === 'gedcom' ? 'ged' : 'blp')
   busy.value = true
   try {
     if (selectedFormat === 'gedcom') {
