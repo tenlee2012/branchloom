@@ -6,16 +6,19 @@ const ALLOWED_EXTERNAL_URLS: &[&str] = &[
 ];
 
 #[tauri::command]
-pub async fn open_external_url(url: String) -> Result<(), String> {
+pub async fn open_external_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
     if !ALLOWED_EXTERNAL_URLS.contains(&url.as_str()) {
         return Err("不允许打开这个外部链接".to_owned());
     }
 
-    open_external_url_with_system_browser(url).await
+    open_external_url_with_system_browser(app, url).await
 }
 
 #[cfg(target_os = "macos")]
-async fn open_external_url_with_system_browser(url: String) -> Result<(), String> {
+async fn open_external_url_with_system_browser(
+    _app: tauri::AppHandle,
+    url: String,
+) -> Result<(), String> {
     let status = tauri::async_runtime::spawn_blocking(move || {
         std::process::Command::new("/usr/bin/open")
             .args(["-n", "--"])
@@ -34,8 +37,14 @@ async fn open_external_url_with_system_browser(url: String) -> Result<(), String
 }
 
 #[cfg(not(target_os = "macos"))]
-async fn open_external_url_with_system_browser(url: String) -> Result<(), String> {
-    tauri_plugin_opener::open_url(url, None::<&str>)
+async fn open_external_url_with_system_browser(
+    app: tauri::AppHandle,
+    url: String,
+) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+
+    app.opener()
+        .open_url(url, None::<&str>)
         .map_err(|error| format!("无法启动系统浏览器：{error}"))
 }
 

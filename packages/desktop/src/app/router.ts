@@ -6,6 +6,12 @@ import {
   type RouteRecordRaw,
 } from 'vue-router'
 import { updateWindowTitle } from './windowTitle'
+import {
+  loadRuntimeCapabilities,
+  type RuntimeCapabilities,
+} from '../shared/runtimeCapabilities'
+
+type RuntimeCapabilityLoader = () => Promise<RuntimeCapabilities>
 
 const routes: RouteRecordRaw[] = [
   {
@@ -61,6 +67,7 @@ const routes: RouteRecordRaw[] = [
           title: 'AI 工具',
           eyebrow: '本机 AI 集成',
           allowMissingProject: true,
+          requiresAiTools: true,
           workspaceMode: 'management',
         },
       },
@@ -73,7 +80,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'tree',
         name: 'project-tree',
-        component: () => import('../features/tree/views/TreeView.vue'),
+        component: () => import('../features/tree/views/TreeWorkspaceView.vue'),
         meta: { title: '家谱树', eyebrow: '家族关系工作区', workspaceMode: 'canvas' },
       },
       {
@@ -156,6 +163,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: 'AI 工具',
           eyebrow: '本机 AI 集成',
+          requiresAiTools: true,
           workspaceMode: 'management',
         },
       },
@@ -244,16 +252,25 @@ const routes: RouteRecordRaw[] = [
   },
 ]
 
-export function createAppRouter(history: 'web' | 'memory' = 'web'): Router {
+export function createAppRouter(
+  history: 'web' | 'memory' = 'web',
+  runtimeCapabilities: RuntimeCapabilityLoader = loadRuntimeCapabilities,
+): Router {
   const router = createRouter({
     history: history === 'memory' ? createMemoryHistory() : createWebHistory(),
     routes,
     scrollBehavior: () => ({ top: 0 }),
   })
 
-  router.beforeEach((to, from) => {
+  router.beforeEach(async (to, from) => {
     if (to.meta.backBehavior === 'history' && from.name) {
       to.meta.previousFullPath = from.fullPath
+    }
+    if (to.meta.requiresAiTools === true && !(await runtimeCapabilities()).aiTools) {
+      const projectId = String(to.params.projectId ?? '')
+      return projectId
+        ? { name: 'project-tree', params: { projectId } }
+        : { name: 'home' }
     }
   })
 

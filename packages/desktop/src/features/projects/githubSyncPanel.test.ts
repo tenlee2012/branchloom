@@ -12,8 +12,14 @@ import type {
 import GithubSyncPanel from './components/GithubSyncPanel.vue'
 
 const openExternalUrl = vi.hoisted(() => vi.fn(async () => undefined))
+const loadRuntimeCapabilities = vi.hoisted(() => vi.fn(async () => ({
+  mobile: false,
+  aiTools: true,
+  scheduledSync: true,
+})))
 
 vi.mock('../../shared/externalLinks', () => ({ openExternalUrl }))
+vi.mock('../../shared/runtimeCapabilities', () => ({ loadRuntimeCapabilities }))
 
 const PROJECT_ID = 'project-demo-family'
 const wrappers: VueWrapper[] = []
@@ -101,6 +107,11 @@ afterEach(() => {
   document.body.innerHTML = ''
   vi.useRealTimers()
   vi.clearAllMocks()
+  loadRuntimeCapabilities.mockResolvedValue({
+    mobile: false,
+    aiTools: true,
+    scheduledSync: true,
+  })
 })
 
 describe('GitHub sync panel', () => {
@@ -420,6 +431,7 @@ describe('GitHub sync panel', () => {
 
     expect(wrapper.get('[role="dialog"]').text()).toContain('用 GitHub 项目覆盖当前空白项目')
     expect(syncGateway.previewImport).toHaveBeenCalledWith({
+      operationId: expect.any(String),
       placeholderProjectId: PROJECT_ID,
       owner: 'family-owner',
       repository: 'family-tree',
@@ -705,6 +717,20 @@ describe('GitHub sync panel', () => {
 })
 
 describe('automatic GitHub sync', () => {
+  it('does not expose or start scheduled sync on mobile runtimes', async () => {
+    loadRuntimeCapabilities.mockResolvedValueOnce({
+      mobile: true,
+      aiTools: false,
+      scheduledSync: false,
+    })
+    const { wrapper, store } = mountPanel(gateway())
+
+    await flushPromises()
+
+    expect(wrapper.find('button[name="切换每小时自动同步"]').exists()).toBe(false)
+    expect(store.status(PROJECT_ID).enabled).toBe(false)
+  })
+
   it('updates the status copy when automatic sync is enabled and disabled', async () => {
     vi.useFakeTimers()
     const connected: GithubConnectionStatus = {

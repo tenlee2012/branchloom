@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { IconBrandGithub } from '@tabler/icons-vue'
+import { IconBrandGithub, IconChevronRight } from '@tabler/icons-vue'
 import { computed, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useBranchloomRepository } from '../../../shared/repository/injection'
@@ -66,15 +66,21 @@ async function createProject(input: { name: string; description: string }) {
           <h2>家族档案信息</h2>
         </div>
       </div>
-      <NewProjectForm :saving="saving" :submit-error="submitError" @submit="createProject" />
       <RouterLink
-        v-if="!isProjectTask"
         class="new-project-view__github-import"
         :to="{ name: 'github-import' }"
+        aria-label="从 GitHub 导入已有项目"
       >
-        <IconBrandGithub :size="18" aria-hidden="true" />
-        已有 GitHub 项目？直接导入
+        <span class="new-project-view__github-icon" aria-hidden="true">
+          <IconBrandGithub :size="20" />
+        </span>
+        <span class="new-project-view__github-copy">
+          <strong>从 GitHub 导入已有项目</strong>
+          <small>与桌面端使用同一套预览、确认和同步流程</small>
+        </span>
+        <IconChevronRight :size="19" aria-hidden="true" />
       </RouterLink>
+      <NewProjectForm :saving="saving" :submit-error="submitError" @submit="createProject" />
       <RouterLink v-if="!isProjectTask" class="new-project-view__cancel" :to="{ name: 'home' }">
         返回最近项目
       </RouterLink>
@@ -177,18 +183,48 @@ async function createProject(input: { name: string; description: string }) {
 }
 
 .new-project-view__github-import {
-  display: inline-flex;
-  min-height: 2.75rem;
+  display: grid;
+  min-height: 4.25rem;
   align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  padding: 0 var(--space-4);
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   background: var(--color-muted-surface);
   color: var(--color-primary);
-  font-weight: 700;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   text-decoration: none;
+}
+
+.new-project-view__github-import:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 38%, var(--color-border));
+  background: color-mix(in srgb, var(--color-muted-surface) 78%, var(--color-primary) 5%);
+}
+
+.new-project-view__github-icon {
+  display: grid;
+  width: 2.5rem;
+  height: 2.5rem;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: var(--color-surface);
+}
+
+.new-project-view__github-copy {
+  display: grid;
+  gap: .15rem;
+}
+
+.new-project-view__github-copy strong {
+  color: var(--color-text);
+  font-size: .9rem;
+}
+
+.new-project-view__github-copy small {
+  color: var(--color-muted);
+  font-size: .75rem;
+  line-height: 1.4;
 }
 
 .new-project-view--task {
@@ -209,6 +245,14 @@ async function createProject(input: { name: string; description: string }) {
 @media (max-width: 52rem) {
   .new-project-view {
     grid-template-columns: 1fr;
+  }
+
+  .new-project-view__panel {
+    order: -1;
+  }
+
+  .new-project-view__intro h1 {
+    font-size: clamp(2.25rem, 11vw, 3.5rem);
   }
 }
 </style>

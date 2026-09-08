@@ -1,0 +1,263 @@
+name: Build Android APK
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/android.yml"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "packages/core/**"
+      - "packages/desktop/**"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/android.yml"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "packages/core/**"
+      - "packages/desktop/**"
+  workflow_call:
+    inputs:
+      release_tag:
+        description: Existing GitHub Release tag that receives the APK
+        required: false
+        type: string
+    secrets:
+      ANDROID_KEYSTORE_BASE64:
+        description: Base64-encoded Android release keystore
+        required: true
+      ANDROID_KEYSTORE_PASSWORD:
+        description: Android release keystore password
+        required: true
+      ANDROID_KEY_ALIAS:
+        description: Android release key alias
+        required: true
+      ANDROID_KEY_PASSWORD:
+        description: Android release key password
+        required: true
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing GitHub Release tag that receives the APK, for example v0.1.5
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.workflow }}-${{ inputs.release_tag || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-android:
+    name: Android arm64 release APK
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+
+    outputs:
+      artifact_name: ${{ steps.android-asset.outputs.artifact_name }}
+      asset_name: ${{ steps.android-asset.outputs.name }}
+
+    env:
+      ANDROID_API_LEVEL: "36"
+      ANDROID_BUILD_TOOLS_VERSION: "36.0.0"
+      ANDROID_NDK_VERSION: "27.0.12077973"
+      UNSIGNED_APK_PATH: packages/desktop/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.1
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Android SDK and NDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: >-
+            tools
+            platform-tools
+            platforms;android-${{ env.ANDROID_API_LEVEL }}
+            build-tools;${{ env.ANDROID_BUILD_TOOLS_VERSION }}
+            ndk;${{ env.ANDROID_NDK_VERSION }}
+
+      - name: Export Android NDK paths
+        shell: bash
+        run: |
+          echo "NDK_HOME=$ANDROID_SDK_ROOT/ndk/$ANDROID_NDK_VERSION" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/$ANDROID_NDK_VERSION" >> "$GITHUB_ENV"
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: android-arm64
+
+      - name: Read app version
+        id: app-version
+        shell: bash
+        run: echo "value=$(node scripts/release-version.mjs --print)" >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Initialize generated Android project
+        run: pnpm --dir packages/desktop tauri android init
+
+      - name: Build optimized release APK
+        run: pnpm build:android:release
+
+      - name: Sign release APK
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          aligned_apk_path="$RUNNER_TEMP/branchloom-android-aligned.apk"
+          signed_apk_path="$RUNNER_TEMP/branchloom-android-release.apk"
+          keystore_path="$RUNNER_TEMP/branchloom-android-release.keystore"
+
+          for variable_name in \
+            ANDROID_KEYSTORE_BASE64 \
+            ANDROID_KEYSTORE_PASSWORD \
+            ANDROID_KEY_ALIAS \
+            ANDROID_KEY_PASSWORD; do
+            if [[ -z "${!variable_name}" ]]; then
+              echo "::error::Missing GitHub Actions secret: $variable_name"
+              exit 1
+            fi
+          done
+
+          test -s "$UNSIGNED_APK_PATH"
+          umask 077
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore_path"
+          "$ANDROID_SDK_ROOT/build-tools/$ANDROID_BUILD_TOOLS_VERSION/zipalign" \
+            -f -P 16 4 "$UNSIGNED_APK_PATH" "$aligned_apk_path"
+          "$ANDROID_SDK_ROOT/build-tools/$ANDROID_BUILD_TOOLS_VERSION/apksigner" sign \
+            --ks "$keystore_path" \
+            --ks-key-alias "$ANDROID_KEY_ALIAS" \
+            --ks-pass env:ANDROID_KEYSTORE_PASSWORD \
+            --key-pass env:ANDROID_KEY_PASSWORD \
+            --out "$signed_apk_path" \
+            "$aligned_apk_path"
+          echo "SIGNED_APK_PATH=$signed_apk_path" >> "$GITHUB_ENV"
+
+      - name: Verify APK signature and alignment
+        shell: bash
+        run: |
+          test -s "$SIGNED_APK_PATH"
+          "$ANDROID_SDK_ROOT/build-tools/$ANDROID_BUILD_TOOLS_VERSION/apksigner" \
+            verify --verbose --print-certs "$SIGNED_APK_PATH"
+          "$ANDROID_SDK_ROOT/build-tools/$ANDROID_BUILD_TOOLS_VERSION/zipalign" \
+            -c -P 16 4 "$SIGNED_APK_PATH"
+
+      - name: Give APK a user-facing filename
+        id: android-asset
+        shell: bash
+        run: |
+          asset_dir="$RUNNER_TEMP/branchloom-android"
+          asset_name="Branchloom_Android_arm64_v${{ steps.app-version.outputs.value }}_release.apk"
+          mkdir -p "$asset_dir"
+          install -m 0644 "$SIGNED_APK_PATH" "$asset_dir/$asset_name"
+          echo "artifact_name=${asset_name%.apk}" >> "$GITHUB_OUTPUT"
+          echo "name=$asset_name" >> "$GITHUB_OUTPUT"
+          echo "path=$asset_dir/$asset_name" >> "$GITHUB_OUTPUT"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.android-asset.outputs.artifact_name }}
+          path: ${{ steps.android-asset.outputs.path }}
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+  attach-release:
+    name: Attach APK to ${{ inputs.release_tag }}
+    if: ${{ inputs.release_tag != '' }}
+    needs: build-android
+    runs-on: ubuntu-22.04
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download verified APK
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build-android.outputs.artifact_name }}
+          path: ${{ runner.temp }}/branchloom-release
+
+      - name: Upload APK to release
+        uses: actions/github-script@v7
+        env:
+          ASSET_NAME: ${{ needs.build-android.outputs.asset_name }}
+          ASSET_PATH: ${{ runner.temp }}/branchloom-release/${{ needs.build-android.outputs.asset_name }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require("fs");
+            const assetName = process.env.ASSET_NAME;
+            const assetPath = process.env.ASSET_PATH;
+            const releaseTag = process.env.RELEASE_TAG;
+            const { data: release } = await github.rest.repos.getReleaseByTag({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag: releaseTag,
+            });
+            const existingAssets = await github.paginate(
+              github.rest.repos.listReleaseAssets,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: release.id,
+                per_page: 100,
+              },
+            );
+
+            if (existingAssets.some((asset) => asset.name === assetName)) {
+              core.info(`Release asset ${assetName} already exists; leaving it unchanged.`);
+              return;
+            }
+
+            const data = fs.readFileSync(assetPath);
+            await github.rest.repos.uploadReleaseAsset({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: release.id,
+              name: assetName,
+              headers: {
+                "content-type": "application/vnd.android.package-archive",
+                "content-length": data.length,
+              },
+              data,
+            });

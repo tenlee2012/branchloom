@@ -6,10 +6,13 @@ Branchloom 使用一种基于 JSON-LD 1.1 的开放文本格式保存族谱项�
 > - 状态：v1 核心格式已实现；字段级 context 与 Schema 约束仍在完善
 > - 格式名称：Branchloom JSON-LD Repository Format
 > - 格式版本：`1.0.0`
-> - 最后更新：2026-07-28
+> - 最后更新：2026-09-06
 
 如果你只是想了解自己的数据如何保存，请先阅读“快速理解”和“一个最小例子”。如果你
 准备实现导入器、导出器或同步客户端，请继续阅读后面的完整规则。
+
+本文描述持久化项目格式；CLI 写入参数以 `<resource> describe --output json` 发布的合约为准，
+详见 [CLI 文档](packages/cli/README.md)。不要把 JSON-LD 示例直接作为 CLI 的 `--input`。
 
 ## 快速理解
 
@@ -501,9 +504,8 @@ relationType = engaged | married | partner | separated | divorced
 
 - 父母关系方向固定为父母或监护人 `fromPerson` 指向子女或被监护人 `toPerson`。
 - 伴侣关系是对称关系，保存时两个 URI 按字典序归一化。
-- 人物不能与自己建立关系。
+- 允许自关系及亲属关系环路，不以家谱是否常见作为拒绝条件。
 - 不能存在完全重复的活动关系。
-- 父母关系不能形成祖先环路。
 
 兄弟姐妹、祖父母、孙辈等可以从基本关系推导，不保存重复边。
 
@@ -641,10 +643,10 @@ source, targetType, target, locator, excerpt, accessedAt, notes
 `targetType`：
 
 ```text
-person | person_name | relationship | event | career
+person | relationship | event | career
 ```
 
-`target` 必须引用与 `targetType` 匹配的数据。
+`target` 必须引用与 `targetType` 匹配的数据。姓名是人物的内嵌值，不是独立引用目标。
 
 ## 图片和其他附件
 
@@ -688,7 +690,7 @@ attachment, targetType, target
 `targetType`：
 
 ```text
-person | person_name | relationship | event | career | citation
+person | relationship | event | career | citation
 ```
 
 相同附件和目标的组合不能重复。
@@ -728,7 +730,7 @@ Git 历史可能继续包含删除前的数据。删除当前文件不等于从�
 - 不为每次键盘输入创建 commit。
 - commit 中的项目状态必须引用完整并通过校验。
 - 新人物和新关系等原子业务操作必须进入同一个 commit。
-- 首版不提供 Branchloom 快照功能。
+- 手动快照及其恢复载荷保存在本地，不随 JSON-LD 或 `.blp` 导出、同步；Git commit 与本地快照分别管理。
 
 建议 commit trailer：
 
@@ -757,7 +759,7 @@ theirs = 远端修改
 - 姓名按规范化姓名值合并；同一姓名被双方改成不同值时产生冲突。
 - 集合按元素 URI 合并。
 - 一方删除、另一方修改同一实体时产生实体冲突。
-- 合并关系后重新检查重复关系和祖先环路。
+- 合并关系后重新检查重复关系和引用完整性，允许亲属关系中的自关系与环路。
 - 不能简单采用“时间最新”或“revision 最大”的版本。
 - 不能只依赖 Git 文本冲突标记作为最终业务结果。
 
@@ -795,7 +797,7 @@ theirs = 远端修改
 - 所有引用目标存在并且类型匹配。
 - 每个人物都有有效主姓名。
 - 地点和机构层级没有环路。
-- 父母关系没有祖先环路。
+- 亲属关系的端点存在且属于同一项目；自关系与环路合法。
 - 当前履历没有结束日期。
 - 引用和附件关联目标存在。
 - 附件大小与 SHA-256 一致。
@@ -944,8 +946,9 @@ Git diff 更小，冲突更容易定位。
 
 ### 可以手工编辑这些文件吗？
 
-可以查看，也可以谨慎编辑，但手工修改后必须运行完整校验。错误 UUID、失效引用或环路
-都可能让项目无法导入。
+可以查看，也可以谨慎编辑，但手工修改后必须运行完整校验。错误 UUID、失效引用或地点、
+机构层级中的环路都可能让项目无法导入；亲属关系允许自关系与环路。Agent 操作用户资料
+仍应通过 Branchloom CLI，仓库开发与测试只使用隔离数据。
 
 ### GitHub 是唯一支持的远端吗？
 

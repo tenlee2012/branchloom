@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { IconBrandGithub, IconLock } from '@tabler/icons-vue'
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import type { GithubProjectImportResult } from '../../../shared/githubSync'
 import { useBranchloomRepository } from '../../../shared/repository/injection'
 import { requestNativeRepositoryRefresh } from '../../../shared/repository/TauriRepository'
+import { loadRuntimeCapabilities } from '../../../shared/runtimeCapabilities'
 import { BrowserRecentProjectLocations } from '../../projects/model/recentProjectLocations'
 import GithubProjectImportPanel from '../components/GithubProjectImportPanel.vue'
 
@@ -12,6 +13,15 @@ const repository = useBranchloomRepository()
 const router = useRouter()
 const recentLocations = new BrowserRecentProjectLocations()
 const navigationError = ref('')
+const mobileRuntime = ref(false)
+
+onMounted(async () => {
+  try {
+    mobileRuntime.value = (await loadRuntimeCapabilities()).mobile
+  } catch {
+    mobileRuntime.value = false
+  }
+})
 
 async function openProject(projectId: string) {
   navigationError.value = ''
@@ -45,12 +55,20 @@ async function handleImported(result: GithubProjectImportResult) {
       </p>
       <div class="github-import-view__privacy">
         <IconLock :size="20" aria-hidden="true" />
-        <span>导入预览不会修改 GitHub；Token 只保存在系统安全凭据中。</span>
+        <span>
+          导入预览不会修改 GitHub；{{ mobileRuntime
+            ? 'Token 只在本次 App 运行期间保留。'
+            : 'Token 保存在系统安全凭据中。' }}
+        </span>
       </div>
     </div>
 
     <div class="github-import-view__panel">
-      <GithubProjectImportPanel @imported="handleImported" @existing="openProject" />
+      <GithubProjectImportPanel
+        :mobile-runtime="mobileRuntime"
+        @imported="handleImported"
+        @existing="openProject"
+      />
       <p v-if="navigationError" class="github-import-view__error" role="alert">
         {{ navigationError }}
       </p>

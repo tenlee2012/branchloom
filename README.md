@@ -9,11 +9,15 @@
 </p>
 
 <p align="center">
-  本地优先 · 无需注册 · 开放格式 · 家人异步协作 · 支持 macOS / Windows / Linux
+  本地优先 · 无需注册 · 开放格式 · 家人异步协作 · 支持 macOS / Windows / Linux / Android
 </p>
 
 <p align="center">
-  <a href="https://github.com/tenlee2012/branchloom/releases">下载桌面版</a>
+  <a href="https://github.com/tenlee2012/branchloom/releases">下载桌面版 / Android 版</a>
+  ·
+  <a href="https://pan.quark.cn/s/2ec290e5499c">夸克网盘</a>
+  ·
+  <a href="https://www.alipan.com/s/yVxJsJhSE2L">阿里云盘</a>
   ·
   <a href="DATA_FORMAT.md">开放数据格式 `.blp`</a>
   ·
@@ -67,14 +71,16 @@
 - **先预览，再同步**：Pull、完整同步和冲突处理都会先展示预览；每次 Push 前始终先 Pull 并执行字段级三方合并，存在未解决冲突时不会上传。
 - **适合多人异步维护**：不同人物、事件或字段上的修改可以自动合并；同一字段发生冲突时，由用户选择共同基线、本地版本或 GitHub 版本。
 - **加入项目很直接**：可以从首页导入家人已有的 Branchloom 仓库；当前项目仍为空白时，也可以先检查远端内容，再用 GitHub 项目直接覆盖。
-- **凭据与家谱分离**：每位协作者使用自己的 GitHub 身份和 token；token 只保存在系统安全凭据存储中，不会进入 SQLite、项目文件、`.blp` 包或同步基线。
-- **手动与定时同步兼顾**：既可以随时手动同步，也可以在应用运行期间每 60 分钟自动检查；应用退出后自动停止。
+- **凭据与家谱分离**：每位协作者使用自己的 GitHub 身份和 token；桌面端将 token 保存在系统安全凭据存储中，Android 端仅在本次运行期间保留，重启应用后需重新输入。token 不会进入 SQLite、项目文件、`.blp` 包或同步基线。
+- **手动与定时同步兼顾**：各平台均可手动同步；桌面端还支持在应用运行期间每 60 分钟自动检查，应用退出后自动停止。Android 端目前仅支持手动同步。
 
 > GitHub 同步完全可选，适合备份和多人异步协作，不是实时共同编辑。GitHub 私有仓库也不是端到端加密存储，请只邀请可信成员，并谨慎同步仍在世成员的资料。
 
 ## AI 辅助：让整理更高效，也更可控
 
 有谱桌面端直接提供版本匹配的原生 CLI 和 Codex Skill。AI Agent 可以理解家谱结构、查找资料、生成修改计划，并在得到确认后完成批量整理；整个过程复用桌面端相同的核心规则和数据目录，不需要为 AI 再维护一套数据库逻辑。
+
+Android 端目前不提供 CLI、Codex Skill 安装或“AI 工具”页面。
 
 ![有谱桌面版 AI 工具页面](docs/screenshots/ai-tools.jpg)
 
@@ -116,12 +122,37 @@
 
 ## 获取有谱
 
-前往 [GitHub Releases](https://github.com/tenlee2012/branchloom/releases) 下载与操作系统匹配的安装包。macOS 用户请根据设备选择 `aarch64`（Apple 芯片）或 `x64`（Intel 芯片）版本。
+前往 [GitHub Releases](https://github.com/tenlee2012/branchloom/releases) 下载与操作系统匹配的安装包。macOS 用户请根据设备选择 `Apple-Silicon`（M1 及后续 Apple 芯片）或 `Intel` 版本。
+
+也可通过网盘下载，两个入口均永久有效、无需提取码：
+
+- [夸克网盘](https://pan.quark.cn/s/2ec290e5499c)
+- [阿里云盘](https://www.alipan.com/s/yVxJsJhSE2L)：公开分享页目前仅显示 Windows / Linux 安装包；macOS 请使用夸克网盘或 GitHub Releases。
+
+网盘安装包来自本项目 GitHub Releases，按「有谱 / v版本号」归档，目前收录 v0.1.0～v0.1.4。这些版本沿用旧文件名，macOS 的 `aarch64` 对应 Apple 芯片，`x64` 对应 Intel 芯片。
+
+安装包文件名会直接标明系统、处理器和版本；桌面端额外标注 `Desktop`，Android APK 以 `_release.apk` 结尾：
+
+| 文件名示例 | 适用设备 |
+| --- | --- |
+| `Branchloom_Desktop_Windows_x64_v0.1.5-setup.exe` | Windows 桌面电脑 |
+| `Branchloom_Desktop_macOS_Apple-Silicon_v0.1.5.dmg` | Apple 芯片 Mac（M1 及后续型号） |
+| `Branchloom_Desktop_macOS_Intel_v0.1.5.dmg` | Intel 芯片 Mac |
+| `Branchloom_Desktop_Linux_x64_v0.1.5.AppImage` / `.deb` | 64 位 Linux 桌面电脑 |
+| `Branchloom_Android_arm64_v0.1.5_release.apk` | Android 12 及以上的 ARM64 设备；已签名的 Release APK |
+| `Branchloom_iOS_arm64_v0.1.5.ipa` | iPhone；iOS 安装包尚未提供，此名称为后续发布预留 |
+
+<details>
+<summary><strong>Android 安装提示</strong></summary>
+
+从 GitHub Releases 下载 `Branchloom_Android_arm64_v<版本>_release.apk`，在 Android 设备上打开并按系统提示允许本次安装。当前支持 Android 12 及以上的 ARM64 设备。
+
+</details>
 
 <details>
 <summary><strong>macOS 首次安装提示</strong></summary>
 
-目前 macOS 安装包使用 ad-hoc 签名，尚未使用 Apple Developer ID 签名和公证。请只从本项目官方 Releases 下载并确认来源可信。
+目前 macOS 安装包使用 ad-hoc 签名，尚未使用 Apple Developer ID 签名和公证。请只从本项目官方 Releases 或上方网盘入口下载并确认来源可信。
 
 将“有谱”拖入“应用程序”文件夹后，如果系统提示“App 已损坏”或无法验证开发者，请打开“终端”执行：
 
@@ -130,14 +161,14 @@ xattr -dr com.apple.quarantine "/Applications/有谱.app"
 open "/Applications/有谱.app"
 ```
 
-该命令只移除“有谱”的互联网下载隔离标记，不会关闭系统的全局 Gatekeeper。仅对从本项目官方 Releases 下载的安装包执行此操作。
+该命令只移除“有谱”的互联网下载隔离标记，不会关闭系统的全局 Gatekeeper。仅对从本项目官方 Releases 或上方网盘入口下载的安装包执行此操作。
 
 </details>
 
 <details>
 <summary><strong>Windows 安装提示</strong></summary>
 
-Windows 安装包目前未进行商业代码签名，安装时操作系统可能显示安全提醒。请确认安装包来自本项目官方 Releases 后再继续。
+Windows 安装包目前未进行商业代码签名，安装时操作系统可能显示安全提醒。请确认安装包来自本项目官方 Releases 或上方网盘入口后再继续。
 
 </details>
 
@@ -168,6 +199,14 @@ pnpm typecheck
 pnpm test:unit
 pnpm test:cli
 ```
+
+发布版本只维护根 `Cargo.toml` 中的一处 workspace 版本。使用命令更新版本并自动刷新 `Cargo.lock`：
+
+```bash
+pnpm release:version 0.1.6
+```
+
+发布 tag 必须与 workspace 版本一致，例如版本 `0.1.6` 对应 `v0.1.6`。
 
 ## 参与项目
 

@@ -14,7 +14,6 @@
 以下命令均需在仓库根目录执行：
 
 ```bash
-cd /Users/bytedance/work/branchloom
 pnpm install
 pnpm build:cli
 target/debug/branchloom-cli --help
@@ -24,7 +23,6 @@ target/debug/branchloom-cli --help
 
 ```bash
 cargo build -p branchloom-cli
-cargo run -p branchloom-cli --bin branchloom-cli -- doctor --output json
 ```
 
 源码构建产物位于 `target/debug/branchloom-cli`。`branchloom-cli` 是仓库内部产物名；由
@@ -101,6 +99,11 @@ branchloom person describe --output json
 
 提交成功的人物等实体写入会返回 `data.changeSetId`。使用 `--output json` 时，标准输出只
 包含一个 JSON envelope。
+
+Skill 的交互确认与自主增量导入规则统一维护在 [SKILL.md](../../skills/branchloom/SKILL.md#preview-and-authorization)。
+普通交互先确认具体预览；已确认且未变化的预览无需重复确认。自主模式仅在明确授权的项目与
+增量范围内连续写入，仍须逐次预览并重放全部令牌。协议中的 `STALE_PREVIEW` 或
+`REVISION_CONFLICT` 要求重新预览并确认新计划；完整错误说明见 [CLI reference](../../skills/branchloom/references/cli-reference.md#error-recovery)。
 
 ## 事件写入
 

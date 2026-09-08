@@ -1,8 +1,18 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
-import type { GithubSyncGateway } from '../../shared/githubSync'
+import {
+  githubError,
+  type GithubOperationProgress,
+  type GithubProjectImportPreview,
+  type GithubSyncGateway,
+} from '../../shared/githubSync'
 import GithubProjectImportPanel from './components/GithubProjectImportPanel.vue'
+import githubProjectImportPanelSource from './components/GithubProjectImportPanel.vue?raw'
 import githubProjectImportViewSource from './views/GithubProjectImportView.vue?raw'
+
+const globalStyles = readFileSync(resolve(process.cwd(), 'src/app/styles/base.css'), 'utf8')
 
 function gateway(overrides: Partial<GithubSyncGateway> = {}): GithubSyncGateway {
   return {
@@ -55,6 +65,7 @@ describe('GitHub project import panel', () => {
     await flushPromises()
 
     expect(syncGateway.previewImport).toHaveBeenCalledWith({
+      operationId: expect.any(String),
       owner: 'family-owner',
       repository: 'family-tree',
       branch: 'main',
@@ -67,6 +78,7 @@ describe('GitHub project import panel', () => {
     await flushPromises()
 
     expect(syncGateway.applyImport).toHaveBeenCalledWith({
+      operationId: expect.any(String),
       owner: 'family-owner',
       repository: 'family-tree',
       branch: 'main',
@@ -91,6 +103,7 @@ describe('GitHub project import panel', () => {
     await flushPromises()
 
     expect(syncGateway.previewImport).toHaveBeenCalledWith({
+      operationId: expect.any(String),
       placeholderProjectId: 'project-placeholder',
       owner: 'family-owner',
       repository: 'family-tree',
@@ -142,6 +155,7 @@ describe('GitHub project import panel', () => {
     await flushPromises()
 
     expect(previewImport).toHaveBeenNthCalledWith(1, {
+      operationId: expect.any(String),
       placeholderProjectId: 'project-placeholder',
       owner: 'family-owner',
       repository: 'family-tree',
@@ -156,6 +170,7 @@ describe('GitHub project import panel', () => {
     await flushPromises()
 
     expect(previewImport).toHaveBeenNthCalledWith(2, {
+      operationId: expect.any(String),
       placeholderProjectId: 'project-placeholder',
       owner: 'family-owner',
       repository: 'family-tree',
@@ -166,6 +181,62 @@ describe('GitHub project import panel', () => {
     expect(wrapper.text()).toContain('远端李氏家谱')
   })
 
+  it('shows live repository progress and releases the shared listener', async () => {
+    let finishPreview!: (preview: GithubProjectImportPreview) => void
+    let progressHandler!: (progress: GithubOperationProgress) => void
+    const unsubscribe = vi.fn()
+    const previewImport = vi.fn<GithubSyncGateway['previewImport']>(() => new Promise((resolve) => {
+      finishPreview = resolve
+    }))
+    const subscribeProgress = vi.fn<NonNullable<GithubSyncGateway['subscribeProgress']>>(async (handler) => {
+      progressHandler = handler
+      return unsubscribe
+    })
+    const wrapper = mount(GithubProjectImportPanel, {
+      props: { gateway: gateway({ previewImport, subscribeProgress }) },
+    })
+    await flushPromises()
+
+    await wrapper.get('input[name="githubImportOwner"]').setValue('family-owner')
+    await wrapper.get('input[name="githubImportRepository"]').setValue('family-tree')
+    await wrapper.get('input[name="githubImportToken"]').setValue('session-token')
+    await wrapper.get('form').trigger('submit')
+
+    const operationId = previewImport.mock.calls[0]?.[0].operationId
+    expect(operationId).toEqual(expect.any(String))
+    progressHandler({
+      operationId: operationId!,
+      projectId: 'github-import',
+      operation: 'previewImport',
+      phase: 'downloading-files',
+      message: '正在读取 GitHub 资料 6 / 12…',
+      completed: 6,
+      total: 12,
+    })
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.get('.github-import__progress').attributes('role')).toBe('status')
+    expect(wrapper.text()).toContain('正在整理仓库资料')
+    expect(wrapper.text()).toContain('正在读取 GitHub 资料 6 / 12')
+    expect(wrapper.text()).toContain('6 / 12')
+    expect(wrapper.get('.github-import__progress-track > span').attributes('style')).toContain('50%')
+
+    finishPreview({
+      projectId: 'project-remote',
+      projectName: '远端李氏家谱',
+      projectDescription: '',
+      commit: 'commit-remote',
+      recordCounts: { people: 12 },
+      alreadyExists: false,
+      fingerprint: 'github-import.v1.preview',
+    })
+    await flushPromises()
+    expect(wrapper.find('.github-import__progress').exists()).toBe(false)
+
+    wrapper.unmount()
+    expect(unsubscribe).toHaveBeenCalledOnce()
+  })
+
   it('does not expose repository fields in the browser preview', () => {
     const wrapper = mount(GithubProjectImportPanel, {
       props: { gateway: gateway({ available: () => false }) },
@@ -174,6 +245,25 @@ describe('GitHub project import panel', () => {
     expect(wrapper.text()).toContain('GitHub 项目导入仅在桌面端可用')
     expect(wrapper.find('input[name="githubImportToken"]').exists()).toBe(false)
   })
+
+  it('explains that mobile tokens are retained only for the current app session', () => {
+    const wrapper = mount(GithubProjectImportPanel, {
+      props: { gateway: gateway(), mobileRuntime: true },
+    })
+
+    expect(wrapper.text()).toContain('Token 只在本次 App 运行期间保留')
+    expect(wrapper.text()).not.toContain('导入后保存在系统安全凭据中')
+  })
+
+  it('turns a transport failure with a long blob URL into a concise retry message', () => {
+    const failure = githubError(
+      new Error('remote operation failed: error sending request for url (https://api.github.com/repos/family/archive/git/blobs/very-long-sha)'),
+      '无法读取 GitHub 项目。',
+    )
+
+    expect(failure).toBe('读取 GitHub 时网络连接中断，应用已自动重试；请确认网络稳定后再次尝试。')
+    expect(failure).not.toContain('https://')
+  })
 })
 
 describe('GitHub project import layout', () => {
@@ -181,5 +271,16 @@ describe('GitHub project import layout', () => {
     expect(githubProjectImportViewSource).toMatch(
       /@media \(max-width: 60rem\)\s*{\s*\.github-import-view\s*{\s*grid-template-columns: 1fr;/,
     )
+  })
+
+  it('globally contains long text without widening the app viewport', () => {
+    expect(globalStyles).toMatch(/html,\s*body,\s*#app\s*{[^}]*overflow-x:\s*hidden;/s)
+    expect(globalStyles).toMatch(/body\s*{[^}]*overflow-wrap:\s*anywhere;/s)
+  })
+
+  it('uses a compact responsive progress card for desktop and mobile import', () => {
+    expect(githubProjectImportPanelSource).toContain('github-import__progress-track')
+    expect(githubProjectImportPanelSource).toMatch(/\.github-import__progress\s*{[^}]*min-width:\s*0;[^}]*overflow:\s*hidden;/s)
+    expect(githubProjectImportPanelSource).toMatch(/@media \(max-width: 38rem\)[\s\S]*\.github-import__progress-heading/)
   })
 })
