@@ -15,6 +15,10 @@
 <p align="center">
   <a href="https://github.com/tenlee2012/branchloom/releases">下载桌面版</a>
   ·
+  <a href="https://pan.quark.cn/s/2ec290e5499c">夸克网盘</a>
+  ·
+  <a href="https://www.alipan.com/s/yVxJsJhSE2L">阿里云盘</a>
+  ·
   <a href="DATA_FORMAT.md">开放数据格式 `.blp`</a>
   ·
   <a href="packages/cli/README.md">CLI 文档</a>
@@ -118,10 +122,17 @@
 
 前往 [GitHub Releases](https://github.com/tenlee2012/branchloom/releases) 下载与操作系统匹配的安装包。macOS 用户请根据设备选择 `aarch64`（Apple 芯片）或 `x64`（Intel 芯片）版本。
 
+也可通过网盘下载，两个入口均永久有效、无需提取码：
+
+- [夸克网盘](https://pan.quark.cn/s/2ec290e5499c)
+- [阿里云盘](https://www.alipan.com/s/yVxJsJhSE2L)：公开分享页目前仅显示 Windows / Linux 安装包；macOS 请使用夸克网盘或 GitHub Releases。
+
+网盘安装包来自本项目 GitHub Releases，按「有谱 / v版本号」归档，目前收录 v0.1.0～v0.1.4。这些版本沿用旧文件名，macOS 的 `aarch64` 对应 Apple 芯片，`x64` 对应 Intel 芯片。
+
 <details>
 <summary><strong>macOS 首次安装提示</strong></summary>
 
-目前 macOS 安装包使用 ad-hoc 签名，尚未使用 Apple Developer ID 签名和公证。请只从本项目官方 Releases 下载并确认来源可信。
+目前 macOS 安装包使用 ad-hoc 签名，尚未使用 Apple Developer ID 签名和公证。请只从本项目官方 Releases 或上方网盘入口下载并确认来源可信。
 
 将“有谱”拖入“应用程序”文件夹后，如果系统提示“App 已损坏”或无法验证开发者，请打开“终端”执行：
 
@@ -130,14 +141,14 @@ xattr -dr com.apple.quarantine "/Applications/有谱.app"
 open "/Applications/有谱.app"
 ```
 
-该命令只移除“有谱”的互联网下载隔离标记，不会关闭系统的全局 Gatekeeper。仅对从本项目官方 Releases 下载的安装包执行此操作。
+该命令只移除“有谱”的互联网下载隔离标记，不会关闭系统的全局 Gatekeeper。仅对从本项目官方 Releases 或上方网盘入口下载的安装包执行此操作。
 
 </details>
 
 <details>
 <summary><strong>Windows 安装提示</strong></summary>
 
-Windows 安装包目前未进行商业代码签名，安装时操作系统可能显示安全提醒。请确认安装包来自本项目官方 Releases 后再继续。
+Windows 安装包目前未进行商业代码签名，安装时操作系统可能显示安全提醒。请确认安装包来自本项目官方 Releases 或上方网盘入口后再继续。
 
 </details>
 
