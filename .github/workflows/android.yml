@@ -89,6 +89,11 @@ jobs:
         with:
           shared-key: android-arm64
 
+      - name: Read app version
+        id: app-version
+        shell: bash
+        run: echo "value=$(node scripts/release-version.mjs --print)" >> "$GITHUB_OUTPUT"
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -108,7 +113,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: branchloom-android-arm64-debug-${{ github.sha }}
+          name: branchloom-${{ steps.app-version.outputs.value }}-android-arm64-debug-${{ github.sha }}
           path: ${{ env.APK_PATH }}
           if-no-files-found: error
           retention-days: 14

@@ -169,6 +169,14 @@ pnpm test:unit
 pnpm test:cli
 ```
 
+发布版本只维护根 `Cargo.toml` 中的一处 workspace 版本。使用命令更新版本并自动刷新 `Cargo.lock`：
+
+```bash
+pnpm release:version 0.1.6
+```
+
+发布 tag 必须与 workspace 版本一致，例如版本 `0.1.6` 对应 `v0.1.6`。
+
 ## 参与项目
 
 欢迎通过 Issue、Discussion 或 Pull Request 参与有谱：报告问题、提出真实的家谱整理场景、改进无障碍体验与文案，或协助测试数据导入、备份和跨平台体验。
