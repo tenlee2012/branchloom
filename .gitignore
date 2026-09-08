@@ -42,3 +42,7 @@ id_ed25519
 *.db
 *.db-*
 *.blp
+
+# Local implementation notes and visual QA reports
+/AI_TOOLS_INSTALLATION_SPEC.md
+/design-qa.md
