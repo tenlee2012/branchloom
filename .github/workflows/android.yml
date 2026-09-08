@@ -21,13 +21,24 @@ on:
       - "pnpm-lock.yaml"
       - "packages/core/**"
       - "packages/desktop/**"
+  workflow_call:
+    inputs:
+      release_tag:
+        description: Existing GitHub Release tag that receives the APK
+        required: false
+        type: string
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing GitHub Release tag that receives the APK, for example v0.1.5
+        required: false
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: android-${{ github.workflow }}-${{ github.ref }}
+  group: android-${{ github.workflow }}-${{ inputs.release_tag || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -35,6 +46,10 @@ jobs:
     name: Android arm64 debug APK
     runs-on: ubuntu-22.04
     timeout-minutes: 45
+
+    outputs:
+      artifact_name: ${{ steps.android-asset.outputs.artifact_name }}
+      asset_name: ${{ steps.android-asset.outputs.name }}
 
     env:
       ANDROID_API_LEVEL: "36"
@@ -45,6 +60,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -110,11 +127,85 @@ jobs:
           "$ANDROID_SDK_ROOT/build-tools/$ANDROID_BUILD_TOOLS_VERSION/apksigner" verify --verbose "$APK_PATH"
           "$ANDROID_SDK_ROOT/build-tools/$ANDROID_BUILD_TOOLS_VERSION/zipalign" -c -P 16 4 "$APK_PATH"
 
+      - name: Give APK a user-facing filename
+        id: android-asset
+        shell: bash
+        run: |
+          asset_dir="$RUNNER_TEMP/branchloom-android"
+          asset_name="Branchloom_Android_arm64_v${{ steps.app-version.outputs.value }}_debug.apk"
+          mkdir -p "$asset_dir"
+          install -m 0644 "$APK_PATH" "$asset_dir/$asset_name"
+          echo "artifact_name=${asset_name%.apk}" >> "$GITHUB_OUTPUT"
+          echo "name=$asset_name" >> "$GITHUB_OUTPUT"
+          echo "path=$asset_dir/$asset_name" >> "$GITHUB_OUTPUT"
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: branchloom-${{ steps.app-version.outputs.value }}-android-arm64-debug-${{ github.sha }}
-          path: ${{ env.APK_PATH }}
+          name: ${{ steps.android-asset.outputs.artifact_name }}
+          path: ${{ steps.android-asset.outputs.path }}
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
+
+  attach-release:
+    name: Attach APK to ${{ inputs.release_tag }}
+    if: ${{ inputs.release_tag != '' }}
+    needs: build-android
+    runs-on: ubuntu-22.04
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download verified APK
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build-android.outputs.artifact_name }}
+          path: ${{ runner.temp }}/branchloom-release
+
+      - name: Upload APK to release
+        uses: actions/github-script@v7
+        env:
+          ASSET_NAME: ${{ needs.build-android.outputs.asset_name }}
+          ASSET_PATH: ${{ runner.temp }}/branchloom-release/${{ needs.build-android.outputs.asset_name }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require("fs");
+            const assetName = process.env.ASSET_NAME;
+            const assetPath = process.env.ASSET_PATH;
+            const releaseTag = process.env.RELEASE_TAG;
+            const { data: release } = await github.rest.repos.getReleaseByTag({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag: releaseTag,
+            });
+            const existingAssets = await github.paginate(
+              github.rest.repos.listReleaseAssets,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: release.id,
+                per_page: 100,
+              },
+            );
+
+            if (existingAssets.some((asset) => asset.name === assetName)) {
+              core.info(`Release asset ${assetName} already exists; leaving it unchanged.`);
+              return;
+            }
+
+            const data = fs.readFileSync(assetPath);
+            await github.rest.repos.uploadReleaseAsset({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: release.id,
+              name: assetName,
+              headers: {
+                "content-type": "application/vnd.android.package-archive",
+                "content-length": data.length,
+              },
+              data,
+            });

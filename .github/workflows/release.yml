@@ -1,4 +1,4 @@
-name: Build desktop installers
+name: Build release installers
 
 on:
   push:
@@ -80,7 +80,8 @@ jobs:
             const tag = context.ref.replace("refs/tags/", "");
             const releaseName = `有谱 ${tag}`;
             const releaseBody = [
-              "有谱桌面端安装包。每个平台的安装包均内置匹配版本的原生 CLI 与 Codex Skill，",
+              "本 Release 包含有谱桌面端安装包与 Android arm64 测试 APK；iOS 安装包尚未提供。",
+              "桌面安装包均内置匹配版本的原生 CLI 与 Codex Skill，",
               "安装桌面端后可从“AI 工具”页面离线安装、更新或修复，无需 npm 或 npx。",
               "",
               "## macOS 安装说明",
@@ -147,6 +148,16 @@ jobs:
             core.info(`Created draft release ${release.id} for ${tag}.`);
             return String(release.id);
 
+  build-android:
+    name: Build Android arm64 APK
+    needs: create-release
+    permissions:
+      contents: write
+    uses: ./.github/workflows/android.yml
+    with:
+      release_tag: ${{ github.ref_name }}
+    secrets: inherit
+
   build:
     name: Build ${{ matrix.name }}
     needs: create-release
@@ -165,6 +176,7 @@ jobs:
             cli_binary: target/x86_64-unknown-linux-gnu/release/branchloom-cli
             args: "--target x86_64-unknown-linux-gnu --bundles appimage,deb"
             cache-key: linux-x64
+            asset_label: Linux_x64
 
           - name: Windows x64
             platform: windows-latest
@@ -172,6 +184,7 @@ jobs:
             cli_binary: target/x86_64-pc-windows-msvc/release/branchloom-cli.exe
             args: "--target x86_64-pc-windows-msvc --bundles nsis"
             cache-key: windows-x64
+            asset_label: Windows_x64
 
           - name: macOS Apple Silicon
             platform: macos-15
@@ -179,6 +192,7 @@ jobs:
             cli_binary: target/aarch64-apple-darwin/release/branchloom-cli
             args: "--target aarch64-apple-darwin --bundles dmg"
             cache-key: macos-arm64
+            asset_label: macOS_Apple-Silicon
 
           - name: macOS Intel
             platform: macos-15-intel
@@ -186,6 +200,7 @@ jobs:
             cli_binary: target/x86_64-apple-darwin/release/branchloom-cli
             args: "--target x86_64-apple-darwin --bundles dmg"
             cache-key: macos-x64
+            asset_label: macOS_Intel
 
     steps:
       - name: Checkout
@@ -251,4 +266,4 @@ jobs:
           tauriScript: pnpm tauri
           args: ${{ matrix.args }}
           releaseId: ${{ needs.create-release.outputs.release-id }}
-          releaseAssetNamePattern: Branchloom_[version]_[platform]_[arch][setup][ext]
+          releaseAssetNamePattern: Branchloom_Desktop_${{ matrix.asset_label }}_v[version][setup][ext]
