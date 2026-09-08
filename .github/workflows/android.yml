@@ -27,6 +27,19 @@ on:
         description: Existing GitHub Release tag that receives the APK
         required: false
         type: string
+    secrets:
+      ANDROID_KEYSTORE_BASE64:
+        description: Base64-encoded Android release keystore
+        required: true
+      ANDROID_KEYSTORE_PASSWORD:
+        description: Android release keystore password
+        required: true
+      ANDROID_KEY_ALIAS:
+        description: Android release key alias
+        required: true
+      ANDROID_KEY_PASSWORD:
+        description: Android release key password
+        required: true
   workflow_dispatch:
     inputs:
       release_tag:
@@ -43,7 +56,7 @@ concurrency:
 
 jobs:
   build-android:
-    name: Android arm64 debug APK
+    name: Android arm64 release APK
     runs-on: ubuntu-22.04
     timeout-minutes: 45
 
@@ -55,7 +68,10 @@ jobs:
       ANDROID_API_LEVEL: "36"
       ANDROID_BUILD_TOOLS_VERSION: "36.0.0"
       ANDROID_NDK_VERSION: "27.0.12077973"
-      APK_PATH: packages/desktop/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
+      UNSIGNED_APK_PATH: packages/desktop/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk
+      ALIGNED_APK_PATH: ${{ runner.temp }}/branchloom-android-aligned.apk
+      SIGNED_APK_PATH: ${{ runner.temp }}/branchloom-android-release.apk
+      KEYSTORE_PATH: ${{ runner.temp }}/branchloom-android-release.keystore
 
     steps:
       - name: Checkout
@@ -117,24 +133,58 @@ jobs:
       - name: Initialize generated Android project
         run: pnpm --dir packages/desktop tauri android init
 
-      - name: Build installable APK
-        run: pnpm build:android
+      - name: Build optimized release APK
+        run: pnpm build:android:release
+
+      - name: Sign release APK
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          for variable_name in \
+            ANDROID_KEYSTORE_BASE64 \
+            ANDROID_KEYSTORE_PASSWORD \
+            ANDROID_KEY_ALIAS \
+            ANDROID_KEY_PASSWORD; do
+            if [[ -z "${!variable_name}" ]]; then
+              echo "::error::Missing GitHub Actions secret: $variable_name"
+              exit 1
+            fi
+          done
+
+          test -s "$UNSIGNED_APK_PATH"
+          umask 077
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+          "$ANDROID_SDK_ROOT/build-tools/$ANDROID_BUILD_TOOLS_VERSION/zipalign" \
+            -f -P 16 4 "$UNSIGNED_APK_PATH" "$ALIGNED_APK_PATH"
+          "$ANDROID_SDK_ROOT/build-tools/$ANDROID_BUILD_TOOLS_VERSION/apksigner" sign \
+            --ks "$KEYSTORE_PATH" \
+            --ks-key-alias "$ANDROID_KEY_ALIAS" \
+            --ks-pass env:ANDROID_KEYSTORE_PASSWORD \
+            --key-pass env:ANDROID_KEY_PASSWORD \
+            --out "$SIGNED_APK_PATH" \
+            "$ALIGNED_APK_PATH"
 
       - name: Verify APK signature and alignment
         shell: bash
         run: |
-          test -s "$APK_PATH"
-          "$ANDROID_SDK_ROOT/build-tools/$ANDROID_BUILD_TOOLS_VERSION/apksigner" verify --verbose "$APK_PATH"
-          "$ANDROID_SDK_ROOT/build-tools/$ANDROID_BUILD_TOOLS_VERSION/zipalign" -c -P 16 4 "$APK_PATH"
+          test -s "$SIGNED_APK_PATH"
+          "$ANDROID_SDK_ROOT/build-tools/$ANDROID_BUILD_TOOLS_VERSION/apksigner" \
+            verify --verbose --print-certs "$SIGNED_APK_PATH"
+          "$ANDROID_SDK_ROOT/build-tools/$ANDROID_BUILD_TOOLS_VERSION/zipalign" \
+            -c -P 16 4 "$SIGNED_APK_PATH"
 
       - name: Give APK a user-facing filename
         id: android-asset
         shell: bash
         run: |
           asset_dir="$RUNNER_TEMP/branchloom-android"
-          asset_name="Branchloom_Android_arm64_v${{ steps.app-version.outputs.value }}_debug.apk"
+          asset_name="Branchloom_Android_arm64_v${{ steps.app-version.outputs.value }}_release.apk"
           mkdir -p "$asset_dir"
-          install -m 0644 "$APK_PATH" "$asset_dir/$asset_name"
+          install -m 0644 "$SIGNED_APK_PATH" "$asset_dir/$asset_name"
           echo "artifact_name=${asset_name%.apk}" >> "$GITHUB_OUTPUT"
           echo "name=$asset_name" >> "$GITHUB_OUTPUT"
           echo "path=$asset_dir/$asset_name" >> "$GITHUB_OUTPUT"

@@ -80,7 +80,7 @@ jobs:
             const tag = context.ref.replace("refs/tags/", "");
             const releaseName = `有谱 ${tag}`;
             const releaseBody = [
-              "本 Release 包含有谱桌面端安装包与 Android arm64 测试 APK；iOS 安装包尚未提供。",
+              "本 Release 包含有谱桌面端安装包与已签名的 Android arm64 Release APK；iOS 安装包尚未提供。",
               "桌面安装包均内置匹配版本的原生 CLI 与 Codex Skill，",
               "安装桌面端后可从“AI 工具”页面离线安装、更新或修复，无需 npm 或 npx。",
               "",
