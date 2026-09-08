@@ -18,6 +18,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 
 import { compareUtf8, createFileHashManifest } from './ai-tools-manifest.mjs'
+import { readWorkspaceVersion } from '../../../scripts/workspace-version.mjs'
 
 const desktopDirectory = fileURLToPath(new URL('..', import.meta.url))
 const workspaceDirectory = path.resolve(desktopDirectory, '../..')
@@ -61,14 +62,6 @@ function platformId(targetTriple) {
   const platform = platforms.get(targetTriple)
   if (!platform) throw new Error(`Unsupported Branchloom desktop target: ${targetTriple}`)
   return platform
-}
-
-function packageVersion(file) {
-  const source = readFileSync(file, 'utf8')
-  const packageSection = source.match(/\[package\]([\s\S]*?)(?:\n\[|$)/)?.[1]
-  const version = packageSection?.match(/^version\s*=\s*"([^"]+)"/m)?.[1]
-  if (!version) throw new Error(`Unable to read package version from ${file}`)
-  return version
 }
 
 function contractVersion() {
@@ -149,13 +142,8 @@ const stagedSkill = path.join(resourceDirectory, 'skills', 'branchloom')
 cpSync(skillSource, stagedSkill, { recursive: true, errorOnExist: true })
 const skillManifest = createFileHashManifest(listFiles(stagedSkill))
 
-const desktopVersion = JSON.parse(
-  readFileSync(path.join(desktopDirectory, 'src-tauri', 'tauri.conf.json'), 'utf8'),
-).version
-const cliVersion = packageVersion(path.join(workspaceDirectory, 'packages/cli/native/Cargo.toml'))
-if (desktopVersion !== cliVersion) {
-  throw new Error(`Desktop version ${desktopVersion} does not match CLI version ${cliVersion}`)
-}
+const desktopVersion = readWorkspaceVersion(workspaceDirectory, { locked: true })
+const cliVersion = desktopVersion
 
 const manifest = {
   schemaVersion: 1,

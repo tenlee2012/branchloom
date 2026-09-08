@@ -69,6 +69,7 @@ export interface GithubSyncOutcome {
 }
 
 export interface GithubProjectImportRequest {
+  operationId?: string
   placeholderProjectId?: string
   owner: string
   repository: string
@@ -96,7 +97,14 @@ export interface GithubProjectImportResult {
   warnings: string[]
 }
 
-export type GithubOperationKind = 'connect' | 'previewPull' | 'previewFull' | 'applyPull' | 'applyFull'
+export type GithubOperationKind =
+  | 'connect'
+  | 'previewPull'
+  | 'previewFull'
+  | 'applyPull'
+  | 'applyFull'
+  | 'previewImport'
+  | 'applyImport'
 
 export interface GithubOperationProgress {
   operationId: string
@@ -104,6 +112,8 @@ export interface GithubOperationProgress {
   operation: GithubOperationKind
   phase: string
   message: string
+  completed?: number
+  total?: number
 }
 
 export function githubSyncOutcomeError(outcome: GithubSyncOutcome): string | undefined {
@@ -172,6 +182,15 @@ export function githubError(error: unknown, fallback: string): string {
   }
   if (normalized.includes('timed out') || normalized.includes('timeout')) {
     return '连接 GitHub 超时，请检查网络后重试。'
+  }
+  if (
+    normalized.includes('github request failed')
+    || normalized.includes('error sending request')
+    || normalized.includes('connection refused')
+    || normalized.includes('connection reset')
+    || normalized.includes('dns error')
+  ) {
+    return '读取 GitHub 时网络连接中断，应用已自动重试；请确认网络稳定后再次尝试。'
   }
   return message || fallback
 }

@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import AppSidebar from '../components/AppSidebar.vue'
 import AppTopbar from '../components/AppTopbar.vue'
+import MobileProjectNavigation from '../components/MobileProjectNavigation.vue'
 import { useSessionStore } from '../stores/session'
 import { useBranchloomRepository } from '../../shared/repository/injection'
 import { BrowserRecentProjectLocations } from '../../features/projects/model/recentProjectLocations'
@@ -113,11 +114,13 @@ onBeforeUnmount(() => {
 
   <div v-else class="project-layout">
     <AppSidebar
+      class="project-layout__sidebar"
       :project-id="navigationProjectId"
       :project-name="session.currentProjectName"
     />
     <div class="project-layout__workspace">
       <AppTopbar
+        :project-name="session.currentProjectName"
         @fit-tree="fitTreeCanvas"
         @add-person="addTreePerson"
       />
@@ -136,6 +139,7 @@ onBeforeUnmount(() => {
         </RouterView>
       </main>
     </div>
+    <MobileProjectNavigation :project-id="navigationProjectId" />
   </div>
 </template>
 
@@ -242,6 +246,35 @@ onBeforeUnmount(() => {
 @media (max-width: 64rem) {
   .project-layout {
     grid-template-columns: 4rem minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 48rem) {
+  .project-layout {
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
+  .project-layout__sidebar {
+    display: none;
+  }
+
+  .project-layout__workspace {
+    grid-row: 1;
+  }
+
+  .project-layout__main {
+    padding: 1rem;
+  }
+
+  .project-layout__main--canvas {
+    overflow: auto;
+    padding: 0;
+  }
+
+  .project-layout__main--management {
+    padding: 1rem;
   }
 }
 </style>

@@ -75,6 +75,22 @@ afterEach(() => {
 })
 
 describe('project overview', () => {
+  it('recovers from a failed project list load and supports Escape to close the switcher', async () => {
+    const repository = makeRepository()
+    const { wrapper } = await mountManagement(`/project/${PROJECT_ID}/manage/overview`, repository)
+    const list = vi.spyOn(repository, 'listProjects').mockRejectedValue(new Error('列表读取失败'))
+    const switcher = wrapper.get<HTMLDetailsElement>('.project-switcher')
+    switcher.element.open = true
+    await vi.waitFor(() => expect(switcher.get('[role="alert"]').text()).toContain('列表读取失败'))
+    list.mockRestore()
+    await switcher.get('button').trigger('click')
+    await flushPromises()
+    expect(switcher.get('nav[aria-label="可切换的项目"]').findAll('a').length).toBeGreaterThan(0)
+    await switcher.trigger('keydown', { key: 'Escape' })
+    expect(switcher.element.open).toBe(false)
+    expect(document.activeElement).toBe(switcher.get('summary').element)
+  })
+
   it('shows every required project count, storage size, modification time, and backup time', async () => {
     const { wrapper } = await mountManagement(`/project/${PROJECT_ID}/manage/overview`)
 

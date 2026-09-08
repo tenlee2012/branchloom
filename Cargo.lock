@@ -351,7 +351,7 @@ dependencies = [
 
 [[package]]
 name = "branchloom"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "branchloom-core",
  "keyring",
@@ -361,6 +361,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
+ "tauri-plugin-fs",
  "tauri-plugin-opener",
  "tempfile",
  "uuid",
@@ -368,7 +369,7 @@ dependencies = [
 
 [[package]]
 name = "branchloom-cli"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "branchloom-core",
  "serde",
@@ -381,12 +382,13 @@ dependencies = [
 
 [[package]]
 name = "branchloom-core"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "base64 0.22.1",
  "dirs",
  "reqwest",
  "rusqlite",
+ "rustls",
  "serde",
  "serde_json",
  "sha2",
@@ -395,6 +397,7 @@ dependencies = [
  "time",
  "unicode-normalization",
  "uuid",
+ "webpki-roots",
  "zip",
 ]
 
@@ -5020,6 +5023,15 @@ name = "webpki-root-certs"
 version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b96554aa2acc8ccdb7e1c9a58a7a68dd5d13bccc69cd124cb09406db612a1c9b"
+dependencies = [
+ "rustls-pki-types",
+]
+
+[[package]]
+name = "webpki-roots"
+version = "1.0.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7dcd9d09a39985f5344844e66b0c530a33843579125f23e21e9f0f220850f22a"
 dependencies = [
  "rustls-pki-types",
 ]

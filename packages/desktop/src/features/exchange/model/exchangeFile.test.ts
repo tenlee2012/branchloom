@@ -1,7 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { exchangeErrorMessage, exchangeFileName, selectedFileName } from './exchangeFile'
+import { exchangeDestination, exchangeErrorMessage, exchangeFileName, selectedFileName } from './exchangeFile'
 
 describe('exchange file names', () => {
+  it('preserves opaque provider URIs while completing desktop file extensions', () => {
+    for (const extension of ['blp', 'ged'] as const) {
+      const uri = 'content://com.android.providers.downloads.documents/document/123%3A456'
+      expect(exchangeDestination(uri, extension)).toBe(uri)
+      expect(exchangeDestination('file:///private/family%20archive', extension))
+        .toBe('file:///private/family%20archive')
+      expect(exchangeDestination('/tmp/family', extension)).toBe(`/tmp/family.${extension}`)
+      expect(exchangeDestination(`C:\\family.${extension.toUpperCase()}`, extension))
+        .toBe(`C:\\family.${extension.toUpperCase()}`)
+    }
+  })
+
   it('uses only the final file name in user notifications', () => {
     expect(selectedFileName('/Users/example/Private/family.ged')).toBe('family.ged')
     expect(selectedFileName('C:\\Users\\example\\Private\\family.blp')).toBe('family.blp')

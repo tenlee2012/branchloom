@@ -10,6 +10,7 @@ import DataRefreshButton from './DataRefreshButton.vue'
 import PageBackLink from './PageBackLink.vue'
 
 const route = useRoute()
+defineProps<{ projectName?: string }>()
 const isTreeWorkspace = computed(() => route.name === 'project-tree')
 const emit = defineEmits<{
   fitTree: []
@@ -24,12 +25,14 @@ const emit = defineEmits<{
       class="app-topbar__drag-surface"
       data-tauri-drag-region
       aria-hidden="true"
-    />
+    >
+      <span class="app-topbar__mobile-project">{{ projectName || '有谱' }}</span>
+    </div>
     <PageBackLink v-else placement="topbar" />
 
     <div class="app-topbar__actions" :aria-label="isTreeWorkspace ? '家谱树操作' : '资料操作'">
       <DataRefreshButton />
-      <BaseButton v-if="isTreeWorkspace" name="适应画布" size="sm" variant="secondary" @click="emit('fitTree')">
+      <BaseButton v-if="isTreeWorkspace" class="app-topbar__fit-canvas" name="适应画布" size="sm" variant="secondary" @click="emit('fitTree')">
         <IconArrowsMaximize :size="17" aria-hidden="true" />适应画布
       </BaseButton>
       <BaseButton v-if="isTreeWorkspace" name="添加人物" size="sm" @click="emit('addPerson')">
@@ -63,9 +66,45 @@ const emit = defineEmits<{
   align-self: stretch;
 }
 
+.app-topbar__mobile-project {
+  display: none;
+}
+
 .app-topbar__actions :deep(.base-button) {
   gap: .4rem;
   white-space: nowrap;
+}
+
+@media (max-width: 48rem) {
+  .app-topbar {
+    min-height: calc(3.75rem + env(safe-area-inset-top));
+    padding: calc(.55rem + env(safe-area-inset-top)) .75rem .55rem;
+    gap: .5rem;
+  }
+
+  .app-topbar__mobile-project {
+    display: block;
+    overflow: hidden;
+    color: var(--color-primary-strong);
+    font-family: var(--font-heading);
+    font-size: 1rem;
+    font-weight: 620;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .app-topbar__fit-canvas {
+    display: none;
+  }
+
+  .app-topbar__actions {
+    gap: .25rem;
+  }
+
+  .app-topbar__actions :deep(.base-button) {
+    min-height: 2.6rem;
+    padding-inline: .65rem;
+  }
 }
 
 </style>

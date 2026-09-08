@@ -8,6 +8,7 @@ import {
   IconHistory,
   IconNetwork,
   IconPlus,
+  IconRefresh,
   IconSettings,
   IconShieldCheck,
 } from '@tabler/icons-vue'
@@ -15,6 +16,7 @@ import BaseButton from '../../../design-system/BaseButton.vue'
 import type { Project, ProjectSummary } from '../../../shared/domain/types'
 import { useBranchloomRepository } from '../../../shared/repository/injection'
 import ProjectStats from '../components/ProjectStats.vue'
+import ProjectSwitcher from '../components/ProjectSwitcher.vue'
 
 const route = useRoute()
 const repository = useBranchloomRepository()
@@ -26,6 +28,13 @@ const loadError = ref('')
 let loadRequest = 0
 
 const managementLinks = computed(() => [
+  {
+    label: '协作同步',
+    ariaLabel: '打开协作同步',
+    description: '预览并同步 GitHub 项目资料',
+    icon: IconRefresh,
+    to: `/project/${projectId.value}/collaboration-sync`,
+  },
   {
     label: '导入与导出',
     ariaLabel: '打开导入与导出',
@@ -105,6 +114,7 @@ watch(projectId, () => { void loadOverview() }, { immediate: true })
         新建项目
       </RouterLink>
     </header>
+    <ProjectSwitcher :project-id="projectId" />
     <div v-if="loadState === 'loading'" class="project-overview__state" role="status">正在汇总项目资料…</div>
     <div v-else-if="loadState === 'error'" class="project-overview__state project-overview__state--error" role="alert">
       <strong>项目概览暂时无法读取</strong><span>{{ loadError }}</span>
