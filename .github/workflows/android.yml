@@ -69,9 +69,6 @@ jobs:
       ANDROID_BUILD_TOOLS_VERSION: "36.0.0"
       ANDROID_NDK_VERSION: "27.0.12077973"
       UNSIGNED_APK_PATH: packages/desktop/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk
-      ALIGNED_APK_PATH: ${{ runner.temp }}/branchloom-android-aligned.apk
-      SIGNED_APK_PATH: ${{ runner.temp }}/branchloom-android-release.apk
-      KEYSTORE_PATH: ${{ runner.temp }}/branchloom-android-release.keystore
 
     steps:
       - name: Checkout
@@ -144,6 +141,10 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
+          aligned_apk_path="$RUNNER_TEMP/branchloom-android-aligned.apk"
+          signed_apk_path="$RUNNER_TEMP/branchloom-android-release.apk"
+          keystore_path="$RUNNER_TEMP/branchloom-android-release.keystore"
+
           for variable_name in \
             ANDROID_KEYSTORE_BASE64 \
             ANDROID_KEYSTORE_PASSWORD \
@@ -157,16 +158,17 @@ jobs:
 
           test -s "$UNSIGNED_APK_PATH"
           umask 077
-          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore_path"
           "$ANDROID_SDK_ROOT/build-tools/$ANDROID_BUILD_TOOLS_VERSION/zipalign" \
-            -f -P 16 4 "$UNSIGNED_APK_PATH" "$ALIGNED_APK_PATH"
+            -f -P 16 4 "$UNSIGNED_APK_PATH" "$aligned_apk_path"
           "$ANDROID_SDK_ROOT/build-tools/$ANDROID_BUILD_TOOLS_VERSION/apksigner" sign \
-            --ks "$KEYSTORE_PATH" \
+            --ks "$keystore_path" \
             --ks-key-alias "$ANDROID_KEY_ALIAS" \
             --ks-pass env:ANDROID_KEYSTORE_PASSWORD \
             --key-pass env:ANDROID_KEY_PASSWORD \
-            --out "$SIGNED_APK_PATH" \
-            "$ALIGNED_APK_PATH"
+            --out "$signed_apk_path" \
+            "$aligned_apk_path"
+          echo "SIGNED_APK_PATH=$signed_apk_path" >> "$GITHUB_ENV"
 
       - name: Verify APK signature and alignment
         shell: bash
