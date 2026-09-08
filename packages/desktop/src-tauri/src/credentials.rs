@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 
+#[cfg(desktop)]
 use keyring::v1::{Entry, Error};
 
+#[cfg(desktop)]
 const GITHUB_TOKEN_SERVICE: &str = "app.branchloom.desktop.github";
 
 #[derive(Default)]
@@ -24,15 +26,18 @@ impl GithubCredentialCache {
     }
 }
 
+#[cfg(desktop)]
 fn github_token_account(project_id: &str) -> String {
     format!("project:{project_id}")
 }
 
+#[cfg(desktop)]
 fn github_token_entry(project_id: &str) -> Result<Entry, String> {
     Entry::new(GITHUB_TOKEN_SERVICE, &github_token_account(project_id))
         .map_err(|error| format!("无法访问系统安全凭据存储：{error}"))
 }
 
+#[cfg(desktop)]
 pub fn save_github_token(project_id: &str, token: &str) -> Result<(), String> {
     if token.trim().is_empty() {
         return Err("GitHub Token 不能为空".to_owned());
@@ -42,6 +47,17 @@ pub fn save_github_token(project_id: &str, token: &str) -> Result<(), String> {
         .map_err(|error| format!("无法将 GitHub Token 保存到系统安全凭据存储：{error}"))
 }
 
+#[cfg(mobile)]
+pub fn save_github_token(_project_id: &str, token: &str) -> Result<(), String> {
+    if token.trim().is_empty() {
+        return Err("GitHub Token 不能为空".to_owned());
+    }
+    // The caller keeps the token in the process-scoped credential cache. Until native
+    // Android/iOS secure stores are wired in, mobile builds never persist it to disk.
+    Ok(())
+}
+
+#[cfg(desktop)]
 pub fn load_github_token(project_id: &str) -> Result<Option<String>, String> {
     match github_token_entry(project_id)?.get_password() {
         Ok(token) if token.trim().is_empty() => Ok(None),
@@ -51,11 +67,22 @@ pub fn load_github_token(project_id: &str) -> Result<Option<String>, String> {
     }
 }
 
+#[cfg(mobile)]
+pub fn load_github_token(_project_id: &str) -> Result<Option<String>, String> {
+    Ok(None)
+}
+
+#[cfg(desktop)]
 pub fn delete_github_token(project_id: &str) -> Result<(), String> {
     match github_token_entry(project_id)?.delete_credential() {
         Ok(()) | Err(Error::NoEntry) => Ok(()),
         Err(error) => Err(format!("无法从系统安全凭据存储删除 GitHub Token：{error}")),
     }
+}
+
+#[cfg(mobile)]
+pub fn delete_github_token(_project_id: &str) -> Result<(), String> {
+    Ok(())
 }
 
 pub fn is_github_authentication_failure(message: &str) -> bool {

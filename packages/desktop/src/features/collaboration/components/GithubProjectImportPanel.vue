@@ -5,7 +5,7 @@ import {
   IconCircleCheck,
   IconDownload,
 } from '@tabler/icons-vue'
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import BaseButton from '../../../design-system/BaseButton.vue'
 import BaseField from '../../../design-system/BaseField.vue'
 import StatusBadge from '../../../design-system/StatusBadge.vue'
@@ -14,6 +14,8 @@ import {
   tauriGithubSyncGateway,
   type GithubProjectImportPreview,
   type GithubProjectImportResult,
+  type GithubOperationKind,
+  type GithubOperationProgress,
   type GithubSyncGateway,
 } from '../../../shared/githubSync'
 
@@ -24,6 +26,7 @@ const props = withDefaults(defineProps<{
   initialBranch?: string
   initialToken?: string
   autoPreview?: boolean
+  mobileRuntime?: boolean
   gateway?: GithubSyncGateway
 }>(), {
   initialOwner: '',
@@ -50,6 +53,11 @@ const result = ref<GithubProjectImportResult>()
 const loading = ref(false)
 const failure = ref('')
 const credentialRecovery = ref(false)
+const progress = ref<GithubOperationProgress>()
+let activeOperationId = ''
+let operationSequence = 0
+let stopProgressListener: (() => void) | undefined
+let disposed = false
 
 watch(
   () => [props.initialOwner, props.initialRepository, props.initialBranch] as const,
@@ -66,6 +74,37 @@ const importingAsReplacement = computed(() => Boolean(props.placeholderProjectId
 const tokenRequired = computed(() => !props.placeholderProjectId || credentialRecovery.value)
 const totalRecords = computed(() => Object.values(preview.value?.recordCounts ?? {})
   .reduce((total, count) => total + count, 0))
+const progressPercent = computed(() => {
+  const current = progress.value
+  if (current?.total && current.completed !== undefined) {
+    const ratio = current.completed / current.total
+    if (current.phase === 'downloading-attachments') return Math.min(94, 84 + ratio * 10)
+    return Math.min(82, 18 + ratio * 64)
+  }
+  const phaseProgress: Record<string, number> = {
+    starting: 4,
+    'checking-repository': 9,
+    'listing-files': 15,
+    'downloading-files': 24,
+    'downloading-attachments': 88,
+    'validating-project': 95,
+    'preparing-preview': 98,
+    'validating-preview': 14,
+    'using-preview-cache': 92,
+  }
+  return phaseProgress[current?.phase ?? 'starting'] ?? 8
+})
+const progressStage = computed(() => progress.value?.operation === 'applyImport'
+  ? '正在导入项目'
+  : '正在整理仓库资料')
+const progressCount = computed(() => {
+  const current = progress.value
+  if (!current?.total || current.completed === undefined) return ''
+  return `${current.completed} / ${current.total}`
+})
+const progressHint = computed(() => props.mobileRuntime
+  ? '首次读取会受仓库大小和网络影响；读取期间请保持网络连接。'
+  : '首次读取会受仓库大小和网络影响；确认导入时会复用这次预览。')
 const requestInput = computed(() => ({
   ...(props.placeholderProjectId ? { placeholderProjectId: props.placeholderProjectId } : {}),
   owner: draft.owner.trim(),
@@ -96,6 +135,23 @@ function requiresCredentialInput(error: unknown): boolean {
     || normalized.includes('bad credentials')
 }
 
+function beginProgress(operation: Extract<GithubOperationKind, 'previewImport' | 'applyImport'>, message: string) {
+  activeOperationId = `github-import-${Date.now()}-${++operationSequence}`
+  progress.value = {
+    operationId: activeOperationId,
+    projectId: props.placeholderProjectId ?? 'github-import',
+    operation,
+    phase: 'starting',
+    message,
+  }
+  return activeOperationId
+}
+
+function receiveProgress(next: GithubOperationProgress) {
+  if (next.operationId !== activeOperationId) return
+  progress.value = next
+}
+
 async function createPreview() {
   if (loading.value) return
   failure.value = validateDraft()
@@ -103,8 +159,9 @@ async function createPreview() {
   loading.value = true
   preview.value = undefined
   result.value = undefined
+  const operationId = beginProgress('previewImport', '正在启动仓库检查…')
   try {
-    preview.value = await props.gateway.previewImport(requestInput.value)
+    preview.value = await props.gateway.previewImport({ ...requestInput.value, operationId })
     credentialRecovery.value = false
   } catch (error) {
     credentialRecovery.value = props.autoPreview && requiresCredentialInput(error)
@@ -120,17 +177,33 @@ function editConnection() {
   failure.value = ''
 }
 
-onMounted(() => {
-  if (props.autoPreview && desktopRuntime.value) void createPreview()
+onMounted(async () => {
+  try {
+    if (props.gateway.subscribeProgress) {
+      stopProgressListener = await props.gateway.subscribeProgress(receiveProgress)
+      if (disposed) stopProgressListener()
+    }
+  } catch {
+    stopProgressListener = undefined
+  } finally {
+    if (!disposed && props.autoPreview && desktopRuntime.value) void createPreview()
+  }
+})
+
+onBeforeUnmount(() => {
+  disposed = true
+  stopProgressListener?.()
 })
 
 async function applyImport() {
   if (!preview.value || loading.value) return
   failure.value = ''
   loading.value = true
+  const operationId = beginProgress('applyImport', '正在确认预览仍然有效…')
   try {
     const outcome = await props.gateway.applyImport({
       ...requestInput.value,
+      operationId,
       expectedFingerprint: preview.value.fingerprint,
     })
     result.value = outcome
@@ -150,7 +223,7 @@ async function applyImport() {
       <IconBrandGithub :size="24" aria-hidden="true" />
       <div>
         <strong>GitHub 项目导入仅在桌面端可用</strong>
-        <p>请在 Branchloom 桌面应用中连接私有仓库并安全保存凭据。</p>
+        <p>请在有谱 App 中打开此页面并连接私有仓库。</p>
       </div>
     </div>
 
@@ -233,16 +306,8 @@ async function applyImport() {
       </div>
     </template>
 
-    <div v-else-if="props.autoPreview && loading" class="github-import__notice github-import__notice--loading" role="status">
-      <IconBrandGithub :size="24" aria-hidden="true" />
-      <div>
-        <strong>正在检查已连接的 GitHub 项目…</strong>
-        <p>将使用系统安全凭据读取仓库内容，不会修改本地项目或 GitHub。</p>
-      </div>
-    </div>
-
     <form
-      v-else-if="props.autoPreview && credentialRecovery"
+      v-else-if="props.autoPreview && credentialRecovery && !loading"
       class="github-import__form"
       @submit.prevent="createPreview"
     >
@@ -250,7 +315,7 @@ async function applyImport() {
         <IconAlertTriangle :size="24" aria-hidden="true" />
         <div>
           <strong>已保存的 GitHub 凭据不可用</strong>
-          <p>请补充一个可访问当前仓库的 Token。验证成功后会重新安全保存。</p>
+          <p>请补充一个可访问当前仓库的 Token。{{ props.mobileRuntime ? '验证成功后会在本次运行期间继续使用。' : '验证成功后会重新安全保存。' }}</p>
         </div>
       </div>
       <BaseField
@@ -276,13 +341,13 @@ async function applyImport() {
       </div>
     </form>
 
-    <div v-else-if="props.autoPreview" class="github-import__actions">
+    <div v-else-if="props.autoPreview && !loading" class="github-import__actions">
       <BaseButton name="重新检查 GitHub 项目" :loading="loading" @click="createPreview">
         重新检查
       </BaseButton>
     </div>
 
-    <form v-else class="github-import__form" @submit.prevent="createPreview">
+    <form v-else-if="!props.autoPreview" class="github-import__form" @submit.prevent="createPreview">
       <div class="github-import__fields">
         <BaseField id="github-import-owner" label="仓库所有者" required>
           <input id="github-import-owner" v-model="draft.owner" name="githubImportOwner" autocomplete="off" />
@@ -296,7 +361,13 @@ async function applyImport() {
         <BaseField
           id="github-import-token"
           label="GitHub Token"
-          :hint="tokenRequired ? '需要 Contents 读取权限；导入后保存在系统安全凭据中。' : '留空时使用当前项目已安全保存的凭据。'"
+          :hint="tokenRequired
+            ? props.mobileRuntime
+              ? '需要 Contents 读取权限；Token 只在本次 App 运行期间保留。'
+              : '需要 Contents 读取权限；导入后保存在系统安全凭据中。'
+            : props.mobileRuntime
+              ? '留空时使用本次运行期间保留的 Token。'
+              : '留空时使用当前项目已安全保存的凭据。'"
           :required="tokenRequired"
         >
           <input
@@ -315,6 +386,29 @@ async function applyImport() {
         </BaseButton>
       </div>
     </form>
+
+    <section
+      v-if="loading"
+      class="github-import__progress"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+    >
+      <div class="github-import__progress-heading">
+        <span class="github-import__progress-icon" aria-hidden="true">
+          <IconBrandGithub :size="21" />
+        </span>
+        <div>
+          <span>{{ progressStage }}</span>
+          <strong>{{ progress?.message || '正在准备…' }}</strong>
+        </div>
+        <b v-if="progressCount">{{ progressCount }}</b>
+      </div>
+      <div class="github-import__progress-track" aria-hidden="true">
+        <span :style="{ width: `${progressPercent}%` }"><i /></span>
+      </div>
+      <p>{{ progressHint }}</p>
+    </section>
 
     <p v-if="failure" class="github-import__error" role="alert">{{ failure }}</p>
   </div>
@@ -446,11 +540,6 @@ async function applyImport() {
   background: var(--color-success-surface);
 }
 
-.github-import__notice--loading {
-  border-color: var(--color-info);
-  background: var(--color-info-surface);
-}
-
 .github-import__notice--replacement {
   border-color: var(--color-success);
   background: var(--color-success-surface);
@@ -461,6 +550,104 @@ async function applyImport() {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: var(--space-3);
+}
+
+.github-import__progress {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4);
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 28%, var(--color-border));
+  border-radius: var(--radius-md);
+  background:
+    linear-gradient(120deg, color-mix(in srgb, var(--color-primary) 7%, transparent), transparent 58%),
+    var(--color-muted-surface);
+}
+
+.github-import__progress-heading {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.github-import__progress-icon {
+  display: grid;
+  width: 2.5rem;
+  height: 2.5rem;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
+  color: var(--color-primary);
+}
+
+.github-import__progress-heading > div {
+  display: grid;
+  min-width: 0;
+  gap: .15rem;
+}
+
+.github-import__progress-heading span,
+.github-import__progress p {
+  color: var(--color-muted);
+}
+
+.github-import__progress-heading > div > span {
+  font-size: .75rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+}
+
+.github-import__progress-heading strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.github-import__progress-heading b {
+  color: var(--color-primary);
+  font-size: .8rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.github-import__progress-track {
+  position: relative;
+  height: .25rem;
+  margin: .3rem .4rem 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary) 14%, var(--color-border));
+}
+
+.github-import__progress-track > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  min-width: .6rem;
+  border-radius: inherit;
+  background: var(--color-primary);
+  transition: width 260ms ease-out;
+}
+
+.github-import__progress-track i {
+  position: absolute;
+  top: 50%;
+  right: -.3rem;
+  width: .65rem;
+  height: .65rem;
+  border: 2px solid var(--color-surface);
+  border-radius: 50%;
+  background: var(--color-primary);
+  box-shadow:
+    -.48rem -.42rem 0 -.18rem var(--color-primary),
+    -.48rem .42rem 0 -.18rem var(--color-primary);
+  transform: translateY(-50%);
+}
+
+.github-import__progress p {
+  margin: 0;
+  font-size: .82rem;
+  line-height: 1.55;
 }
 
 .github-import__error {
@@ -482,6 +669,14 @@ async function applyImport() {
   }
 
   .github-import__preview-heading .status-badge {
+    grid-column: 2;
+  }
+
+  .github-import__progress-heading {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .github-import__progress-heading b {
     grid-column: 2;
   }
 

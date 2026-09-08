@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -9,12 +10,13 @@ use uuid::Uuid;
 
 use branchloom_core::application::{ApplicationService, GedcomImportResult, StatePayload};
 use branchloom_core::core::duplicate::DuplicateCandidate;
-use branchloom_core::data_location::{
-    database_path as shared_database_path, default_data_directory,
-};
+use branchloom_core::data_location::database_path as shared_database_path;
+#[cfg(desktop)]
+use branchloom_core::data_location::default_data_directory;
 use branchloom_core::sync::{
     load_connection, save_connection, save_sync_baseline, ConflictResolution, GithubConnection,
-    GithubRemote, RemoteProjectImportService, RemoteProjectImportSummary,
+    GithubRemote, GithubTransferPhase, GithubTransferProgress, ProjectRemote,
+    RemoteProjectImportPlan, RemoteProjectImportService, RemoteProjectImportSummary,
     SyncInitializationStrategy, SyncMode, SyncOutcome, SyncPlanSummary, SyncService,
 };
 
@@ -24,11 +26,36 @@ use crate::credentials::{
 };
 
 const GITHUB_CREDENTIAL_UNAVAILABLE_FILE: &str = ".credential-unavailable";
+const GITHUB_IMPORT_PREVIEW_TTL: Duration = Duration::from_secs(10 * 60);
+const GITHUB_IMPORT_PREVIEW_MAX_BYTES: usize = 64 * 1024 * 1024;
+const GITHUB_IMPORT_EVENT_SCOPE: &str = "github-import";
 
 pub struct DesktopProjectSession {
     pub service: Mutex<ApplicationService>,
     github_operation: Mutex<()>,
     github_credentials: Mutex<GithubCredentialCache>,
+    github_import_preview: Mutex<Option<CachedGithubImportPreview>>,
+}
+
+struct CachedGithubImportPreview {
+    owner: String,
+    repository: String,
+    branch: String,
+    placeholder_project_id: Option<String>,
+    fingerprint: String,
+    created_at: Instant,
+    plan: RemoteProjectImportPlan,
+}
+
+impl CachedGithubImportPreview {
+    fn matches(&self, input: &GithubProjectImportInput, expected_fingerprint: &str) -> bool {
+        self.created_at.elapsed() <= GITHUB_IMPORT_PREVIEW_TTL
+            && self.owner == input.owner
+            && self.repository == input.repository
+            && self.branch == input.branch
+            && self.placeholder_project_id == input.placeholder_project_id
+            && self.fingerprint == expected_fingerprint
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -113,7 +140,7 @@ pub struct SetLocalAttachmentInput {
 #[serde(rename_all = "camelCase")]
 pub struct ProjectArchiveInput {
     pub project_id: String,
-    pub path: PathBuf,
+    pub path: tauri_plugin_fs::FilePath,
     #[serde(default)]
     pub overwrite: bool,
 }
@@ -181,6 +208,8 @@ pub struct GithubConnectionStatus {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GithubProjectImportInput {
+    #[serde(default)]
+    pub operation_id: String,
     pub placeholder_project_id: Option<String>,
     pub owner: String,
     pub repository: String,
@@ -208,6 +237,10 @@ struct GithubOperationProgress<'a> {
     operation: &'a str,
     phase: &'a str,
     message: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    completed: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    total: Option<usize>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -238,11 +271,23 @@ fn database_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(shared_database_path(app_data_directory(app)?))
 }
 
+#[cfg(desktop)]
 fn app_data_directory(_app: &AppHandle) -> Result<PathBuf, String> {
     let directory =
         default_data_directory().map_err(|error| format!("无法确定应用数据目录：{error}"))?;
     std::fs::create_dir_all(&directory)
         .map_err(|error| format!("无法创建应用数据目录：{error}"))?;
+    Ok(directory)
+}
+
+#[cfg(mobile)]
+fn app_data_directory(app: &AppHandle) -> Result<PathBuf, String> {
+    let directory = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("无法确定移动端应用数据目录：{error}"))?;
+    std::fs::create_dir_all(&directory)
+        .map_err(|error| format!("无法创建移动端应用数据目录：{error}"))?;
     Ok(directory)
 }
 
@@ -252,6 +297,7 @@ pub fn open_desktop_project_session(app: &AppHandle) -> Result<DesktopProjectSes
         service: Mutex::new(service),
         github_operation: Mutex::new(()),
         github_credentials: Mutex::new(GithubCredentialCache::default()),
+        github_import_preview: Mutex::new(None),
     })
 }
 
@@ -302,8 +348,78 @@ fn emit_github_progress(
             operation,
             phase,
             message,
+            completed: None,
+            total: None,
         },
     );
+}
+
+fn emit_github_transfer_progress(
+    app: &AppHandle,
+    operation_id: &str,
+    project_id: &str,
+    operation: &str,
+    progress: GithubTransferProgress,
+) {
+    let (phase, message) = match progress.phase {
+        GithubTransferPhase::ListingFiles => ("listing-files", "正在读取仓库文件清单…".to_owned()),
+        GithubTransferPhase::DownloadingFiles => (
+            "downloading-files",
+            format!(
+                "正在读取 GitHub 资料 {} / {}…",
+                progress.completed, progress.total
+            ),
+        ),
+        GithubTransferPhase::DownloadingAttachments => (
+            "downloading-attachments",
+            format!(
+                "正在下载项目附件 {} / {}…",
+                progress.completed, progress.total
+            ),
+        ),
+        GithubTransferPhase::ValidatingProject => {
+            ("validating-project", "正在验证项目完整性…".to_owned())
+        }
+    };
+    let _ = app.emit(
+        "github-sync-progress",
+        GithubOperationProgress {
+            operation_id,
+            project_id,
+            operation,
+            phase,
+            message: &message,
+            completed: (progress.total > 0).then_some(progress.completed),
+            total: (progress.total > 0).then_some(progress.total),
+        },
+    );
+}
+
+fn github_remote_with_progress(
+    app: &AppHandle,
+    connection: GithubConnection,
+    token: String,
+    operation_id: &str,
+    project_id: &str,
+    operation: &str,
+) -> Result<GithubRemote, String> {
+    let progress_app = app.clone();
+    let progress_operation_id = operation_id.to_owned();
+    let progress_project_id = project_id.to_owned();
+    let progress_operation = operation.to_owned();
+    GithubRemote::new(connection, token)
+        .map(|remote| {
+            remote.with_progress(move |progress| {
+                emit_github_transfer_progress(
+                    &progress_app,
+                    &progress_operation_id,
+                    &progress_project_id,
+                    &progress_operation,
+                    progress,
+                );
+            })
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -422,76 +538,86 @@ pub fn read_attachment(
 }
 
 #[tauri::command]
-pub fn export_project_archive(
-    state: State<'_, DesktopProjectSession>,
+pub async fn export_project_archive(
+    app: AppHandle,
     input: ProjectArchiveInput,
 ) -> Result<(), String> {
-    if !input.path.is_absolute() {
-        return Err("导出路径必须是绝对路径".to_owned());
-    }
-    lock_session(&state)?
-        .export_project_archive(&input.project_id, input.path)
-        .map_err(|error| format!("无法导出 Branchloom 项目包：{error}"))
+    crate::exchange_files::run(app, move |app| {
+        crate::exchange_files::export(app, input.path, "blp", |path| {
+            lock_session(&app.state::<DesktopProjectSession>())?
+                .export_project_archive(&input.project_id, path)
+                .map_err(|error| format!("无法导出 Branchloom 项目包：{error}"))
+        })
+    })
+    .await
 }
 
 #[tauri::command]
-pub fn import_project_archive(
-    state: State<'_, DesktopProjectSession>,
+pub async fn import_project_archive(
+    app: AppHandle,
     input: ProjectArchiveInput,
 ) -> Result<ProjectArchiveImportResult, String> {
-    if !input.path.is_absolute() {
-        return Err("导入路径必须是绝对路径".to_owned());
-    }
-    let mut service = lock_session(&state)?;
-    let imported = service
-        .import_project_archive(input.path, input.overwrite)
-        .map_err(|error| format!("无法导入 Branchloom 项目包：{error}"))?;
-    let state = service
-        .load_state()
-        .map_err(|error| format!("无法读取导入后的本地资料：{error}"))?
-        .map(NormalizedStatePayload::from)
-        .ok_or_else(|| "导入后未找到项目资料".to_owned())?;
-    Ok(ProjectArchiveImportResult {
-        project_id: imported.id,
-        state,
+    crate::exchange_files::run(app, move |app| {
+        crate::exchange_files::import(app, input.path, "blp", |path| {
+            let session = app.state::<DesktopProjectSession>();
+            let mut service = lock_session(&session)?;
+            let imported = service
+                .import_project_archive(path, input.overwrite)
+                .map_err(|error| format!("无法导入 Branchloom 项目包：{error}"))?;
+            let state = service
+                .load_state()
+                .map_err(|error| format!("无法读取导入后的本地资料：{error}"))?
+                .map(NormalizedStatePayload::from)
+                .ok_or_else(|| "导入后未找到项目资料".to_owned())?;
+            Ok(ProjectArchiveImportResult {
+                project_id: imported.id,
+                state,
+            })
+        })
     })
+    .await
 }
 
 #[tauri::command]
-pub fn export_project_gedcom(
-    state: State<'_, DesktopProjectSession>,
+pub async fn export_project_gedcom(
+    app: AppHandle,
     input: ProjectArchiveInput,
 ) -> Result<branchloom_core::gedcom::GedcomSummary, String> {
-    if !input.path.is_absolute() {
-        return Err("导出路径必须是绝对路径".to_owned());
-    }
-    lock_session(&state)?
-        .export_project_gedcom(&input.project_id, input.path)
-        .map_err(|error| format!("无法导出 GEDCOM 文件：{error}"))
+    crate::exchange_files::run(app, move |app| {
+        crate::exchange_files::export(app, input.path, "ged", |path| {
+            lock_session(&app.state::<DesktopProjectSession>())?
+                .export_project_gedcom(&input.project_id, path)
+                .map_err(|error| format!("无法导出 GEDCOM 文件：{error}"))
+        })
+    })
+    .await
 }
 
 #[tauri::command]
-pub fn import_project_gedcom(
-    state: State<'_, DesktopProjectSession>,
+pub async fn import_project_gedcom(
+    app: AppHandle,
     input: ProjectArchiveInput,
 ) -> Result<GedcomDesktopImportResult, String> {
-    if !input.path.is_absolute() {
-        return Err("导入路径必须是绝对路径".to_owned());
-    }
-    let mut service = lock_session(&state)?;
-    let GedcomImportResult { project, summary } = service
-        .import_project_gedcom(input.path, input.overwrite)
-        .map_err(|error| format!("无法导入 GEDCOM 文件：{error}"))?;
-    let state = service
-        .load_state()
-        .map_err(|error| format!("无法读取导入后的本地资料：{error}"))?
-        .map(NormalizedStatePayload::from)
-        .ok_or_else(|| "导入后未找到项目资料".to_owned())?;
-    Ok(GedcomDesktopImportResult {
-        project_id: project.id,
-        state,
-        summary,
+    crate::exchange_files::run(app, move |app| {
+        crate::exchange_files::import(app, input.path, "ged", |path| {
+            let session = app.state::<DesktopProjectSession>();
+            let mut service = lock_session(&session)?;
+            let GedcomImportResult { project, summary } = service
+                .import_project_gedcom(path, input.overwrite)
+                .map_err(|error| format!("无法导入 GEDCOM 文件：{error}"))?;
+            let state = service
+                .load_state()
+                .map_err(|error| format!("无法读取导入后的本地资料：{error}"))?
+                .map(NormalizedStatePayload::from)
+                .ok_or_else(|| "导入后未找到项目资料".to_owned())?;
+            Ok(GedcomDesktopImportResult {
+                project_id: project.id,
+                state,
+                summary,
+            })
+        })
     })
+    .await
 }
 
 #[tauri::command]
@@ -545,8 +671,14 @@ fn connect_github_blocking(
         }
     }
     let (token, token_origin) = resolve_github_token(app, &input.project_id, &input.token)?;
-    let remote =
-        GithubRemote::new(connection.clone(), token.clone()).map_err(|error| error.to_string())?;
+    let remote = github_remote_with_progress(
+        app,
+        connection.clone(),
+        token.clone(),
+        &input.operation_id,
+        &input.project_id,
+        "connect",
+    )?;
     emit_github_progress(
         app,
         &input.operation_id,
@@ -662,20 +794,72 @@ fn preview_github_project_import_blocking(
     let (token, token_origin) =
         resolve_github_import_token(app, input.placeholder_project_id.as_deref(), &input.token)?;
     let project_scope = input.placeholder_project_id.clone();
+    let event_scope = project_scope
+        .as_deref()
+        .unwrap_or(GITHUB_IMPORT_EVENT_SCOPE)
+        .to_owned();
+    emit_github_progress(
+        app,
+        &input.operation_id,
+        &event_scope,
+        "previewImport",
+        "checking-repository",
+        "正在验证仓库、分支和读取权限…",
+    );
+    *app.state::<DesktopProjectSession>()
+        .github_import_preview
+        .lock()
+        .map_err(|_| "GitHub 导入预览缓存异常，请重新启动应用".to_owned())? = None;
     let result = (|| {
         let connection = GithubConnection {
-            owner: input.owner,
-            repository: input.repository,
-            branch: input.branch,
+            owner: input.owner.clone(),
+            repository: input.repository.clone(),
+            branch: input.branch.clone(),
             last_synced_commit: None,
         };
-        let remote = GithubRemote::new(connection, token).map_err(|error| error.to_string())?;
+        let remote = github_remote_with_progress(
+            app,
+            connection,
+            token,
+            &input.operation_id,
+            &event_scope,
+            "previewImport",
+        )?;
         let mut application = open_application_service(app)?;
         let service = RemoteProjectImportService::new(&mut application, &remote);
-        service
+        let plan = service
             .plan(input.placeholder_project_id.as_deref())
-            .map(|plan| plan.summary().clone())
-            .map_err(|error| error.to_string())
+            .map_err(|error| error.to_string())?;
+        emit_github_progress(
+            app,
+            &input.operation_id,
+            &event_scope,
+            "previewImport",
+            "preparing-preview",
+            "资料读取完成，正在生成导入预览…",
+        );
+        let summary = plan.summary().clone();
+        let cached_bytes = plan
+            .tree()
+            .files()
+            .values()
+            .fold(0usize, |total, bytes| total.saturating_add(bytes.len()));
+        if cached_bytes <= GITHUB_IMPORT_PREVIEW_MAX_BYTES {
+            *app.state::<DesktopProjectSession>()
+                .github_import_preview
+                .lock()
+                .map_err(|_| "GitHub 导入预览缓存异常，请重新启动应用".to_owned())? =
+                Some(CachedGithubImportPreview {
+                    owner: input.owner.clone(),
+                    repository: input.repository.clone(),
+                    branch: input.branch.clone(),
+                    placeholder_project_id: input.placeholder_project_id.clone(),
+                    fingerprint: summary.fingerprint.clone(),
+                    created_at: Instant::now(),
+                    plan,
+                });
+        }
+        Ok(summary)
     })();
     if let Some(project_id) = project_scope.as_deref() {
         forget_invalid_stored_credential(app, project_id, token_origin, result.as_ref().err());
@@ -705,20 +889,61 @@ fn apply_github_project_import_blocking(
     let (token, token_origin) =
         resolve_github_import_token(app, input.placeholder_project_id.as_deref(), &input.token)?;
     let project_scope = input.placeholder_project_id.clone();
+    let event_scope = project_scope
+        .as_deref()
+        .unwrap_or(GITHUB_IMPORT_EVENT_SCOPE)
+        .to_owned();
+    emit_github_progress(
+        app,
+        &input.operation_id,
+        &event_scope,
+        "applyImport",
+        "validating-preview",
+        "正在确认本地资料和 GitHub 提交没有变化…",
+    );
     let result = (|| {
         let mut connection = GithubConnection {
-            owner: input.owner,
-            repository: input.repository,
-            branch: input.branch,
+            owner: input.owner.clone(),
+            repository: input.repository.clone(),
+            branch: input.branch.clone(),
             last_synced_commit: None,
         };
-        let remote = GithubRemote::new(connection.clone(), token.clone())
-            .map_err(|error| error.to_string())?;
+        let remote = github_remote_with_progress(
+            app,
+            connection.clone(),
+            token.clone(),
+            &input.operation_id,
+            &event_scope,
+            "applyImport",
+        )?;
         let mut application = open_application_service(app)?;
         let mut service = RemoteProjectImportService::new(&mut application, &remote);
-        let plan = service
-            .plan(input.placeholder_project_id.as_deref())
-            .map_err(|error| error.to_string())?;
+        let cached = app
+            .state::<DesktopProjectSession>()
+            .github_import_preview
+            .lock()
+            .map_err(|_| "GitHub 导入预览缓存异常，请重新启动应用".to_owned())?
+            .take()
+            .filter(|cached| cached.matches(&input, expected));
+        let plan = if let Some(cached) = cached {
+            let current_commit = remote.head().map_err(|error| error.to_string())?;
+            if current_commit != cached.plan.summary().commit {
+                return Err("GitHub 导入预览已经过期，请重新预览后再确认".to_owned());
+            }
+            emit_github_progress(
+                app,
+                &input.operation_id,
+                &event_scope,
+                "applyImport",
+                "using-preview-cache",
+                "预览资料仍然有效，正在直接导入…",
+            );
+            cached.plan
+        } else {
+            service
+                .plan(input.placeholder_project_id.as_deref())
+                .map_err(|error| error.to_string())?
+        };
         if plan.summary().fingerprint != expected {
             return Err("GitHub 导入预览已经过期，请重新预览后再确认".to_owned());
         }
@@ -806,7 +1031,14 @@ fn preview_github_sync_blocking(
     let state_directory = github_state_directory(app, &input.project_id)?;
     let connection = load_connection(&state_directory).map_err(|error| error.to_string())?;
     let (token, token_origin) = resolve_github_token(app, &input.project_id, &input.token)?;
-    let remote = GithubRemote::new(connection.clone(), token).map_err(|error| error.to_string())?;
+    let remote = github_remote_with_progress(
+        app,
+        connection.clone(),
+        token,
+        &input.operation_id,
+        &input.project_id,
+        operation,
+    )?;
     let mut application = open_application_service(app)?;
     let sync = SyncService::new(&mut application, &remote, state_directory, connection)
         .map_err(|error| error.to_string())?;
@@ -864,8 +1096,14 @@ fn apply_github_sync_blocking(
     let result = (|| {
         let state_directory = github_state_directory(app, &input.project_id)?;
         let connection = load_connection(&state_directory).map_err(|error| error.to_string())?;
-        let remote =
-            GithubRemote::new(connection.clone(), token).map_err(|error| error.to_string())?;
+        let remote = github_remote_with_progress(
+            app,
+            connection.clone(),
+            token,
+            &input.operation_id,
+            &input.project_id,
+            operation,
+        )?;
         let mut application = open_application_service(app)?;
         let mut service = SyncService::new(&mut application, &remote, state_directory, connection)
             .map_err(|error| error.to_string())?;

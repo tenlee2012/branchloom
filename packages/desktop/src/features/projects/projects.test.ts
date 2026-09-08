@@ -55,7 +55,7 @@ function overrideCreateProject(
 }
 
 async function mountProjects(
-  path: '/' | '/new',
+  path: string,
   repository: BranchloomRepository = makeRepository(),
 ) {
   const pinia = createPinia()
@@ -121,6 +121,17 @@ describe('project entry', () => {
 })
 
 describe('new project flow', () => {
+  it('keeps GitHub import visible when creating another project from project management', async () => {
+    const repository = makeRepository()
+    const [project] = await repository.listProjects()
+    const { wrapper } = await mountProjects(`/project/${project!.id}/manage/new`, repository)
+
+    expect(wrapper.get('.new-project-view__github-import').attributes('href')).toBe('/github-import')
+    expect(wrapper.get('.new-project-view__github-import').text()).toContain('从 GitHub 导入已有项目')
+
+    wrapper.unmount()
+  })
+
   it('requires a project name after trimming whitespace', async () => {
     const { wrapper, router } = await mountProjects('/new')
 

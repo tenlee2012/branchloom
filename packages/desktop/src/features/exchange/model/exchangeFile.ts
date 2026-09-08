@@ -7,6 +7,12 @@ export function selectedFileName(path: string): string {
   return path.split(/[\\/]/).filter(Boolean).at(-1) ?? '导出文件'
 }
 
+export function exchangeDestination(selected: string, extension: 'blp' | 'ged'): string {
+  // A file provider URI is an opaque identifier, not an editable file name.
+  if (/^(content|file):\/\//i.test(selected)) return selected
+  return selected.toLowerCase().endsWith(`.${extension}`) ? selected : `${selected}.${extension}`
+}
+
 export function exchangeErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof Error && error.message.trim()) return error.message.trim()
   if (typeof error === 'string' && error.trim()) return error.trim()
