@@ -112,6 +112,43 @@ describe('application shell', () => {
     wrapper.unmount()
   })
 
+  it.each(['/new', '/project/project-demo-family/manage/overview'])(
+    'returns from GitHub import to %s through a single header back button',
+    async (origin) => {
+      const { wrapper, router } = await mountShell(origin)
+      await router.push('/github-import')
+      await flushPromises()
+
+      const header = wrapper.get('.home-layout__header')
+      const back = header.get('button[aria-label="返回上一页"]')
+      expect(header.element.firstElementChild).toBe(back.element)
+      expect(wrapper.findAll('.page-back-link')).toHaveLength(1)
+      expect(wrapper.find('.home-layout__main .page-back-link').exists()).toBe(false)
+      expect(header.find('a[aria-label="Branchloom 首页"]').exists()).toBe(false)
+      expect(header.find('a[aria-label="从 GitHub 导入项目"]').exists()).toBe(false)
+      expect(header.find('button[name="刷新资料"]').exists()).toBe(false)
+      expect(wrapper.find('.github-import-view__intro .icon-tabler-brand-github').exists()).toBe(false)
+      expect(wrapper.get('h1').text()).toBe('从 GitHub 导入')
+
+      await back.trigger('click')
+      await vi.waitFor(() => expect(router.currentRoute.value.fullPath).toBe(origin))
+      await flushPromises()
+      expect(wrapper.find('button[name="刷新资料"]').exists()).toBe(origin === '/new')
+
+      wrapper.unmount()
+    },
+  )
+
+  it('provides a working back fallback when GitHub import is opened directly', async () => {
+    const { wrapper, router } = await mountShell('/github-import')
+    const back = wrapper.get('.home-layout__header button[aria-label="返回"]')
+
+    await back.trigger('click')
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('project-tree'))
+
+    wrapper.unmount()
+  })
+
   it('shows all project destinations and marks the current page accessibly', async () => {
     const repository = makeRepository()
     const [project] = await repository.listProjects()
@@ -195,7 +232,7 @@ describe('application shell', () => {
       await wrapper.get('nav[aria-label="移动端项目导航"] a[href$="/manage/overview"]').trigger('click')
       await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('project-overview'))
       await flushPromises()
-      expect(wrapper.find('.app-topbar button[name="刷新资料"]').exists()).toBe(true)
+      expect(wrapper.get('.app-topbar').find('button[name="刷新资料"]').exists()).toBe(false)
     }
     await openProjectPage()
     await wrapper.get('a[aria-label="打开协作同步"]').trigger('click')
@@ -288,7 +325,7 @@ describe('application shell', () => {
     wrapper.unmount()
   })
 
-  it('keeps manual refresh available throughout a project and retains contextual back navigation', async () => {
+  it('keeps manual refresh on data pages and retains contextual back navigation', async () => {
     const repository = makeRepository()
     const [project] = await repository.listProjects()
     const { wrapper, router } = await mountShell(
@@ -296,18 +333,18 @@ describe('application shell', () => {
       repository,
     )
     const primaryPaths = [
-      'people',
-      'timeline',
-      'sources',
-      'collaboration-sync',
-      'manage/overview',
-    ]
+      ['people', true],
+      ['timeline', true],
+      ['sources', true],
+      ['collaboration-sync', true],
+      ['manage/overview', false],
+    ] as const
 
-    for (const path of primaryPaths) {
+    for (const [path, hasRefresh] of primaryPaths) {
       await router.push(`/project/${project!.id}/${path}`)
       await flushPromises()
       const topbar = wrapper.get('.app-topbar')
-      expect(topbar.get('button[name="刷新资料"]').text()).toContain('刷新资料')
+      expect(topbar.find('button[name="刷新资料"]').exists()).toBe(hasRefresh)
       expect(topbar.find('.page-back-link').exists()).toBe(false)
     }
 
@@ -359,6 +396,18 @@ describe('application shell', () => {
     expect(wrapper.get('a[aria-label="返回当前项目家谱树"]').attributes('href'))
       .toBe(`/project/${project!.id}/tree`)
 
+    const topbar = wrapper.get('.app-topbar')
+    expect(topbar.find('button[name="刷新资料"]').exists()).toBe(false)
+    const back = topbar.get('a[aria-label="返回项目管理"]')
+    expect(back.attributes('href')).toBe(`/project/${project!.id}/manage/overview`)
+    await back.trigger('click')
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('project-overview'))
+    await flushPromises()
+    expect(wrapper.get('.app-topbar').find('button[name="刷新资料"]').exists()).toBe(false)
+
+    await wrapper.get('.project-overview__create').trigger('click')
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('project-new'))
+    await flushPromises()
     await wrapper.get('a[aria-label="返回当前项目家谱树"]').trigger('click')
     await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('project-tree'))
 
@@ -369,7 +418,7 @@ describe('application shell', () => {
     const router = createAppRouter('memory')
     const expectedParents = [
       ['/import/gedcom', 'home', '返回首页'],
-      ['/github-import', 'home', '返回首页'],
+      ['/github-import', 'home', '返回'],
       ['/project/project-demo-family/people/person-demo-1', 'project-people', '返回人物列表'],
       ['/project/project-demo-family/people/person-demo-1/edit', 'person-detail', '返回人物详情'],
       ['/project/project-demo-family/manage/new', 'project-overview', '返回项目管理'],
@@ -402,7 +451,7 @@ describe('application shell', () => {
 
     await back.trigger('click')
     await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('project-overview'))
-    expect(wrapper.get('.app-topbar button[name="刷新资料"]').text()).toContain('刷新资料')
+    expect(wrapper.get('.app-topbar').find('button[name="刷新资料"]').exists()).toBe(false)
     expect(wrapper.find('.app-topbar .page-back-link').exists()).toBe(false)
     expect(document.title).toBe('项目概览 · 有谱')
 

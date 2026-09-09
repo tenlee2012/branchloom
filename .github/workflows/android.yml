@@ -8,6 +8,7 @@ on:
       - "Cargo.toml"
       - "package.json"
       - "pnpm-lock.yaml"
+      - "scripts/workspace-version.mjs"
       - "packages/core/**"
       - "packages/desktop/**"
   push:
@@ -19,6 +20,7 @@ on:
       - "Cargo.toml"
       - "package.json"
       - "pnpm-lock.yaml"
+      - "scripts/workspace-version.mjs"
       - "packages/core/**"
       - "packages/desktop/**"
   workflow_call:
@@ -135,7 +137,26 @@ jobs:
         run: pnpm --dir packages/desktop tauri android init
 
       - name: Build optimized release APK
-        run: pnpm build:android:release
+        run: pnpm build:android:release:unsigned
+
+      - name: Verify APK version
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { execFileSync } from 'node:child_process';
+          import path from 'node:path';
+          import { readWorkspaceVersion } from './scripts/workspace-version.mjs';
+
+          const version = readWorkspaceVersion(process.cwd(), { locked: true });
+          const [major, minor, patch] = version.split(/[.+-]/).map(Number);
+          const versionCode = major * 1000000 + minor * 1000 + patch;
+          const aapt = path.join(process.env.ANDROID_SDK_ROOT, 'build-tools', process.env.ANDROID_BUILD_TOOLS_VERSION, 'aapt2');
+          const info = execFileSync(aapt, ['dump', 'badging', process.env.UNSIGNED_APK_PATH], { encoding: 'utf8' });
+          assert.equal(info.match(/^package:.*\bversionName='([^']+)'/m)?.[1], version, 'APK versionName must match the workspace');
+          assert.equal(Number(info.match(/^package:.*\bversionCode='(\d+)'/m)?.[1]), versionCode, 'APK versionCode must match the workspace');
+          console.log(`Verified APK versionName=${version}, versionCode=${versionCode}`);
+          NODE
 
       - name: Sign release APK
         shell: bash

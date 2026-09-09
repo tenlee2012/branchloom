@@ -30,13 +30,26 @@ const emit = defineEmits<{
     </div>
     <PageBackLink v-else placement="topbar" />
 
-    <div class="app-topbar__actions" :aria-label="isTreeWorkspace ? '家谱树操作' : '资料操作'">
-      <DataRefreshButton />
+    <div
+      v-if="route.name !== 'project-new' && route.name !== 'project-overview'"
+      class="app-topbar__actions"
+      :aria-label="isTreeWorkspace ? '家谱树操作' : '资料操作'"
+    >
+      <DataRefreshButton :compact-on-mobile="isTreeWorkspace" />
       <BaseButton v-if="isTreeWorkspace" class="app-topbar__fit-canvas" name="适应画布" size="sm" variant="secondary" @click="emit('fitTree')">
         <IconArrowsMaximize :size="17" aria-hidden="true" />适应画布
       </BaseButton>
-      <BaseButton v-if="isTreeWorkspace" name="添加人物" size="sm" @click="emit('addPerson')">
-        <IconUserPlus :size="18" aria-hidden="true" />添加人物
+      <BaseButton
+        v-if="isTreeWorkspace"
+        class="app-topbar__add-person"
+        name="添加人物"
+        aria-label="添加人物"
+        title="添加人物"
+        size="sm"
+        @click="emit('addPerson')"
+      >
+        <IconUserPlus :size="18" aria-hidden="true" />
+        <span class="app-topbar__add-person-label">添加人物</span>
       </BaseButton>
     </div>
   </header>
@@ -93,6 +106,11 @@ const emit = defineEmits<{
     white-space: nowrap;
   }
 
+  .app-topbar__drag-surface {
+    display: flex;
+    align-items: center;
+  }
+
   .app-topbar__fit-canvas {
     display: none;
   }
@@ -102,8 +120,17 @@ const emit = defineEmits<{
   }
 
   .app-topbar__actions :deep(.base-button) {
-    min-height: 2.6rem;
+    min-height: 2.75rem;
     padding-inline: .65rem;
+  }
+
+  .app-topbar__add-person {
+    width: 2.75rem;
+    flex: 0 0 2.75rem;
+  }
+
+  .app-topbar__add-person-label {
+    display: none;
   }
 }
 

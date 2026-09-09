@@ -1,0 +1,10 @@
+<resources>
+    <style name="Theme.branchloom" parent="Theme.MaterialComponents.Light.NoActionBar">
+        <item name="android:windowBackground">#fffdf8</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">#fffdf8</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:forceDarkAllowed">false</item>
+    </style>
+</resources>

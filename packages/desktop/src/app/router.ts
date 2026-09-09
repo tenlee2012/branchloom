@@ -40,7 +40,8 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '从 GitHub 导入',
           eyebrow: '加入已有家族档案',
-          parent: { name: 'home', label: '返回首页' },
+          backBehavior: 'history',
+          parent: { name: 'home', label: '返回' },
         },
       },
       {

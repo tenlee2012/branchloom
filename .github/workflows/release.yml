@@ -70,6 +70,9 @@ jobs:
       release-id: ${{ steps.release.outputs.result }}
 
     steps:
+      - name: Checkout release notes
+        uses: actions/checkout@v4
+
       - name: Create or find release
         id: release
         uses: actions/github-script@v7
@@ -77,9 +80,10 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           result-encoding: string
           script: |
+            const fs = require("node:fs");
             const tag = context.ref.replace("refs/tags/", "");
             const releaseName = `有谱 ${tag}`;
-            const releaseBody = [
+            const defaultReleaseBody = [
               "本 Release 包含有谱桌面端安装包与已签名的 Android arm64 Release APK；iOS 安装包尚未提供。",
               "桌面安装包均内置匹配版本的原生 CLI 与 Codex Skill，",
               "安装桌面端后可从“AI 工具”页面离线安装、更新或修复，无需 npm 或 npx。",
@@ -100,6 +104,14 @@ jobs:
               "",
               "Windows 安装包目前也未进行商业代码签名，安装时可能显示安全提醒。",
             ].join("\n");
+            const releaseNotesPath = `.github/release-notes/${tag}.md`;
+            const releaseBody = fs.existsSync(releaseNotesPath)
+              ? fs.readFileSync(releaseNotesPath, "utf8").trim()
+              : defaultReleaseBody;
+            if (!releaseBody) {
+              core.setFailed(`Release notes are empty: ${releaseNotesPath}`);
+              return "";
+            }
             const releases = await github.paginate(
               github.rest.repos.listReleases,
               {

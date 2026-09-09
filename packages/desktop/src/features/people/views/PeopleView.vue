@@ -316,6 +316,7 @@ async function confirmDelete() {
 
 .people-view__heading {
   display: flex;
+  flex-wrap: wrap;
   align-items: end;
   justify-content: space-between;
   gap: var(--space-6);
@@ -339,10 +340,12 @@ async function confirmDelete() {
   font-weight: 560;
   letter-spacing: -0.035em;
   line-height: 1.05;
+  white-space: nowrap;
 }
 
 .people-view__count {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: baseline;
   gap: var(--space-1);
   white-space: nowrap;
@@ -351,8 +354,14 @@ async function confirmDelete() {
 
 .people-view__heading-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-4);
+}
+
+.people-view__heading-actions :deep(.base-button) {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .people-view__count strong {
@@ -430,7 +439,22 @@ async function confirmDelete() {
 
 @media (max-width: 40rem) {
   .people-view__heading {
-    align-items: start;
+    align-items: stretch;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .people-view__heading-actions {
+    justify-content: space-between;
+    gap: var(--space-3);
+  }
+
+  .people-view__heading-actions :deep(.base-button) {
+    min-height: 2.75rem;
+  }
+
+  .people-view__count strong {
+    font-size: 1.5rem;
   }
 
   .people-view__summary {

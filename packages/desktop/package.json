@@ -14,6 +14,6 @@
     "test": "vitest",
     "test:unit": "vitest run",
     "test:e2e": "playwright test",
-    "tauri": "tauri"
+    "tauri": "node scripts/run-tauri.mjs"
   }
 }

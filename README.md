@@ -208,6 +208,31 @@ pnpm release:version 0.1.6
 
 发布 tag 必须与 workspace 版本一致，例如版本 `0.1.6` 对应 `v0.1.6`。
 
+版本发布说明保存在 `.github/release-notes/<tag>.md`（如 `.github/release-notes/v0.1.6.md`）。发布流水线创建或更新 Release 时优先使用对应说明；缺少该文件时使用默认安装说明。
+
+Android 构建（`pnpm build:android`、`pnpm build:android:release`）以及通过 `pnpm tauri android` 调用的初始化、开发和构建命令，会自动读取同一 workspace 版本并传给 Tauri。APK 的 `versionName` 与该版本一致，`versionCode` 按 [Tauri 默认规则](https://v2.tauri.app/reference/config/#versioncode) `major × 1000000 + minor × 1000 + patch` 生成，例如 `0.1.5` 对应 `1005`。无需在 `tauri.conf.json` 或生成的 `gen/android` 中另行维护版本号。
+
+本地生成可安装的 Android Release APK，先复制 `.env.android.example` 为 `.env.android.local`，填入签名密钥的绝对路径 `ANDROID_KEYSTORE_PATH` 和别名 `ANDROID_KEY_ALIAS`，再运行：
+
+```bash
+pnpm build:android:release
+```
+
+命令会完成构建、对齐、签名和校验，产物为 `packages/desktop/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk`。已有未签名 APK 时，可直接运行 `pnpm android:sign`，无需重新构建。密码在终端中输入；非交互环境可通过 `ANDROID_KEYSTORE_PASSWORD` 和 `ANDROID_KEY_PASSWORD` 环境变量提供。`.env.android.local` 和密钥文件已被 Git 忽略；后续版本应继续使用同一签名密钥。
+
+Debug 使用 Android 工具链自动生成并复用的调试密钥，不读取 `.env.android.local`，也不需要正式签名密码。命令与产物如下：
+
+| 命令 | 签名 | APK 文件名 |
+| --- | --- | --- |
+| `pnpm build:android:debug`（或 `pnpm build:android`） | 默认调试签名 | `universal/debug/app-universal-debug.apk` |
+| `pnpm build:android:release` | `.env.android.local` 配置的正式签名 | `universal/release/app-universal-release.apk` |
+
+产物目录均位于 `packages/desktop/src-tauri/gen/android/app/build/outputs/apk/`。调试签名不是每次构建随机更换的临时密钥；Debug 与 Release 的签名不同，同包名时不能互相覆盖安装。
+
+`pnpm build:android:release:unsigned` 只生成未签名 APK，供 CI 的独立签名步骤使用，不能直接安装。
+
+Android 原生入口与全局浅色主题维护在 `packages/desktop/src-tauri/android/`；初始化、开发和构建命令会自动同步到 `gen/android`。状态栏的时间、通知图标与底部系统导航图标统一使用深色，切换系统深色模式或重新生成 Android 项目后仍与应用的浅色背景保持一致。
+
 ## 参与项目
 
 欢迎通过 Issue、Discussion 或 Pull Request 参与有谱：报告问题、提出真实的家谱整理场景、改进无障碍体验与文案，或协助测试数据导入、备份和跨平台体验。

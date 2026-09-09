@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { IconBrandGithub, IconRobot } from '@tabler/icons-vue'
-import { onMounted, ref } from 'vue'
-import { RouterLink, RouterView } from 'vue-router'
+import { computed, onMounted, ref } from 'vue'
+import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { loadRuntimeCapabilities } from '../../shared/runtimeCapabilities'
 import DataRefreshButton from '../components/DataRefreshButton.vue'
 import PageBackLink from '../components/PageBackLink.vue'
 
+const route = useRoute()
+const isGithubImport = computed(() => route.name === 'github-import')
 const aiToolsAvailable = ref(false)
 
 onMounted(async () => {
@@ -20,13 +22,15 @@ onMounted(async () => {
 <template>
   <div class="home-layout">
     <header class="home-layout__header" data-tauri-drag-region>
-      <RouterLink class="home-layout__brand" to="/" aria-label="Branchloom 首页">
+      <PageBackLink v-if="isGithubImport" placement="topbar" />
+      <RouterLink v-else class="home-layout__brand" to="/" aria-label="Branchloom 首页">
         <span aria-hidden="true">B</span>
         <strong>Branchloom</strong>
       </RouterLink>
       <div class="home-layout__header-actions">
         <p>一座属于你们家的私人档案馆</p>
         <RouterLink
+          v-if="!isGithubImport"
           class="home-layout__github-import"
           to="/github-import"
           aria-label="从 GitHub 导入项目"
@@ -36,11 +40,11 @@ onMounted(async () => {
         <RouterLink v-if="aiToolsAvailable" class="home-layout__ai-tools" to="/ai-tools">
           <IconRobot :size="17" aria-hidden="true" />AI 工具
         </RouterLink>
-        <DataRefreshButton />
+        <DataRefreshButton v-if="!isGithubImport" />
       </div>
     </header>
     <main class="home-layout__main" data-tauri-drag-region>
-      <PageBackLink />
+      <PageBackLink v-if="!isGithubImport" />
       <RouterView />
     </main>
     <footer class="home-layout__footer">离线优先 · 本地保存 · 家族共同记忆</footer>

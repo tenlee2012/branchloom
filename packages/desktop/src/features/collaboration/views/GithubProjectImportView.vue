@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { IconBrandGithub, IconLock } from '@tabler/icons-vue'
+import { IconLock } from '@tabler/icons-vue'
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import type { GithubProjectImportResult } from '../../../shared/githubSync'
@@ -45,9 +45,6 @@ async function handleImported(result: GithubProjectImportResult) {
 <template>
   <section class="github-import-view" aria-labelledby="github-import-title">
     <div class="github-import-view__intro">
-      <span class="github-import-view__icon" aria-hidden="true">
-        <IconBrandGithub :size="30" />
-      </span>
       <p class="github-import-view__eyebrow">加入已有家族档案</p>
       <h1 id="github-import-title">从 GitHub 导入</h1>
       <p>
@@ -90,18 +87,8 @@ async function handleImported(result: GithubProjectImportResult) {
   justify-items: start;
 }
 
-.github-import-view__icon {
-  display: grid;
-  width: 4rem;
-  height: 4rem;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--color-primary);
-  color: var(--color-surface);
-}
-
 .github-import-view__eyebrow {
-  margin: var(--space-5) 0 0;
+  margin: 0;
   color: var(--color-accent);
   font-size: .75rem;
   font-weight: 750;
