@@ -1,0 +1,58 @@
+import { expect, test } from '@playwright/test'
+import { expectNoRuntimeErrors, resetDemo, watchRuntimeErrors } from './helpers/demo'
+
+test.beforeEach(async ({ page }) => resetDemo(page))
+
+for (const width of [1440, 900]) {
+  test(`partial-name search highlights and locates a person at ${width}px`, async ({ page }, testInfo) => {
+    const errors = watchRuntimeErrors(page)
+    await page.setViewportSize({ width, height: 1000 })
+    const search = page.getByRole('searchbox', { name: '搜索跳转人物' })
+    await search.fill('梅兰')
+    const results = page.getByRole('region', { name: '人物搜索结果' })
+    await expect(results).toContainText('找到 1 位人物')
+    await expect(results.getByRole('button', { name: '定位王梅兰' })).toBeVisible()
+    await search.press('ArrowDown')
+    await expect(results.getByRole('button', { name: '定位王梅兰' })).toBeFocused()
+    await page.keyboard.press('Enter')
+    await expect(page.getByText('王梅兰对其他人物的称呼', { exact: true })).toBeVisible()
+    await expect(page.getByRole('complementary', { name: '为王梅兰添加关系' })).toHaveCount(0)
+    await expect(page.getByTestId('family-graph').locator('canvas').first()).toBeVisible()
+    await page.locator('.family-graph__directory summary').click()
+    const selected = page.getByRole('button', { name: '选择人物：王梅兰', exact: true })
+    await expect(selected).toHaveClass(/is-search-match/)
+    await expect(selected).toHaveAttribute('aria-pressed', 'true')
+    await expect(selected).toContainText('本人')
+    await expect(page.locator('.app-topbar')).toBeVisible()
+    expect(await page.locator('html').evaluate((element) => element.scrollWidth)).toBeLessThanOrEqual(width)
+    await page.screenshot({ path: testInfo.outputPath('search-and-kinship.png') })
+
+    await search.fill('')
+    await expect(selected).not.toHaveClass(/is-search-match/)
+    await expect(results).toHaveCount(0)
+    await search.fill('查无此人的测试关键词')
+    await expect(results).toContainText('未找到匹配人物')
+    expectNoRuntimeErrors(errors)
+  })
+}
+
+test('keyboard selection changes the perspective and exposes everyday kinship terms', async ({ page }, testInfo) => {
+  const errors = watchRuntimeErrors(page)
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.locator('.family-graph__directory summary').click()
+  const daughter = page.getByRole('button', { name: '选择人物：林晨', exact: true })
+  await daughter.focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByText('林晨对其他人物的称呼', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: '选择人物：林海', exact: true })).toContainText('爸爸')
+  await expect(page.getByRole('button', { name: '选择人物：陈芳', exact: true })).toContainText('妈妈')
+  await expect(page.getByRole('button', { name: '选择人物：林国强', exact: true })).toContainText('爷爷')
+  await expect(page.getByRole('button', { name: '选择人物：周素琴', exact: true })).toContainText('奶奶')
+  await page.screenshot({ path: testInfo.outputPath('everyday-kinship.png') })
+  await page.getByRole('button', { name: '选择人物：林海', exact: true }).click()
+  await expect(daughter).toContainText('女儿')
+  await page.keyboard.press('Escape')
+  await expect(page.getByText('林海对其他人物的称呼', { exact: true })).toHaveCount(0)
+  await expect(daughter).not.toContainText('女儿')
+  expectNoRuntimeErrors(errors)
+})

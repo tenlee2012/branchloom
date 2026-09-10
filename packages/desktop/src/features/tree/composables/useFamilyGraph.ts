@@ -1,6 +1,7 @@
 import type { Core, ElementDefinition, EventObject, EventObjectNode, StylesheetStyle } from 'cytoscape'
 import type {
   GraphAdapter,
+  GraphAnnotations,
   GraphDensity,
   GraphNodeAnchor,
   GraphRuntime,
@@ -346,6 +347,8 @@ const stylesheet: StylesheetStyle[] = [
   { selector: 'node.is-muted', style: { opacity: 0.42 } },
   { selector: 'node.is-related', style: { 'border-color': '#9a674e', 'border-width': 2.5 } },
   { selector: 'node.is-focused', style: { 'border-color': '#315d45', 'border-width': 4, opacity: 1, 'z-index': 12 } },
+  { selector: 'node.is-search-match', style: { 'border-color': '#b17a20', 'border-width': 4, 'background-color': '#fff1c5', opacity: 1, 'z-index': 13 } },
+  { selector: 'node.has-kinship', style: { height: 162, opacity: 1 } },
   {
     selector: 'node[junction = "yes"]',
     style: {
@@ -362,6 +365,20 @@ const stylesheet: StylesheetStyle[] = [
 ]
 
 export const familyGraphStylesheet = stylesheet
+
+export function applyGraphAnnotations(cy: Core, graph: VisibleGraph, density: GraphDensity, annotations: GraphAnnotations) {
+  cy.batch(() => {
+    for (const node of graph.nodes) {
+      const element = cy.getElementById(node.id)
+      const kinship = annotations.kinships.get(node.id)?.label ?? (annotations.kinships.size ? '未找到关系路径' : '')
+      const shortLabel = kinship.length > 12 ? `${kinship.slice(0, 11)}…` : kinship
+      element.data('label', [nodeLabel(node, density), shortLabel].filter(Boolean).join('\n'))
+      element.data('kinship', kinship)
+      element.toggleClass('is-search-match', annotations.searchPersonIds.has(node.id))
+      element.toggleClass('has-kinship', Boolean(kinship))
+    }
+  })
+}
 
 export function createNodeTapController(callbacks: {
   onClick(personId: string): void
@@ -472,6 +489,8 @@ async function createRuntime(options: GraphCreateOptions): Promise<GraphRuntime>
     boxSelectionEnabled: false,
   })
   let currentGraph = options.graph
+  let currentDensity = options.density
+  let annotations: GraphAnnotations = { searchPersonIds: new Set(), kinships: new Map() }
   let selectedPersonId = options.selectedPersonId ?? ''
   const notifySelectedNodeAnchor = () => {
     if (!selectedPersonId) {
@@ -528,10 +547,24 @@ async function createRuntime(options: GraphCreateOptions): Promise<GraphRuntime>
   return {
     update(graph, density) {
       currentGraph = graph
+      currentDensity = density
       cy.elements().remove()
       cy.add(elements(graph, density))
       runLayout(cy, graph)
       applyRelationshipFocus(cy, selectedPersonId)
+      applyGraphAnnotations(cy, graph, density, annotations)
+      notifySelectedNodeAnchor()
+    },
+    annotate(nextAnnotations) {
+      annotations = nextAnnotations
+      applyGraphAnnotations(cy, currentGraph, currentDensity, annotations)
+      notifySelectedNodeAnchor()
+    },
+    locate(personId) {
+      const node = cy.getElementById(personId)
+      if (node.empty()) return
+      cy.zoom(Math.max(1, cy.zoom()))
+      cy.center(node)
       notifySelectedNodeAnchor()
     },
     focus(personId) {

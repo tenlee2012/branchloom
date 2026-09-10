@@ -1,15 +1,18 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import cytoscape from 'cytoscape'
 import { createAppRouter } from '../../app/router'
 import { BrowserPrototypeRepository } from '../../shared/repository/BrowserPrototypeRepository'
 import { branchloomRepositoryKey } from '../../shared/repository/injection'
 import type { BranchloomRepository } from '../../shared/domain/types'
 import type { PrototypeStorage } from '../../shared/repository/storage'
 import { createDemoState } from '../../shared/fixtures/demoState'
+import { buildKinshipDescriptions } from '../../shared/domain/kinship'
 import { buildVisibleGraph } from './model/buildVisibleGraph'
 import {
   buildFamilyAwarePositions,
+  applyGraphAnnotations,
   buildCytoscapeElements,
   createNodeTapController,
   familyGraphStylesheet,
@@ -48,6 +51,7 @@ async function mountTree(
   const zoomIn = vi.fn()
   const zoomOut = vi.fn()
   const zoomTo = vi.fn()
+  const locate = vi.fn()
   const wrapper = mount(TreeView, {
     attachTo: document.body,
     props: { warningThreshold },
@@ -57,7 +61,7 @@ async function mountTree(
       stubs: {
         FamilyGraph: {
           name: 'FamilyGraph',
-          props: ['graph', 'density', 'selectedPersonId'],
+          props: ['graph', 'density', 'selectedPersonId', 'annotations'],
           emits: ['node-click', 'node-double-click', 'canvas-click', 'selected-node-anchor-change', 'zoom-change'],
           template: `<div data-testid="family-graph">
             <button aria-label="选择林晨" @click="$emit('node-click', 'person-lin-chen'); $emit('selected-node-anchor-change', { personId: 'person-lin-chen', x1: 180, x2: 284, y1: 160, y2: 302, canvasWidth: 960, canvasHeight: 640 })">选中林晨</button>
@@ -65,14 +69,14 @@ async function mountTree(
             <button aria-label="设林晨为中心" @click="$emit('node-double-click', 'person-lin-chen')">设为中心</button>
             <button aria-label="点击画布空白处" @click="$emit('canvas-click')">画布空白</button>
           </div>`,
-          methods: { fit, relayout, zoomIn, zoomOut, zoomTo },
+          methods: { fit, relayout, zoomIn, zoomOut, zoomTo, locate },
         },
       },
     },
   })
   wrappers.push(wrapper)
   await flushPromises()
-  return { wrapper, router, repository, fit, relayout, zoomIn, zoomOut, zoomTo }
+  return { wrapper, router, repository, fit, relayout, zoomIn, zoomOut, zoomTo, locate }
 }
 
 describe('TreeView', () => {
@@ -295,6 +299,112 @@ describe('TreeView', () => {
       sort: 'name',
     })
     expect(wrapper.get('select[name="personJump"]').text()).toContain('远房人物')
+    expect(wrapper.get('[aria-label="定位远房人物"]').isVisible()).toBe(true)
+  })
+
+  it('shows partial-name matches, highlights them without resetting the graph, and locates the result', async () => {
+    const { wrapper, router, locate } = await mountTree()
+    const canvas = wrapper.getComponent({ name: 'FamilyGraph' })
+    const originalGraph = canvas.props('graph')
+    await wrapper.get('input[aria-label="搜索跳转人物"]').setValue(' 梅兰 ')
+    await flushPromises()
+    expect(wrapper.get('[aria-label="人物搜索结果"]').text()).toContain('找到 1 位人物')
+    expect(wrapper.get('[aria-label="定位王梅兰"]').isVisible()).toBe(true)
+    expect(canvas.props('annotations').searchPersonIds.has('person-wang-meilan')).toBe(true)
+    expect(canvas.props('graph')).toBe(originalGraph)
+
+    await wrapper.get('[aria-label="定位王梅兰"]').trigger('click')
+    await flushPromises()
+    expect(canvas.props('selectedPersonId')).toBe('person-wang-meilan')
+    expect(locate).toHaveBeenCalledWith('person-wang-meilan')
+    if (!originalGraph.nodes.some(({ id }: { id: string }) => id === 'person-wang-meilan')) {
+      expect(router.currentRoute.value.query.personId).toBe('person-wang-meilan')
+    }
+    await wrapper.get('input[aria-label="搜索跳转人物"]').setValue('')
+    await flushPromises()
+    expect(canvas.props('annotations').searchPersonIds.size).toBe(0)
+    expect(wrapper.find('[aria-label="人物搜索结果"]').exists()).toBe(false)
+  })
+
+  it('locates an existing visible match with Enter and retains the current center', async () => {
+    const { wrapper, router, locate } = await mountTree()
+    const search = wrapper.get('input[aria-label="搜索跳转人物"]')
+    await search.setValue('晨晨')
+    await flushPromises()
+    await search.trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    expect(locate).toHaveBeenCalledWith('person-lin-chen')
+    expect(wrapper.text()).toContain('中心人物：林海')
+    expect(router.currentRoute.value.query.personId).toBeUndefined()
+  })
+
+  it('waits for an off-screen search target’s new family slice before locating it', async () => {
+    const { wrapper, repository, locate } = await mountTree()
+    await wrapper.get('select[name="treeMode"]').setValue('ancestors')
+    await wrapper.get('input[name="generationsUp"]').setValue('0')
+    await flushPromises()
+    const graph = wrapper.getComponent({ name: 'FamilyGraph' })
+    expect(graph.props('graph').nodes.some(({ id }: { id: string }) => id === 'person-wang-meilan')).toBe(false)
+    const slice = await repository.getTreeFamilySlice('project-demo-family', 'person-wang-meilan', { generationsUp: 0, generationsDown: 0 })
+    let finishSlice!: (value: typeof slice) => void
+    vi.spyOn(repository, 'getTreeFamilySlice').mockReturnValueOnce(new Promise((resolve) => { finishSlice = resolve }))
+    await wrapper.get('input[aria-label="搜索跳转人物"]').setValue('梅兰')
+    await flushPromises()
+    await wrapper.get('[aria-label="定位王梅兰"]').trigger('click')
+    await flushPromises()
+    expect(locate).not.toHaveBeenCalled()
+    finishSlice(slice)
+    await flushPromises()
+    expect(locate).toHaveBeenCalledOnce()
+    expect(locate).toHaveBeenCalledWith('person-wang-meilan')
+    expect(graph.props('selectedPersonId')).toBe('person-wang-meilan')
+  })
+
+  it('keeps the graph available while search fails, allows retry, and reports empty results', async () => {
+    const { wrapper, repository } = await mountTree()
+    const listPeople = vi.spyOn(repository, 'listPeople').mockRejectedValueOnce(new Error('搜索暂时不可用'))
+    const search = wrapper.get('input[aria-label="搜索跳转人物"]')
+    await search.setValue('梅兰')
+    await flushPromises()
+    expect(wrapper.get('[aria-label="人物搜索结果"]').text()).toContain('搜索暂时不可用')
+    expect(wrapper.find('[data-testid="family-graph"]').exists()).toBe(true)
+    await wrapper.get('[aria-label="人物搜索结果"] button').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[aria-label="定位王梅兰"]').exists()).toBe(true)
+    expect(listPeople).toHaveBeenCalledTimes(2)
+    await search.setValue('不存在的测试人物')
+    await flushPromises()
+    expect(wrapper.get('[aria-label="人物搜索结果"]').text()).toContain('未找到匹配人物')
+    await search.trigger('keydown', { key: 'Escape' })
+    expect(wrapper.find('[aria-label="人物搜索结果"]').exists()).toBe(false)
+  })
+
+  it('ignores stale search responses instead of replacing the newest matches', async () => {
+    const { wrapper, repository } = await mountTree()
+    const originalList = repository.listPeople.bind(repository)
+    let finishOldSearch!: (value: Awaited<ReturnType<typeof originalList>>) => void
+    vi.spyOn(repository, 'listPeople').mockImplementation((projectId, query) => query.search === '梅'
+      ? new Promise((resolve) => { finishOldSearch = resolve }) : originalList(projectId, query))
+    const search = wrapper.get('input[aria-label="搜索跳转人物"]')
+    await search.setValue('梅')
+    expect(wrapper.get('[aria-label="人物搜索结果"]').text()).toContain('正在搜索')
+    await search.setValue('林晨')
+    await flushPromises()
+    finishOldSearch(await originalList('project-demo-family', { search: '梅', page: 1, pageSize: 100, sort: 'name' }))
+    await flushPromises()
+    expect(wrapper.find('[aria-label="定位林晨"]').exists()).toBe(true)
+    expect(wrapper.find('[aria-label="定位王梅兰"]').exists()).toBe(false)
+  })
+
+  it('shows the selected person’s kinship terms and clears them on deselection', async () => {
+    const { wrapper } = await mountTree()
+    await wrapper.get('[aria-label="选择林晨"]').trigger('click')
+    const canvas = wrapper.getComponent({ name: 'FamilyGraph' })
+    expect(canvas.props('annotations').kinships.get('person-lin-hai')?.label).toBe('爸爸')
+    expect(canvas.props('annotations').kinships.get('person-chen-fang')?.label).toBe('妈妈')
+    expect(canvas.props('annotations').kinships.get('person-lin-guoqiang')?.label).toBe('爷爷')
+    await wrapper.get('[aria-label="点击画布空白处"]').trigger('click')
+    expect(canvas.props('annotations').kinships.size).toBe(0)
   })
 
   it('controls mode, generations, density, collapse, fit and relayout accessibly', async () => {
@@ -445,7 +555,7 @@ describe('FamilyGraph lifecycle', () => {
   })
 
   it('wires graph callbacks, updates a live runtime, and destroys it on unmount', async () => {
-    const runtime = { destroy: vi.fn(), update: vi.fn(), focus: vi.fn(), fit: vi.fn(), relayout: vi.fn() }
+    const runtime = { destroy: vi.fn(), update: vi.fn(), focus: vi.fn(), annotate: vi.fn(), locate: vi.fn(), fit: vi.fn(), relayout: vi.fn() }
     const create = vi.fn().mockResolvedValue(runtime)
     const graph = buildVisibleGraph(createDemoState(), {
       centerPersonId: 'person-lin-hai', mode: 'combined', generationsUp: 2, generationsDown: 2,
@@ -480,12 +590,24 @@ describe('FamilyGraph lifecycle', () => {
     expect(runtime.update).toHaveBeenCalled()
     await wrapper.setProps({ selectedPersonId: 'person-lin-chen' })
     expect(runtime.focus).toHaveBeenLastCalledWith('person-lin-chen')
+    const state = createDemoState()
+    const annotations = {
+      searchPersonIds: new Set(['person-lin-hai']),
+      kinships: buildKinshipDescriptions(state.people, state.relationships, 'person-lin-chen'),
+    }
+    runtime.update.mockClear()
+    await wrapper.setProps({ annotations })
+    expect(runtime.annotate).toHaveBeenLastCalledWith(annotations)
+    expect(runtime.update).not.toHaveBeenCalled()
+    expect(wrapper.get('[aria-label="选择人物：林海"]').text()).toContain('爸爸')
+    wrapper.vm.locate('person-lin-hai')
+    expect(runtime.locate).toHaveBeenLastCalledWith('person-lin-hai')
     wrapper.unmount()
     expect(runtime.destroy).toHaveBeenCalledOnce()
   })
 
   it('applies the latest graph and density after an async adapter finishes creating', async () => {
-    const runtime = { destroy: vi.fn(), update: vi.fn(), fit: vi.fn(), relayout: vi.fn() }
+    const runtime = { destroy: vi.fn(), update: vi.fn(), annotate: vi.fn(), locate: vi.fn(), fit: vi.fn(), relayout: vi.fn() }
     let resolveRuntime!: (value: typeof runtime) => void
     const create = vi.fn(() => new Promise<typeof runtime>((resolve) => { resolveRuntime = resolve }))
     const first = buildVisibleGraph(createDemoState(), {
@@ -504,11 +626,15 @@ describe('FamilyGraph lifecycle', () => {
         adapter: { create },
       },
     })
-    await wrapper.setProps({ graph: latest, density: latestDensity })
+    const latestAnnotations = { searchPersonIds: new Set(['person-lin-chen']), kinships: new Map() }
+    await wrapper.setProps({ graph: latest, density: latestDensity, annotations: latestAnnotations })
+    wrapper.vm.locate('person-lin-chen')
     expect(runtime.update).not.toHaveBeenCalled()
     resolveRuntime(runtime)
     await flushPromises()
     expect(runtime.update).toHaveBeenCalledWith(latest, latestDensity)
+    expect(runtime.annotate).toHaveBeenLastCalledWith(latestAnnotations)
+    expect(runtime.locate).toHaveBeenLastCalledWith('person-lin-chen')
     wrapper.unmount()
   })
 
@@ -564,6 +690,34 @@ describe('FamilyGraph lifecycle', () => {
 })
 
 describe('Cytoscape graph presentation', () => {
+  it('updates real node highlights and kinship labels without moving or zooming the graph', () => {
+    const state = createDemoState()
+    const graph = buildVisibleGraph(state, {
+      centerPersonId: 'person-lin-chen', mode: 'combined', generationsUp: 2, generationsDown: 2, collapsedPersonIds: new Set(),
+    })
+    const density = { avatars: true, dates: true, places: true, relationships: true }
+    const cy = cytoscape({ headless: true, elements: buildCytoscapeElements(graph, density) })
+    try {
+      cy.zoom(0.75)
+      cy.pan({ x: 45, y: 60 })
+      const node = cy.getElementById('person-lin-hai')
+      const position = { ...node.position() }
+      applyGraphAnnotations(cy, graph, density, {
+        searchPersonIds: new Set(['person-lin-hai']),
+        kinships: buildKinshipDescriptions(state.people, state.relationships, 'person-lin-chen'),
+      })
+      expect(node.hasClass('is-search-match')).toBe(true)
+      expect(node.data('label')).toContain('\n爸爸')
+      expect(node.data('kinship')).toBe('爸爸')
+      expect(cy.zoom()).toBe(0.75)
+      expect(cy.pan()).toEqual({ x: 45, y: 60 })
+      expect(node.position()).toEqual(position)
+      applyGraphAnnotations(cy, graph, density, { searchPersonIds: new Set(), kinships: new Map() })
+      expect(node.hasClass('is-search-match')).toBe(false)
+      expect(node.data('label')).not.toContain('爸爸')
+    } finally { cy.destroy() }
+  })
+
   it('keeps partner groups adjacent instead of allowing marriage lines to cross unrelated people', () => {
     const source = buildVisibleGraph(createDemoState(), {
       centerPersonId: 'person-lin-hai', mode: 'combined', generationsUp: 2, generationsDown: 2,

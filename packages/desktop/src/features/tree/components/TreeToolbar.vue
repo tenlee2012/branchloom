@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed, ref, watch } from 'vue'
 import {
   IconMinus,
   IconPlus,
@@ -11,7 +12,7 @@ import type { Person } from '../../../shared/domain/types'
 import type { GraphDensity } from './FamilyGraph.vue'
 import type { TreeMode } from '../model/buildVisibleGraph'
 
-defineProps<{
+const props = defineProps<{
   mode: TreeMode
   generationsUp: number
   generationsDown: number
@@ -19,6 +20,10 @@ defineProps<{
   people: Person[]
   centerPersonId: string
   personSearch: string
+  searchResults: Person[]
+  searchState: 'idle' | 'loading' | 'ready' | 'error'
+  searchError: string
+  searchTotal: number
   collapsedCount: number
   zoomLevel: number
 }>()
@@ -30,12 +35,32 @@ const emit = defineEmits<{
   updateDensity: [value: GraphDensity]
   updatePersonSearch: [value: string]
   jump: [personId: string]
+  locate: [personId: string]
+  retrySearch: []
   relayout: []
   clearCollapsed: []
   zoomIn: []
   zoomOut: []
   zoomTo: [zoomLevel: number]
 }>()
+
+const searchDismissed = ref(false)
+const resultList = ref<HTMLElement>()
+const showSearchResults = computed(() => Boolean(props.personSearch.trim()) && !searchDismissed.value)
+watch(() => props.personSearch, () => { searchDismissed.value = false })
+
+function locate(personId: string) {
+  searchDismissed.value = true
+  emit('locate', personId)
+}
+
+function locateFirstResult() {
+  if (props.searchState === 'ready' && props.searchResults[0]) locate(props.searchResults[0].id)
+}
+
+function dismissOnFocusOut(event: FocusEvent) {
+  if (!(event.currentTarget as HTMLElement).contains(event.relatedTarget as Node | null)) searchDismissed.value = true
+}
 
 function primaryName(person: Person) {
   return getPrimaryName(person)
@@ -89,20 +114,41 @@ function commitZoom(event: Event, fallbackLevel: number) {
       </label>
     </div>
 
-    <div class="tree-toolbar__jump">
+    <div class="tree-toolbar__jump" @focusout="dismissOnFocusOut" @keydown.esc.stop="searchDismissed = true">
       <IconSearch :size="18" :stroke-width="1.7" aria-hidden="true" />
       <input
         type="search"
         aria-label="搜索跳转人物"
         placeholder="搜索人物（姓名/字号）"
         :value="personSearch"
+        :aria-describedby="showSearchResults ? 'tree-search-feedback' : undefined"
+        @focus="searchDismissed = false"
         @input="emit('updatePersonSearch', ($event.target as HTMLInputElement).value)"
+        @keydown.enter.prevent="locateFirstResult"
+        @keydown.down.prevent="resultList?.querySelector('button')?.focus()"
       />
       <label class="visually-hidden" for="tree-person-jump">跳转人物</label>
       <select id="tree-person-jump" class="visually-hidden" name="personJump" :value="centerPersonId" @change="emit('jump', ($event.target as HTMLSelectElement).value)">
         <option value="" disabled>选择人物</option>
         <option v-for="person in people" :key="person.id" :value="person.id">{{ primaryName(person) }}</option>
       </select>
+      <div v-if="showSearchResults" class="tree-toolbar__search-results" role="region" aria-label="人物搜索结果">
+        <p id="tree-search-feedback" role="status">
+          <template v-if="searchState === 'loading' || searchState === 'idle'">正在搜索人物…</template>
+          <template v-else-if="searchState === 'error'">搜索失败：{{ searchError }}</template>
+          <template v-else-if="!searchResults.length">未找到匹配人物</template>
+          <template v-else>找到 {{ searchTotal }} 位人物，点击定位<template v-if="searchTotal > searchResults.length">；当前显示前 {{ searchResults.length }} 位，请缩小关键词</template>。</template>
+        </p>
+        <button v-if="searchState === 'error'" type="button" @click="emit('retrySearch')">重新搜索</button>
+        <ul v-if="searchState === 'ready'" ref="resultList">
+          <li v-for="person in searchResults" :key="person.id">
+            <button type="button" :aria-label="`定位${primaryName(person)}`" @click="locate(person.id)">
+              <strong>{{ primaryName(person) }}</strong>
+              <span>{{ person.birth?.display ?? '出生日期未记录' }}</span>
+            </button>
+          </li>
+        </ul>
+      </div>
     </div>
 
     <div class="tree-toolbar__zoom" aria-label="缩放">
@@ -154,8 +200,15 @@ function commitZoom(event: Event, fallbackLevel: number) {
 .tree-toolbar__mode button:last-of-type, .tree-toolbar__generation button:last-of-type, .tree-toolbar__zoom button:last-child { border-right: 0; }
 .tree-toolbar__mode button.active { background: var(--color-primary-strong); color: white; }
 .tree-toolbar__generation button:disabled { color: var(--color-muted); cursor: default; opacity: .6; }
-.tree-toolbar__jump { display: flex; min-width: 10rem; max-width: 20rem; flex: 1; align-items: center; gap: .45rem; padding: 0 .65rem; border: 1px solid var(--color-border); border-radius: .35rem; background: var(--color-surface); }
+.tree-toolbar__jump { position: relative; display: flex; min-width: 10rem; max-width: 20rem; flex: 1; align-items: center; gap: .45rem; padding: 0 .65rem; border: 1px solid var(--color-border); border-radius: .35rem; background: var(--color-surface); }
+.tree-toolbar__jump:focus-within { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 .tree-toolbar__jump input { min-width: 5rem; min-height: 2.35rem; flex: 1; border: 0; outline: 0; background: transparent; font-size: .78rem; }
+.tree-toolbar__search-results { position: absolute; top: calc(100% + .4rem); right: 0; left: 0; z-index: 10; max-height: min(26rem, 55vh); overflow: auto; padding: .6rem; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-card); box-shadow: var(--shadow-md); }
+.tree-toolbar__search-results p { margin: 0 0 .4rem; color: var(--color-muted); font-size: .75rem; }
+.tree-toolbar__search-results ul { display: grid; gap: .3rem; margin: 0; padding: 0; list-style: none; }
+.tree-toolbar__search-results button { display: grid; width: 100%; gap: .2rem; padding: .6rem; border: 0; border-radius: var(--radius-sm); background: var(--color-surface); color: var(--color-text); cursor: pointer; text-align: left; overflow-wrap: anywhere; }
+.tree-toolbar__search-results button:hover { background: var(--color-muted-surface); }
+.tree-toolbar__search-results span { color: var(--color-muted); font-size: .72rem; }
 .tree-toolbar__zoom button { display: inline-flex; min-width: 3.2rem; align-items: center; justify-content: center; padding: 0; line-height: 1; }
 .tree-toolbar__zoom button:last-child { border-left: 1px solid var(--color-border); }
 .tree-toolbar__zoom-value { display: inline-flex; min-width: 3.2rem; min-height: 2.35rem; align-items: center; justify-content: center; box-sizing: border-box; line-height: 1; }
