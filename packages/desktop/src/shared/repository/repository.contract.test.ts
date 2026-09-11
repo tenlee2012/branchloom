@@ -301,6 +301,80 @@ export function repositoryContract(name: string, makeContext: MakeContext): void
         .toEqual(['person-lin-hai'])
     })
 
+    it('ranks full names, aliases and partial names before body matches across pages', async () => {
+      const { repository } = makeContext()
+      const project = await repository.createProject({ name: '搜索排序测试', description: '' })
+      const template = await repository.getPerson('person-lin-hai')
+      const candidates = [
+        { id: 'body-b', name: '阿戊' },
+        { id: 'alias-contains', name: '阿丙', alias: '小明远' },
+        { id: 'contains', name: '周明远甲' },
+        { id: 'alias-prefix', name: '阿乙', alias: '明远乙' },
+        { id: 'prefix', name: '明远甲' },
+        { id: 'alias', name: '阿甲', alias: '明远' },
+        { id: 'exact-b', name: '明远' },
+        { id: 'exact-a', name: '明远' },
+        { id: 'body-a', name: '阿丁' },
+      ]
+      for (const [index, candidate] of candidates.entries()) {
+        await repository.savePerson({
+          ...template,
+          id: candidate.id,
+          projectId: project.id,
+          names: [
+            ...(candidate.alias ? [{ value: candidate.alias, type: 'alias' as const, primary: false }] : []),
+            { value: candidate.name, type: 'personal', primary: true },
+          ],
+          biography: '',
+          notes: '测试记录中提到明远。',
+          birth: { display: String(1900 + index), precision: 'exact', start: String(1900 + index) },
+          birthPlaceId: undefined,
+          deathPlaceId: undefined,
+          sourceIds: [],
+        })
+      }
+
+      const query: PersonQuery = { ...defaultQuery, search: '  明远  ', pageSize: 2 }
+      const first = await repository.listPeople(project.id, query)
+      expect(first).toMatchObject({ total: 9, page: 1, pageSize: 2 })
+      expect(first.items.map(({ id }) => id)).toEqual(['exact-a', 'exact-b'])
+      const ids = [...first.items.map(({ id }) => id)]
+      for (let page = 2; page <= 5; page += 1) {
+        const result = await repository.listPeople(project.id, { ...query, page })
+        ids.push(...result.items.map(({ id }) => id))
+      }
+      expect(ids).toEqual([
+        'exact-a', 'exact-b', 'alias', 'prefix', 'alias-prefix', 'contains', 'alias-contains',
+        'body-a', 'body-b',
+      ])
+
+      const byBirth = await repository.listPeople(project.id, { ...query, sort: 'birth' })
+      expect(byBirth.items.map(({ id }) => id)).toEqual(['body-b', 'alias-contains'])
+      const byUpdated = await repository.listPeople(project.id, { ...query, sort: 'updatedAt' })
+      expect(byUpdated.items.map(({ id }) => id)).toEqual(['alias', 'alias-contains'])
+      const unfiltered = await repository.listPeople(project.id, { ...query, search: '' })
+      const whitespace = await repository.listPeople(project.id, { ...query, search: '  ' })
+      expect(whitespace).toEqual(unfiltered)
+      expect(unfiltered.items.map(({ id }) => id)).toEqual(['alias-contains', 'body-a'])
+    })
+
+    it('ranks case-insensitive exact aliases ahead of mentions in biography', async () => {
+      const { repository } = makeContext()
+      const linHai = await repository.getPerson('person-lin-hai')
+      await repository.savePerson({
+        ...linHai,
+        names: [...linHai.names, { value: 'Lin HAI', type: 'alias', primary: false }],
+      })
+      const chenFang = await repository.getPerson('person-chen-fang')
+      await repository.savePerson({ ...chenFang, biography: '测试索引包含 LIN HAI。' })
+
+      const page = await repository.listPeople('project-demo-family', {
+        ...defaultQuery, search: '  lin hai  ', pageSize: 1,
+      })
+      expect(page.total).toBe(2)
+      expect(page.items.map(({ id }) => id)).toEqual(['person-lin-hai'])
+    })
+
     it('implements all person filters, stable sorts and one-based pagination', async () => {
       const { repository } = makeContext()
       const projectId = 'project-demo-family'

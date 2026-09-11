@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import AppSidebar from '../components/AppSidebar.vue'
 import AppTopbar from '../components/AppTopbar.vue'
@@ -8,6 +8,8 @@ import { useSessionStore } from '../stores/session'
 import { useBranchloomRepository } from '../../shared/repository/injection'
 import { BrowserRecentProjectLocations } from '../../features/projects/model/recentProjectLocations'
 import { selectInitialProject } from '../startup'
+import { useMediaQuery } from '../../shared/composables/useMediaQuery'
+import { loadRuntimeCapabilities } from '../../shared/runtimeCapabilities'
 import appIcon from '../../../src-tauri/icons/icon.png'
 
 const route = useRoute()
@@ -17,7 +19,12 @@ const session = useSessionStore()
 const loadState = ref<'loading' | 'ready' | 'error'>('loading')
 const loadError = ref('')
 const navigationProjectId = ref('')
-const isTreeWorkspace = computed(() => route.name === 'project-tree')
+const narrowViewport = useMediaQuery('(max-width: 48rem)')
+const nativeMobile = ref(false)
+const compactLayout = computed(() => nativeMobile.value || narrowViewport.value)
+const mobileNavigation = ref<InstanceType<typeof MobileProjectNavigation> | null>(null)
+const mobileMenuOpen = ref(false)
+watch(compactLayout, () => { mobileMenuOpen.value = false })
 const workspaceMode = computed(() => route.meta.workspaceMode ?? 'standard')
 const isCanvasWorkspace = computed(() => workspaceMode.value === 'canvas')
 const allowsMissingProject = computed(() => route.meta.allowMissingProject === true)
@@ -27,6 +34,10 @@ const routeView = ref<{
   addPerson?(): void
 } | null>(null)
 let latestRequest = 0
+
+onMounted(() => {
+  void loadRuntimeCapabilities().then(({ mobile }) => { nativeMobile.value = mobile }).catch(() => {})
+})
 
 function fitTreeCanvas() {
   routeView.value?.fitCanvas?.()
@@ -112,8 +123,9 @@ onBeforeUnmount(() => {
     </RouterLink>
   </main>
 
-  <div v-else class="project-layout">
+  <div v-else class="project-layout" :class="{ 'project-layout--compact': compactLayout }">
     <AppSidebar
+      v-if="!compactLayout"
       class="project-layout__sidebar"
       :project-id="navigationProjectId"
       :project-name="session.currentProjectName"
@@ -121,6 +133,9 @@ onBeforeUnmount(() => {
     <div class="project-layout__workspace">
       <AppTopbar
         :project-name="session.currentProjectName"
+        :show-menu-button="compactLayout"
+        :menu-open="mobileMenuOpen"
+        @open-menu="mobileNavigation?.show()"
         @fit-tree="fitTreeCanvas"
         @add-person="addTreePerson"
       />
@@ -139,7 +154,13 @@ onBeforeUnmount(() => {
         </RouterView>
       </main>
     </div>
-    <MobileProjectNavigation :project-id="navigationProjectId" />
+    <MobileProjectNavigation
+      v-if="compactLayout"
+      ref="mobileNavigation"
+      :project-id="navigationProjectId"
+      :project-name="session.currentProjectName"
+      @update:open="mobileMenuOpen = $event"
+    />
   </div>
 </template>
 
@@ -249,32 +270,27 @@ onBeforeUnmount(() => {
   }
 }
 
-@media (max-width: 48rem) {
-  .project-layout {
-    min-height: 0;
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) auto;
-  }
+.project-layout--compact {
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  padding-bottom: env(safe-area-inset-bottom);
+}
 
-  .project-layout__sidebar {
-    display: none;
-  }
+.project-layout--compact .project-layout__workspace {
+  grid-row: 1;
+}
 
-  .project-layout__workspace {
-    grid-row: 1;
-  }
+.project-layout--compact .project-layout__main {
+  padding: 1rem;
+}
 
-  .project-layout__main {
-    padding: 1rem;
-  }
+.project-layout--compact .project-layout__main--canvas {
+  overflow: auto;
+  padding: 0;
+}
 
-  .project-layout__main--canvas {
-    overflow: auto;
-    padding: 0;
-  }
-
-  .project-layout__main--management {
-    padding: 1rem;
-  }
+.project-layout--compact .project-layout__main--management {
+  padding: 1rem;
 }
 </style>

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { resetDemo } from './helpers/demo'
+import { openProjectMenu, resetDemo } from './helpers/demo'
 
 test.beforeEach(async ({ page }) => resetDemo(page))
 
@@ -63,11 +63,16 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 
 
 test('mobile project navigation reaches sync and switches back after creating a project', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 })
-  const mobileNavigation = page.getByRole('navigation', { name: '移动端项目导航' })
+  const openOverview = async () => {
+    const menu = await openProjectMenu(page)
+    await menu.getByRole('link', { name: '项目管理', exact: true }).click()
+    await expect(menu).toHaveCount(0)
+  }
   const assertShell = async (hasRefresh = true) => {
     await expect(page.locator('.app-topbar')).toBeVisible()
-    await expect(mobileNavigation).toBeVisible()
-    await expect(page.getByRole('navigation', { name: '项目导航', exact: true })).toBeHidden()
+    await expect(page.getByRole('button', { name: '打开菜单', exact: true })).toBeVisible()
+    await expect(page.getByRole('dialog', { name: '项目菜单' })).toHaveCount(0)
+    await expect(page.getByRole('navigation', { name: '项目导航', exact: true })).toHaveCount(0)
     if (hasRefresh) {
       await expect(page.getByRole('button', { name: '刷新资料' })).toBeVisible()
     } else {
@@ -76,7 +81,7 @@ test('mobile project navigation reaches sync and switches back after creating a 
     expect(await page.locator('html').evaluate((element) => element.scrollWidth)).toBeLessThanOrEqual(390)
   }
   await assertShell()
-  await mobileNavigation.getByRole('link', { name: '项目', exact: true }).click()
+  await openOverview()
   await expect(page).toHaveURL('/project/project-demo-family/manage/overview')
   await assertShell(false)
   await page.screenshot({ path: testInfo.outputPath('mobile-project-overview.png') })
@@ -88,14 +93,14 @@ test('mobile project navigation reaches sync and switches back after creating a 
   await expect(page.getByRole('heading', { name: '协作同步', exact: true })).toBeVisible()
   await assertShell()
 
-  await mobileNavigation.getByRole('link', { name: '项目', exact: true }).click()
+  await openOverview()
   await page.getByRole('link', { name: '打开项目设置' }).click()
   await assertShell()
-  await mobileNavigation.getByRole('link', { name: '项目', exact: true }).click()
+  await openOverview()
   await page.locator('.project-overview').getByRole('link', { name: '新建项目', exact: true }).click()
   await expect(page).toHaveURL('/project/project-demo-family/manage/new')
   await expect(page.getByRole('button', { name: '刷新资料' })).toHaveCount(0)
-  await expect(mobileNavigation).toBeVisible()
+  await expect(page.getByRole('button', { name: '打开菜单', exact: true })).toBeVisible()
   expect(await page.locator('html').evaluate((element) => element.scrollWidth)).toBeLessThanOrEqual(390)
   const back = page.locator('.app-topbar').getByRole('link', { name: '返回项目管理' })
   await back.focus()
@@ -114,7 +119,7 @@ test('mobile project navigation reaches sync and switches back after creating a 
   await expect(page).toHaveURL(/\/project\/(?!project-demo-family)[^/]+\/tree$/)
   await assertShell()
 
-  await mobileNavigation.getByRole('link', { name: '项目', exact: true }).click()
+  await openOverview()
   await assertShell(false)
   const switcher = page.locator('.project-switcher')
   await switcher.locator('summary').focus()

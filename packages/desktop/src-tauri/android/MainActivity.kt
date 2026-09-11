@@ -9,6 +9,9 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 
 class MainActivity : TauriActivity() {
+  // The navigation drawer adds a same-page entry so Back closes it first.
+  override val handleBackNavigation: Boolean = true
+
   override fun onCreate(savedInstanceState: Bundle?) {
     applySystemBarStyle()
     super.onCreate(savedInstanceState)

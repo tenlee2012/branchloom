@@ -1,16 +1,17 @@
-import { mount } from '@vue/test-utils'
+import { DOMWrapper, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { flushPromises } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from '../App.vue'
 import { createAppRouter } from './router'
 import { useSessionStore } from './stores/session'
 import { branchloomRepositoryKey } from '../shared/repository/injection'
 import { BrowserPrototypeRepository } from '../shared/repository/BrowserPrototypeRepository'
-import { PROJECT_DATA_CHANGED_EVENT } from '../shared/repository/TauriRepository'
+import { NATIVE_STATE_REFRESHED_EVENT, PROJECT_DATA_CHANGED_EVENT } from '../shared/repository/TauriRepository'
 import type { PrototypeStorage } from '../shared/repository/storage'
 import type { BranchloomRepository, DataIssue, Project } from '../shared/domain/types'
 import { BrowserRecentProjectLocations } from '../features/projects/model/recentProjectLocations'
+import * as runtimeCapabilities from '../shared/runtimeCapabilities'
 
 const tauriWindowMocks = vi.hoisted(() => ({
   setTitle: vi.fn(() => Promise.resolve()),
@@ -84,6 +85,7 @@ async function mountShell(path: string, repository: BranchloomRepository = makeR
   const wrapper = mount(App, {
     attachTo: document.body,
     global: {
+      stubs: { transition: false },
       plugins: [pinia, router],
       provide: {
         [branchloomRepositoryKey as symbol]: repository,
@@ -99,6 +101,21 @@ async function mountShell(path: string, repository: BranchloomRepository = makeR
 beforeEach(() => {
   window.localStorage.clear()
 })
+
+afterEach(() => { vi.unstubAllGlobals() })
+
+function useMobileViewport() {
+  vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+    matches: query === '(max-width: 48rem)',
+    media: query,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  })))
+}
+
+function mobileMenu() {
+  return new DOMWrapper(document.body).get('[role="dialog"][aria-label="项目菜单"]')
+}
 
 describe('application shell', () => {
   it('forwards the root experience into the latest project tree', async () => {
@@ -160,7 +177,7 @@ describe('application shell', () => {
     const { wrapper } = await mountShell(`/project/${project!.id}/people`, repository)
     const navigation = wrapper.get('nav[aria-label="项目导航"]')
 
-    for (const label of ['家谱树', '人物', '时间线', '资料来源']) {
+    for (const label of ['家谱树', '人物', '查称呼', '时间线', '资料来源']) {
       expect(navigation.get(`a[aria-label="${label}"]`).text()).toContain(label)
     }
     expect(wrapper.get('nav[aria-label="项目管理导航"] a[aria-label="项目管理"]').text())
@@ -186,10 +203,8 @@ describe('application shell', () => {
       .toBe('/github-import')
     expect(wrapper.find('[aria-label="打开项目菜单"]').exists()).toBe(false)
 
-    const mobileNavigation = wrapper.get('nav[aria-label="移动端项目导航"]')
-    expect(mobileNavigation.findAll('a').map((link) => link.text()))
-      .toEqual(['家谱', '人物', '时间', '资料', '项目'])
-    expect(mobileNavigation.get('a[aria-current="page"]').text()).toBe('人物')
+    expect(wrapper.find('button[aria-label="打开菜单"]').exists()).toBe(false)
+    expect(wrapper.find('.mobile-project-navigation').exists()).toBe(false)
 
     inspectProject.mockResolvedValue([])
     window.dispatchEvent(new Event(PROJECT_DATA_CHANGED_EVENT))
@@ -223,13 +238,16 @@ describe('application shell', () => {
   })
 
   it('reaches collaboration and another project through the mobile project destination', async () => {
+    useMobileViewport()
     const repository = makeRepository()
     const [first] = await repository.listProjects()
     const second = await repository.createProject({ name: '移动端第二份家谱', description: '' })
     const { wrapper, router, session } = await mountShell(`/project/${first!.id}/tree`, repository)
 
     const openProjectPage = async () => {
-      await wrapper.get('nav[aria-label="移动端项目导航"] a[href$="/manage/overview"]').trigger('click')
+      await wrapper.get('button[aria-label="打开菜单"]').trigger('click')
+      await flushPromises()
+      await mobileMenu().get('a[aria-label="项目管理"]').trigger('click')
       await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('project-overview'))
       await flushPromises()
       expect(wrapper.get('.app-topbar').find('button[name="刷新资料"]').exists()).toBe(false)
@@ -250,6 +268,83 @@ describe('application shell', () => {
     await flushPromises()
     expect(session.currentProjectName).toBe(second.name)
     expect(wrapper.find('.app-topbar button[name="刷新资料"]').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('opens a modal mobile menu, traps keyboard focus and returns focus on Escape', async () => {
+    useMobileViewport()
+    const { wrapper, router } = await mountShell('/project/project-demo-family/people')
+    const trigger = wrapper.get<HTMLButtonElement>('button[aria-label="打开菜单"]')
+    trigger.element.focus()
+    await trigger.trigger('click')
+    await flushPromises()
+    const menu = mobileMenu()
+    expect(trigger.attributes('aria-expanded')).toBe('true')
+    expect(menu.attributes('aria-modal')).toBe('true')
+    expect(menu.get('a[aria-label="人物"]').attributes('aria-current')).toBe('page')
+    expect(wrapper.element.closest('[inert]')).not.toBeNull()
+    expect(menu.get('[aria-label="关闭菜单"]').element).toBe(document.activeElement)
+    const settings = menu.get<HTMLAnchorElement>('a[href$="/manage/settings"]')
+    settings.element.focus()
+    await settings.trigger('keydown', { key: 'Tab' })
+    expect(menu.get('[aria-label="关闭菜单"]').element).toBe(document.activeElement)
+    await menu.trigger('keydown', { key: 'Escape' })
+    await vi.waitFor(() => expect(document.querySelector('[aria-label="项目菜单"]')).toBeNull())
+    expect(trigger.element).toBe(document.activeElement)
+    expect(trigger.attributes('aria-expanded')).toBe('false')
+    expect(wrapper.element.closest('[inert]')).toBeNull()
+    expect(router.currentRoute.value.path).toBe('/project/project-demo-family/people')
+    wrapper.unmount()
+  })
+
+  it('uses Back to dismiss the menu and closes it when selecting the current destination', async () => {
+    useMobileViewport()
+    const path = '/project/project-demo-family/people'
+    const { wrapper, router } = await mountShell(path)
+    const trigger = wrapper.get('button[aria-label="打开菜单"]')
+    await trigger.trigger('click')
+    await flushPromises()
+    expect(mobileMenu().attributes('aria-modal')).toBe('true')
+    window.history.back()
+    await vi.waitFor(() => expect(document.querySelector('[aria-label="项目菜单"]')).toBeNull())
+    expect(router.currentRoute.value.path).toBe(path)
+    await trigger.trigger('click')
+    await flushPromises()
+    await mobileMenu().get('a[aria-label="人物"]').trigger('click')
+    await vi.waitFor(() => expect(window.history.state?.branchloomNavigationDrawer).toBeUndefined())
+    expect(document.querySelector('[aria-label="项目菜单"]')).toBeNull()
+    expect(router.currentRoute.value.path).toBe(path)
+    wrapper.unmount()
+  })
+
+  it('keeps native mobile navigation in a drawer on wide screens and hides unavailable AI tools', async () => {
+    const capabilities = vi.spyOn(runtimeCapabilities, 'loadRuntimeCapabilities').mockResolvedValue({
+      mobile: true, aiTools: false, scheduledSync: false,
+    })
+    const { wrapper } = await mountShell('/project/project-demo-family/people')
+    try {
+      expect(wrapper.find('.project-layout--compact').exists()).toBe(true)
+      await wrapper.get('button[aria-label="打开菜单"]').trigger('click')
+      await flushPromises()
+      expect(mobileMenu().find('.app-sidebar--mobile').exists()).toBe(true)
+      expect(mobileMenu().find('a[href$="/ai-tools"]').exists()).toBe(false)
+      await mobileMenu().get('button[aria-label="关闭菜单"]').trigger('click')
+      await vi.waitFor(() => expect(window.history.state?.branchloomNavigationDrawer).toBeUndefined())
+    } finally {
+      wrapper.unmount()
+      capabilities.mockRestore()
+    }
+  })
+
+  it('preserves a detail page return target across same-page navigation entries', async () => {
+    const origin = '/project/project-demo-family/people?search=林晨'
+    const { wrapper, router } = await mountShell(origin)
+    await router.push('/project/project-demo-family/people/person-lin-chen')
+    const detailPath = router.currentRoute.value.fullPath
+    await router.push({ path: detailPath, force: true })
+    await flushPromises()
+    expect(router.currentRoute.value.meta.previousFullPath).toBe(origin)
+    expect(wrapper.find('.app-topbar button[aria-label="返回上一页"]').exists()).toBe(true)
     wrapper.unmount()
   })
 
@@ -377,6 +472,38 @@ describe('application shell', () => {
       .toBe('management')
   })
 
+  it('opens the kinship page from a person, preserves its shell and selection on refresh, and returns to that person', async () => {
+    const detailPath = '/project/project-demo-family/people/person-lin-chen'
+    const { wrapper, router } = await mountShell(detailPath)
+    await wrapper.get('button[name="查称呼"]').trigger('click')
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('project-kinship'))
+    await flushPromises()
+    expect(router.currentRoute.value.query.from).toBe('person-lin-chen')
+    expect(wrapper.get('h1').text()).toBe('查称呼')
+    expect(wrapper.find('.app-topbar button[name="刷新资料"]').exists()).toBe(true)
+    expect(wrapper.get('nav[aria-label="项目导航"] a[aria-label="查称呼"]').attributes('aria-current')).toBe('page')
+    await router.replace({ query: { ...router.currentRoute.value.query, to: 'person-lin-hai' } })
+    await flushPromises()
+    expect(wrapper.get('[data-kinship-direction="forward"]').text()).toContain('爸爸')
+    window.dispatchEvent(new Event(NATIVE_STATE_REFRESHED_EVENT))
+    await flushPromises()
+    await vi.waitFor(() => expect(wrapper.get('[data-kinship-direction="forward"]').text()).toContain('爸爸'))
+    const back = wrapper.get('.app-topbar a[aria-label="返回人物详情"]')
+    expect(back.attributes('href')).toBe(detailPath)
+    await back.trigger('click')
+    await vi.waitFor(() => expect(router.currentRoute.value.path).toBe(detailPath))
+    wrapper.unmount()
+  })
+
+  it.each(['https://example.com', '/project/foreign/people/person-foreign', '/project/project-demo-family/manage/settings'])(
+    'ignores an out-of-scope kinship return target: %s', async (returnTo) => {
+      const { wrapper } = await mountShell(`/project/project-demo-family/kinship?returnTo=${encodeURIComponent(returnTo)}`)
+      expect(wrapper.get('.app-topbar a[aria-label="返回人物列表"]').attributes('href')).toBe('/project/project-demo-family/people')
+      expect(wrapper.find('a[aria-label="返回人物详情"]').exists()).toBe(false)
+      wrapper.unmount()
+    },
+  )
+
   it('keeps the project shell visible throughout project creation tasks', async () => {
     const repository = makeRepository()
     const [project] = await repository.listProjects()
@@ -421,6 +548,7 @@ describe('application shell', () => {
       ['/github-import', 'home', '返回'],
       ['/project/project-demo-family/people/person-demo-1', 'project-people', '返回人物列表'],
       ['/project/project-demo-family/people/person-demo-1/edit', 'person-detail', '返回人物详情'],
+      ['/project/project-demo-family/kinship', 'project-people', '返回人物列表'],
       ['/project/project-demo-family/manage/new', 'project-overview', '返回项目管理'],
       ['/project/project-demo-family/manage/exchange', 'project-overview', '返回项目管理'],
       ['/project/project-demo-family/manage/history', 'project-overview', '返回项目管理'],
@@ -443,7 +571,7 @@ describe('application shell', () => {
     const main = wrapper.get('.project-layout__main')
     const back = wrapper.get('a[aria-label="返回项目管理"]')
 
-    expect(wrapper.get('.app-topbar').element.firstElementChild).toBe(back.element)
+    expect(wrapper.get('.app-topbar__context').element.firstElementChild).toBe(back.element)
     expect(main.find('.page-back-link').exists()).toBe(false)
     expect(wrapper.find('.app-topbar__page-title').exists()).toBe(false)
     expect(document.title).toBe('项目设置 · 有谱')

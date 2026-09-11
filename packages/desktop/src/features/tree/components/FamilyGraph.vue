@@ -1,7 +1,13 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { cytoscapeGraphAdapter, type GraphCreateOptions } from '../composables/useFamilyGraph'
 import type { VisibleGraph } from '../model/buildVisibleGraph'
+import type { KinshipDescription } from '../../../shared/domain/kinship'
+
+export interface GraphAnnotations {
+  searchPersonIds: ReadonlySet<string>
+  kinships: ReadonlyMap<string, KinshipDescription>
+}
 
 export interface GraphDensity {
   avatars: boolean
@@ -24,6 +30,8 @@ export interface GraphNodeAnchor {
 export interface GraphRuntime {
   update(graph: VisibleGraph, density: GraphDensity): void
   focus?(personId: string): void
+  annotate?(annotations: GraphAnnotations): void
+  locate?(personId: string): void
   fit(): void
   relayout(): void
   zoomIn?(): void
@@ -40,10 +48,14 @@ const props = withDefaults(defineProps<{
   graph: VisibleGraph
   density: GraphDensity
   selectedPersonId?: string
+  annotations?: GraphAnnotations
   adapter?: GraphAdapter
-}>(), { selectedPersonId: '' })
+}>(), {
+  selectedPersonId: '',
+  annotations: () => ({ searchPersonIds: new Set(), kinships: new Map() }),
+})
 const emit = defineEmits<{
-  nodeClick: [personId: string]
+  nodeClick: [personId: string, showQuickActions?: boolean]
   nodeDoubleClick: [personId: string]
   canvasClick: []
   selectedNodeAnchorChange: [anchor: GraphNodeAnchor | undefined]
@@ -51,8 +63,10 @@ const emit = defineEmits<{
 }>()
 const container = ref<HTMLElement | null>(null)
 const loadError = ref('')
+const selectedName = computed(() => props.graph.nodes.find(({ id }) => id === props.selectedPersonId)?.primaryName)
 let runtime: GraphRuntime | undefined
 let disposed = false
+let pendingLocation = ''
 
 function message(error: unknown) {
   return error instanceof Error ? error.message : '图形引擎无法更新'
@@ -91,6 +105,8 @@ onMounted(async () => {
     try {
       created.update(props.graph, props.density)
       created.focus?.(props.selectedPersonId)
+      created.annotate?.(props.annotations)
+      if (pendingLocation) created.locate?.(pendingLocation)
     } catch (error) {
       created.destroy()
       throw error
@@ -108,6 +124,7 @@ watch(
 )
 
 watch(() => props.selectedPersonId, (personId) => runtime?.focus?.(personId))
+watch(() => props.annotations, (annotations) => runtime?.annotate?.(annotations))
 
 onBeforeUnmount(() => {
   disposed = true
@@ -116,6 +133,10 @@ onBeforeUnmount(() => {
 })
 
 defineExpose({
+  locate(personId: string) {
+    pendingLocation = personId
+    runtime?.locate?.(personId)
+  },
   fit() { runtime?.fit() },
   relayout() { runtime?.relayout() },
   zoomIn() { runtime?.zoomIn?.() },
@@ -137,6 +158,7 @@ defineExpose({
       role="application"
       aria-label="可缩放和平移的家谱图"
     />
+    <p v-if="selectedName" class="visually-hidden" role="status">{{ selectedName }}对其他人物的称呼</p>
   </div>
 </template>
 

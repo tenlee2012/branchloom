@@ -40,7 +40,17 @@ const treeReturnTarget = computed<RouteLocationRaw | undefined>(() => {
     && !requested.startsWith(`${treePath}#`)) return undefined
   return requested
 })
+const personReturnTarget = computed<string | undefined>(() => {
+  if (route.name !== 'project-kinship') return undefined
+  const requested = route.query.returnTo
+  const projectId = route.params.projectId
+  if (typeof requested !== 'string' || typeof projectId !== 'string'
+    || !requested.startsWith(`/project/${encodeURIComponent(projectId)}/people/`)) return undefined
+  const resolved = router.resolve(requested)
+  return resolved.name === 'person-detail' && resolved.params.projectId === projectId ? requested : undefined
+})
 const target = computed<RouteLocationRaw>(() => {
+  if (personReturnTarget.value) return personReturnTarget.value
   if (treeReturnTarget.value) return treeReturnTarget.value
   const definition = parent.value
   if (!definition) return { name: 'home' }
@@ -57,6 +67,7 @@ const target = computed<RouteLocationRaw>(() => {
   }
 })
 const label = computed(() => {
+  if (personReturnTarget.value) return '返回人物详情'
   if (usesHistoryBack.value && previousLocation.value) return '返回上一页'
   return treeReturnTarget.value ? '返回家谱树' : parent.value?.label ?? '返回首页'
 })

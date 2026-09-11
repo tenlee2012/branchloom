@@ -6,6 +6,7 @@ import {
   IconTimeline,
   IconTrash,
   IconUserCircle,
+  IconUsersGroup,
 } from '@tabler/icons-vue'
 import { computed, ref, watch } from 'vue'
 import BaseButton from '../../../design-system/BaseButton.vue'
@@ -62,6 +63,7 @@ const emit = defineEmits<{
   delete: []
   addRelationship: []
   quickAddRelative: []
+  queryKinship: []
   editRelationship: [relationship: Relationship]
   addCareer: []
   editCareer: [career: CareerRecord]
@@ -461,6 +463,9 @@ function citationSource(citation: Citation) {
           <p>兄弟姐妹与祖孙关系会从这些直接关系推导。</p>
         </div>
         <div class="person-detail-panel__relationship-actions">
+          <BaseButton name="查称呼" variant="secondary" @click="emit('queryKinship')">
+            <IconUsersGroup :size="18" aria-hidden="true" />查称呼
+          </BaseButton>
           <BaseButton name="添加已有关系" variant="secondary" @click="emit('addRelationship')">
             添加已有关系
           </BaseButton>

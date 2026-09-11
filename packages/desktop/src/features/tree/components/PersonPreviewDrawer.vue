@@ -5,6 +5,7 @@ import {
   IconEye,
   IconFocusCentered,
   IconUserPlus,
+  IconUsersGroup,
 } from '@tabler/icons-vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import BaseButton from '../../../design-system/BaseButton.vue'
@@ -122,9 +123,12 @@ function treeReturnPath(person: Person): string {
         <p v-else>还没有关联资料来源。</p>
       </section>
       <footer>
+        <RouterLink class="person-preview__kinship" :to="{ name: 'project-kinship', params: { projectId: person.projectId }, query: { from: person.id, returnTo: treeReturnPath(person) } }">
+          <IconUsersGroup :size="18" aria-hidden="true" />查称呼
+        </RouterLink>
         <BaseButton name="添加人物" variant="secondary" @click="emit('quickAdd')"><IconUserPlus :size="18" aria-hidden="true" />添加人物</BaseButton>
         <BaseButton v-if="!isCenter" name="设为中心人物" variant="secondary" @click="emit('center', person.id)"><IconFocusCentered :size="18" aria-hidden="true" />设为中心</BaseButton>
-        <BaseButton :name="collapsed ? `展开${primaryName(person)}分支` : `收起${primaryName(person)}分支`" variant="secondary" @click="emit('toggleBranch', person.id)">
+        <BaseButton :class="{ 'person-preview__full-width': isCenter }" :name="collapsed ? `展开${primaryName(person)}分支` : `收起${primaryName(person)}分支`" variant="secondary" @click="emit('toggleBranch', person.id)">
           {{ collapsed ? '展开分支' : '收起分支' }}
         </BaseButton>
         <RouterLink class="person-preview__view-sources" :to="{ name: 'project-sources', params: { projectId: person.projectId } }"><IconBook2 :size="18" aria-hidden="true" />查看来源</RouterLink>
@@ -151,14 +155,19 @@ function treeReturnPath(person: Person): string {
 .person-preview__bio { padding: var(--space-3); border-radius: var(--radius-sm); background: var(--color-muted-surface); }
 .person-preview ul { display: grid; gap: var(--space-2); padding: 0; list-style: none; }
 .person-preview li { display: flex; justify-content: space-between; gap: var(--space-3); padding: var(--space-2); border-bottom: 1px solid var(--color-border); }
-.person-preview footer { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.person-preview footer { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
+.person-preview footer > :is(a, button) { display: inline-flex; min-width: 0; min-height: 2.75rem; align-items: center; justify-content: center; gap: var(--space-2); padding: var(--space-3); border-radius: var(--radius-sm); font-size: .875rem; font-weight: 650; line-height: 1; white-space: nowrap; }
+.person-preview footer :deep(svg) { flex-shrink: 0; }
+.person-preview__full-width, .person-preview__view-sources { grid-column: 1 / -1; }
+.person-preview__kinship { border: 1px solid var(--color-border); color: var(--color-primary); text-decoration: none; }
+.person-preview__kinship:hover { background: var(--color-muted-surface); }
 .person-preview__section-title { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .person-preview__section-title h4 { margin: 0; font-family: var(--font-heading); font-size: 1.05rem; }
 .person-preview__section-title span { color: var(--color-primary); font-size: .72rem; }
 .person-preview__sources article { display: flex; gap: .7rem; margin-top: .7rem; padding: .8rem; border: 1px solid #dfd2bd; border-radius: .35rem; background: #fcf8ef; }
 .person-preview__sources article p { margin: .3rem 0 0; color: var(--color-muted); font-size: .72rem; line-height: 1.6; }
 .person-preview__source-number { display: grid; width: 1.35rem; height: 1.35rem; flex: 0 0 auto; place-items: center; border-radius: 50%; background: #315d45; color: white; font-size: .7rem; }
-.person-preview__view-sources { display: inline-flex; min-height: 2.5rem; flex: 1; align-items: center; justify-content: center; gap: .45rem; border: 1px solid #315d45; border-radius: .35rem; background: #315d45; color: white; font-size: .82rem; font-weight: 650; text-decoration: none; }
+.person-preview__view-sources { border: 1px solid #315d45; background: #315d45; color: white; text-decoration: none; }
 
 :deep(.base-drawer__surface--inline .base-drawer__header) { padding: 1rem 1.15rem; }
 :deep(.base-drawer__surface--inline .base-drawer__title) { font-size: 1rem; }

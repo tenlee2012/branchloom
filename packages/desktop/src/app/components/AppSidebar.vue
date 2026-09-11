@@ -16,6 +16,7 @@ import {
   IconSettings,
   IconShieldCheck,
   IconUser,
+  IconUsersGroup,
   IconFileDescription,
 } from '@tabler/icons-vue'
 import BaseButton from '../../design-system/BaseButton.vue'
@@ -26,9 +27,10 @@ import {
   PROJECT_DATA_CHANGED_EVENT,
 } from '../../shared/repository/TauriRepository'
 import { useSessionStore } from '../stores/session'
+import { loadRuntimeCapabilities } from '../../shared/runtimeCapabilities'
 import appIcon from '../../../src-tauri/icons/icon.png'
 
-const props = defineProps<{ projectId: string; projectName: string }>()
+const props = defineProps<{ projectId: string; projectName: string; mobile?: boolean }>()
 const route = useRoute()
 const repository = useBranchloomRepository()
 const session = useSessionStore()
@@ -37,6 +39,7 @@ const projectSwitcher = ref<HTMLDetailsElement>()
 const projects = ref<Project[]>([])
 const projectListError = ref('')
 const issueCount = ref<number>()
+const aiToolsAvailable = ref(false)
 const projectTreePath = computed(() => props.projectId
   ? `/project/${encodeURIComponent(props.projectId)}/tree`
   : '/')
@@ -94,6 +97,7 @@ function refreshIssueCount() {
 }
 
 onMounted(() => {
+  void loadRuntimeCapabilities().then(({ aiTools }) => { aiToolsAvailable.value = aiTools }).catch(() => {})
   window.addEventListener(PROJECT_DATA_CHANGED_EVENT, refreshIssueCount)
   window.addEventListener(NATIVE_STATE_REFRESHED_EVENT, refreshIssueCount)
 })
@@ -109,6 +113,7 @@ const navigation = computed(() => {
   return [
     { label: '家谱树', icon: IconNetwork, to: `${base}/tree`, segment: '/tree' },
     { label: '人物', icon: IconUser, to: `${base}/people`, segment: '/people' },
+    { label: '查称呼', icon: IconUsersGroup, to: `${base}/kinship`, segment: '/kinship' },
     { label: '时间线', icon: IconClock, to: `${base}/timeline`, segment: '/timeline' },
     { label: '资料来源', icon: IconFileDescription, to: `${base}/sources`, segment: '/sources' },
   ]
@@ -152,7 +157,7 @@ function isExact(to: string) {
 </script>
 
 <template>
-  <aside class="app-sidebar" data-tauri-drag-region>
+  <aside class="app-sidebar" :class="{ 'app-sidebar--mobile': mobile }" data-tauri-drag-region>
     <RouterLink
       class="app-sidebar__brand"
       :to="projectTreePath"
@@ -169,7 +174,7 @@ function isExact(to: string) {
     <div v-if="projectId" class="app-sidebar__project">
       <span>当前项目</span>
       <details ref="projectSwitcher" class="app-sidebar__project-switcher">
-        <summary aria-label="切换项目">
+        <summary aria-label="切换项目" tabindex="0">
           <strong :title="projectName">{{ projectName }}</strong>
           <IconChevronDown :size="16" aria-hidden="true" />
         </summary>
@@ -273,6 +278,7 @@ function isExact(to: string) {
 
     <div class="app-sidebar__footer">
       <RouterLink
+        v-if="aiToolsAvailable"
         :to="aiToolsTarget"
         :aria-current="isAiToolsCurrent ? 'page' : undefined"
       ><IconRobot :size="22" aria-hidden="true" />AI 工具</RouterLink>
@@ -543,33 +549,44 @@ function isExact(to: string) {
 }
 
 @media (max-width: 64rem) {
-  .app-sidebar__brand span:not(.app-sidebar__seal),
-  .app-sidebar__project,
-  .app-sidebar__link-label,
-  .app-sidebar__link-copy,
-  .app-sidebar__footer {
+  .app-sidebar:not(.app-sidebar--mobile) .app-sidebar__brand span:not(.app-sidebar__seal),
+  .app-sidebar:not(.app-sidebar--mobile) .app-sidebar__project,
+  .app-sidebar:not(.app-sidebar--mobile) .app-sidebar__link-label,
+  .app-sidebar:not(.app-sidebar--mobile) .app-sidebar__link-copy,
+  .app-sidebar:not(.app-sidebar--mobile) .app-sidebar__footer {
     display: none;
   }
 
-  .app-sidebar__brand,
-  .app-sidebar__link {
+  .app-sidebar:not(.app-sidebar--mobile) .app-sidebar__brand,
+  .app-sidebar:not(.app-sidebar--mobile) .app-sidebar__link {
     min-width: 0;
     justify-content: center;
     gap: 0;
     padding-inline: var(--space-2);
   }
 
-  .app-sidebar__link {
+  .app-sidebar:not(.app-sidebar--mobile) .app-sidebar__link {
     width: 100%;
   }
 
-  .app-sidebar__seal {
+  .app-sidebar:not(.app-sidebar--mobile) .app-sidebar__seal {
     width: 2.5rem;
     height: 2.5rem;
   }
 
-  .app-sidebar__badge {
+  .app-sidebar:not(.app-sidebar--mobile) .app-sidebar__badge {
     display: none;
   }
 }
+
+.app-sidebar--mobile .app-sidebar__brand { flex-direction: row; justify-content: flex-start; gap: .8rem; padding: 1.15rem 3.5rem 1.15rem 1.25rem; text-align: left; }
+.app-sidebar--mobile .app-sidebar__seal { width: 2.75rem; height: 2.75rem; }
+.app-sidebar--mobile .app-sidebar__brand strong { font-size: 1.5rem; }
+.app-sidebar--mobile .app-sidebar__project { margin-inline: 1rem; padding: .75rem .25rem; }
+.app-sidebar--mobile .app-sidebar__project-switcher summary { min-height: 2.75rem; }
+.app-sidebar--mobile .app-sidebar__project-panel { position: static; width: 100%; margin-top: .6rem; }
+.app-sidebar--mobile .app-sidebar__project-panel a { min-height: 2.75rem; align-items: center; }
+.app-sidebar--mobile .app-sidebar__navigation--project { margin-top: 1rem; }
+.app-sidebar--mobile .app-sidebar__footer { gap: .25rem; margin-top: auto; }
+.app-sidebar--mobile .app-sidebar__footer a { min-height: 2.75rem; }
 </style>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
   IconArrowsMove,
@@ -19,6 +19,7 @@ import type {
   Source,
 } from '../../../shared/domain/types'
 import { getPrimaryName } from '../../../shared/domain/personNames'
+import { buildKinshipDescriptions } from '../../../shared/domain/kinship'
 import { useBranchloomRepository } from '../../../shared/repository/injection'
 import QuickAddRelativeDialog from '../../relationships/components/QuickAddRelativeDialog.vue'
 import RelationshipEditor from '../../relationships/components/RelationshipEditor.vue'
@@ -37,14 +38,13 @@ const projectId = computed(() => String(route.params.projectId ?? ''))
 const project = ref<Project>()
 const data = shallowRef<PrototypeState>()
 const directoryPeople = ref<Person[]>([])
-const currentSlice = shallowRef<BoundedFamilySlice>()
-const locatedPeopleRecords = ref<Person[]>([])
 const sliceMeta = ref<Pick<BoundedFamilySlice, 'truncated' | 'limits'>>()
 const locatedRelationshipRecord = ref<Relationship>()
 const researchSources = ref<Source[]>([])
 const researchCitations = ref<Citation[]>([])
 const researchPlaces = ref<Place[]>([])
 const loadState = ref<'loading' | 'ready' | 'error'>('loading')
+const familySliceLoading = ref(false)
 const loadError = ref('')
 const centerPersonId = ref('')
 const selectedPersonId = ref('')
@@ -52,6 +52,10 @@ const mode = ref<TreeMode>('combined')
 const generationsUp = ref(2)
 const generationsDown = ref(2)
 const personSearch = ref('')
+const personSearchState = ref<'idle' | 'loading' | 'ready' | 'error'>('idle')
+const personSearchError = ref('')
+const personSearchTotal = ref(0)
+const pendingSearchPersonId = ref('')
 const collapsedPersonIds = ref<ReadonlySet<string>>(new Set())
 const density = ref<GraphDensity>({
   avatars: true,
@@ -66,17 +70,20 @@ const relationshipEditorOpen = ref(false)
 const researchClosed = ref(false)
 const zoomLevel = ref(1)
 const selectedNodeAnchor = ref<GraphNodeAnchor>()
+const quickActionsVisible = ref(true)
 const graphComponent = ref<{
   fit(): void
   relayout(): void
   zoomIn(): void
   zoomOut(): void
   zoomTo(zoomLevel: number): void
+  locate(personId: string): void
 } | null>(null)
 let latestRequest = 0
 let latestDirectoryRequest = 0
 
-const people = computed(() => data.value?.people.filter(({ deletedAt }) => !deletedAt) ?? [])
+const people = computed(() => uniqueById([...(data.value?.people ?? []), ...directoryPeople.value])
+  .filter(({ deletedAt }) => !deletedAt))
 const relationships = computed(() => data.value?.relationships ?? [])
 const centerPerson = computed(() => people.value.find(({ id }) => id === centerPersonId.value))
 const selectedPerson = computed(() => people.value.find(({ id }) => id === selectedPersonId.value))
@@ -119,6 +126,16 @@ const graph = computed(() => {
     limits: sliceMeta.value.limits,
   }
 })
+const annotations = computed(() => {
+  const query = personSearch.value.trim().toLowerCase()
+  return {
+    searchPersonIds: new Set(query ? [
+      ...graph.value.nodes.filter(({ person }) => person.names.some(({ value }) => value.toLowerCase().includes(query))).map(({ id }) => id),
+      ...(personSearchState.value === 'ready' ? directoryPeople.value.map(({ id }) => id) : []),
+    ] : []),
+    kinships: buildKinshipDescriptions(people.value, relationships.value, selectedPersonId.value),
+  }
+})
 const needsDefaultCenter = computed(() => (
   graph.value.status === 'missing-center'
   && !centerPersonId.value
@@ -141,6 +158,8 @@ const researchFromPerson = computed(() => researchRelationship.value
 watch(projectId, () => {
   latestDirectoryRequest += 1
   personSearch.value = ''
+  personSearchState.value = 'idle'
+  pendingSearchPersonId.value = ''
   researchClosed.value = false
   relationshipEditorOpen.value = false
   void load()
@@ -187,6 +206,15 @@ watch([mode, generationsUp, generationsDown], () => {
 watch(personSearch, () => {
   if (loadState.value === 'ready') void refreshPersonDirectory()
 })
+watch([graph, loadState, pendingSearchPersonId, familySliceLoading], async () => {
+  const personId = pendingSearchPersonId.value
+  if (!personId || loadState.value !== 'ready' || familySliceLoading.value || graph.value.thresholdExceeded
+    || !graph.value.nodes.some(({ id }) => id === personId)) return
+  pendingSearchPersonId.value = ''
+  selectPerson(personId, false)
+  await nextTick()
+  graphComponent.value?.locate(personId)
+}, { flush: 'post' })
 
 function locateRelationship() {
   if (loadState.value !== 'ready' || !locatedRelationship.value) return
@@ -199,8 +227,10 @@ async function load() {
   const scopedProjectId = projectId.value
   const requestedPreviewPersonId = previewPersonId.value
   loadState.value = 'loading'
+  familySliceLoading.value = false
   loadError.value = ''
   quickAddOpen.value = false
+  quickActionsVisible.value = true
   selectedPersonId.value = ''
   selectedNodeAnchor.value = undefined
   try {
@@ -264,6 +294,7 @@ async function load() {
       void router.replace({ query: { ...query, personId: legacyPersonId } })
     }
     loadState.value = 'ready'
+    if (personSearch.value.trim()) void refreshPersonDirectory()
     locateRelationship()
     if (previewPerson) selectedPersonId.value = previewPerson.id
   } catch (error) {
@@ -296,8 +327,6 @@ function applySlice(
   locatedPeople: Person[] = [],
   targetRelationship?: Relationship,
 ) {
-  currentSlice.value = slice
-  locatedPeopleRecords.value = locatedPeople
   locatedRelationshipRecord.value = targetRelationship
   sliceMeta.value = slice
     ? { truncated: slice.truncated, limits: slice.limits }
@@ -319,20 +348,24 @@ async function refreshPersonDirectory() {
   if (!project.value) return
   const request = ++latestDirectoryRequest
   const scopedProjectId = project.value.id
+  const query = personSearch.value.trim()
+  personSearchState.value = query ? 'loading' : 'idle'
+  personSearchError.value = ''
   try {
     const page = await repository.listPeople(scopedProjectId, {
       page: 1,
       pageSize: 100,
-      ...(personSearch.value.trim() ? { search: personSearch.value.trim() } : {}),
+      ...(query ? { search: query } : {}),
       sort: 'name',
     })
     if (request !== latestDirectoryRequest || scopedProjectId !== projectId.value || !project.value) return
     directoryPeople.value = page.items
-    applySlice(project.value, currentSlice.value, locatedPeopleRecords.value, locatedRelationshipRecord.value)
+    personSearchTotal.value = page.total
+    personSearchState.value = query ? 'ready' : 'idle'
   } catch (error) {
-    if (request !== latestDirectoryRequest) return
-    loadError.value = error instanceof Error ? error.message : '人物跳转目录无法读取'
-    loadState.value = 'error'
+    if (request !== latestDirectoryRequest || scopedProjectId !== projectId.value) return
+    personSearchError.value = error instanceof Error ? error.message : '人物搜索未能完成'
+    personSearchState.value = 'error'
   }
 }
 
@@ -340,6 +373,7 @@ async function refreshFamilySlice(personId: string) {
   if (!project.value) return
   const request = ++latestRequest
   const scopedProjectId = project.value.id
+  familySliceLoading.value = true
   loadError.value = ''
   try {
     const slice = await loadSlice(scopedProjectId, personId)
@@ -350,6 +384,8 @@ async function refreshFamilySlice(personId: string) {
     if (request !== latestRequest) return
     loadError.value = error instanceof Error ? error.message : '本地家谱资料无法读取'
     loadState.value = 'error'
+  } finally {
+    if (request === latestRequest) familySliceLoading.value = false
   }
 }
 
@@ -369,6 +405,13 @@ async function changeCenter(personId: string) {
   await router.replace({ query: { ...query, personId } })
 }
 
+async function jumpToSearchPerson(personId: string) {
+  pendingSearchPersonId.value = personId
+  if (!graph.value.nodes.some(({ id }) => id === personId)) {
+    await changeCenter(personId)
+  }
+}
+
 async function closePersonPreview() {
   quickAddOpen.value = false
   selectedPersonId.value = ''
@@ -385,9 +428,10 @@ async function changeMode(nextMode: TreeMode) {
   if (selectedId && selectedId !== centerPersonId.value) await changeCenter(selectedId)
 }
 
-function selectPerson(personId: string) {
+function selectPerson(personId: string, showQuickActions = true) {
   if (personId !== selectedPersonId.value) selectedNodeAnchor.value = undefined
   selectedPersonId.value = personId
+  quickActionsVisible.value = showQuickActions
 }
 
 function updateSelectedNodeAnchor(anchor: GraphNodeAnchor | undefined) {
@@ -456,6 +500,7 @@ function handleTreeEscape(event: KeyboardEvent) {
 onMounted(() => document.addEventListener('keydown', handleTreeEscape))
 onBeforeUnmount(() => {
   latestRequest += 1
+  latestDirectoryRequest += 1
   document.removeEventListener('keydown', handleTreeEscape)
 })
 
@@ -480,6 +525,10 @@ defineExpose({ fitCanvas, addPerson })
       :people="people"
       :center-person-id="centerPersonId"
       :person-search="personSearch"
+      :search-results="directoryPeople"
+      :search-state="personSearchState"
+      :search-error="personSearchError"
+      :search-total="personSearchTotal"
       :collapsed-count="collapsedPersonIds.size"
       :zoom-level="zoomLevel"
       @update-mode="changeMode"
@@ -488,6 +537,8 @@ defineExpose({ fitCanvas, addPerson })
       @update-density="density = $event"
       @update-person-search="personSearch = $event"
       @jump="changeCenter"
+      @locate="jumpToSearchPerson"
+      @retry-search="refreshPersonDirectory"
       @relayout="graphComponent?.relayout()"
       @zoom-in="graphComponent?.zoomIn()"
       @zoom-out="graphComponent?.zoomOut()"
@@ -548,6 +599,7 @@ defineExpose({ fitCanvas, addPerson })
           :graph="graph"
           :density="density"
           :selected-person-id="selectedPersonId"
+          :annotations="annotations"
           @node-click="selectPerson"
           @node-double-click="changeCenter"
           @canvas-click="closePersonPreview"
@@ -555,7 +607,7 @@ defineExpose({ fitCanvas, addPerson })
           @zoom-change="zoomLevel = $event"
         />
         <PersonQuickActions
-          v-if="selectedPerson && selectedNodeAnchor"
+          v-if="selectedPerson && selectedNodeAnchor && quickActionsVisible"
           :person-name="primaryName(selectedPerson)"
           :anchor="selectedNodeAnchor"
           @action="openQuickAdd"

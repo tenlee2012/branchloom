@@ -1,0 +1,77 @@
+import { expect, test } from '@playwright/test'
+import { DEMO_PROJECT_PATH, expectNoRuntimeErrors, openProjectMenu, resetDemo, watchRuntimeErrors } from './helpers/demo'
+
+test.beforeEach(async ({ page }) => resetDemo(page))
+
+for (const width of [1440, 900, 390, 320]) {
+  test(`query from a person, swap, refresh and return with a shared shell at ${width}px`, async ({ page }, testInfo) => {
+    const errors = watchRuntimeErrors(page)
+    await page.setViewportSize({ width, height: 1000 })
+    const detailPath = `${DEMO_PROJECT_PATH}/people/person-lin-chen`
+    await page.goto(detailPath)
+    await page.getByRole('button', { name: '查称呼', exact: true }).click()
+    await expect(page.getByRole('heading', { name: '查称呼', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: '谁来称呼：林晨', exact: true })).toBeVisible()
+    await page.getByRole('button', { name: '称呼谁：选择人物' }).click()
+    const search = page.getByRole('searchbox', { name: '称呼谁：搜索人物' })
+    await search.fill('海叔')
+    await search.press('ArrowDown')
+    const result = page.getByRole('region', { name: '称呼谁', exact: true }).getByRole('button', { name: /林海/ })
+    await expect(result).toBeFocused()
+    await page.keyboard.press('Enter')
+    const forward = page.locator('[data-kinship-direction="forward"]')
+    const reverse = page.locator('[data-kinship-direction="reverse"]')
+    await expect(forward).toContainText('爸爸')
+    await expect(reverse).toContainText('女儿')
+    await expect(page.locator('.kinship-view__path')).toContainText('林晨 → 爸爸：林海')
+    await page.screenshot({ path: testInfo.outputPath(`kinship-${width}.png`) })
+
+    await page.getByRole('button', { name: '交换两个人物' }).click()
+    await expect(forward).toContainText('女儿')
+    await expect(reverse).toContainText('爸爸')
+    await page.getByRole('button', { name: '刷新资料', exact: true }).click()
+    await expect(forward).toContainText('女儿')
+    await page.reload()
+    await expect(forward).toContainText('女儿')
+    await expect(page.locator('.app-topbar')).toBeVisible()
+    expect(await page.locator('html').evaluate((element) => element.scrollWidth)).toBeLessThanOrEqual(width)
+    if (width < 768) {
+      const menu = await openProjectMenu(page)
+      const current = menu.getByRole('link', { name: '查称呼', exact: true })
+      await expect(current).toHaveAttribute('aria-current', 'page')
+      expect((await current.boundingBox())!.height).toBeGreaterThanOrEqual(44)
+      await page.keyboard.press('Escape')
+      await expect(menu).toHaveCount(0)
+    } else {
+      await expect(page.getByRole('navigation', { name: '项目导航', exact: true }).getByRole('link', { name: '查称呼', exact: true })).toHaveAttribute('aria-current', 'page')
+    }
+    const back = page.getByRole('link', { name: '返回人物详情', exact: true })
+    await back.focus()
+    await expect(back).toHaveCSS('outline-style', 'solid')
+    await page.keyboard.press('Enter')
+    await expect(page).toHaveURL(detailPath)
+    expectNoRuntimeErrors(errors)
+  })
+}
+
+test('standalone entry searches both people and keeps a no-match search distinct from a disconnected pair', async ({ page }) => {
+  const errors = watchRuntimeErrors(page)
+  await page.getByRole('navigation', { name: '项目导航', exact: true }).getByRole('link', { name: '查称呼', exact: true }).click()
+  await expect(page.getByText('从两个人的名字开始', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '谁来称呼：选择人物' }).click()
+  const fromSearch = page.getByRole('searchbox', { name: '谁来称呼：搜索人物' })
+  await fromSearch.fill('晨晨')
+  await fromSearch.press('Enter')
+  await page.getByRole('button', { name: '称呼谁：选择人物' }).click()
+  const toSearch = page.getByRole('searchbox', { name: '称呼谁：搜索人物' })
+  await toSearch.fill('查无此人的测试')
+  await expect(page.getByRole('region', { name: '称呼谁', exact: true })).toContainText('未找到匹配人物')
+  await toSearch.press('Escape')
+  await expect(page.getByRole('button', { name: '称呼谁：选择人物' })).toBeFocused()
+  await page.getByRole('button', { name: '称呼谁：选择人物' }).click()
+  await page.getByRole('searchbox', { name: '称呼谁：搜索人物' }).fill('小晨')
+  await page.getByRole('searchbox', { name: '称呼谁：搜索人物' }).press('Enter')
+  await expect(page.getByText('当前资料中未找到关系路径', { exact: true })).toBeVisible()
+  await expect(page.locator('[data-kinship-direction]')).toHaveCount(0)
+  expectNoRuntimeErrors(errors)
+})

@@ -1,5 +1,5 @@
 import { expect, test, type Locator } from '@playwright/test'
-import { DEMO_PROJECT_PATH, resetDemo } from './helpers/demo'
+import { DEMO_PROJECT_PATH, openProjectMenu, resetDemo } from './helpers/demo'
 
 test.beforeEach(async ({ page }) => resetDemo(page))
 
@@ -38,7 +38,8 @@ for (const width of [320, 390]) {
     const refresh = topbar.getByRole('button', { name: '刷新资料', exact: true })
     const addPerson = topbar.getByRole('button', { name: '添加人物', exact: true })
 
-    for (const button of [refresh, addPerson]) {
+    const menuButton = topbar.getByRole('button', { name: '打开菜单', exact: true })
+    for (const button of [menuButton, refresh, addPerson]) {
       await expect(button).toBeVisible()
       const bounds = await button.boundingBox()
       expect(bounds!.width).toBeGreaterThanOrEqual(44)
@@ -51,7 +52,7 @@ for (const width of [320, 390]) {
     const projectName = topbar.locator('.app-topbar__mobile-project')
     await expect(projectName).toBeVisible()
     const titleArea = await topbar.locator('.app-topbar__drag-surface').boundingBox()
-    expect(titleArea!.width).toBeGreaterThan(width * 0.45)
+    expect(titleArea!.width).toBeGreaterThanOrEqual(120)
     await expectNoOverflow(topbar)
 
     await refresh.click()
@@ -82,8 +83,8 @@ for (const width of [320, 390]) {
     await newPerson.click()
     await expect(page).toHaveURL(`${DEMO_PROJECT_PATH}/people/new`)
 
-    await page.getByRole('navigation', { name: '移动端项目导航' })
-      .getByRole('link', { name: '时间', exact: true }).click()
+    const menu = await openProjectMenu(page)
+    await menu.getByRole('link', { name: '时间线', exact: true }).click()
     await expect(page).toHaveURL(`${DEMO_PROJECT_PATH}/timeline`)
     const timelineHeader = page.locator('.timeline-view__heading')
     await expect(timelineHeader.locator('.timeline-view__count')).toHaveText(/8\s*件事件/)
@@ -105,6 +106,7 @@ for (const width of [320, 390]) {
 test('desktop keeps text labels on tree actions and readable page headings', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 })
   const topbar = page.locator('.app-topbar')
+  await expect(topbar.getByRole('button', { name: '打开菜单' })).toHaveCount(0)
   await expect(topbar.locator('.data-refresh__label')).toBeVisible()
   await expect(topbar.locator('.app-topbar__add-person-label')).toBeVisible()
   await expect(topbar.getByRole('button', { name: '适应画布' })).toBeVisible()
