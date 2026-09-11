@@ -369,6 +369,7 @@ onBeforeUnmount(() => {
       @delete="openDelete"
       @add-relationship="openNewRelationship"
       @quick-add-relative="quickAddOpen = true"
+      @query-kinship="router.push({ name: 'project-kinship', params: { projectId }, query: { from: person.id, returnTo: route.fullPath } })"
       @edit-relationship="openRelationship"
       @add-career="openNewCareer"
       @edit-career="openCareer"

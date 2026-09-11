@@ -38,6 +38,13 @@ export async function openDemo(page: Page, suffix = '/tree'): Promise<void> {
   await expect(page.getByRole('navigation', { name: '项目导航' })).toBeVisible()
 }
 
+export async function openProjectMenu(page: Page) {
+  await page.getByRole('button', { name: '打开菜单', exact: true }).click()
+  const menu = page.getByRole('dialog', { name: '项目菜单', exact: true })
+  await expect(menu).toBeVisible()
+  return menu
+}
+
 export function watchRuntimeErrors(page: Page): string[] {
   const errors: string[] = []
   page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`))

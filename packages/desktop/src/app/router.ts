@@ -91,6 +91,15 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '人物', eyebrow: '人物档案与检索' },
       },
       {
+        path: 'kinship',
+        name: 'project-kinship',
+        component: () => import('../features/kinship/views/KinshipView.vue'),
+        meta: {
+          title: '查称呼',
+          parent: { name: 'project-people', label: '返回人物列表', inheritParams: ['projectId'] },
+        },
+      },
+      {
         path: 'people/new',
         name: 'person-new',
         component: () => import('../features/people/views/PersonEditView.vue'),
@@ -265,7 +274,9 @@ export function createAppRouter(
 
   router.beforeEach(async (to, from) => {
     if (to.meta.backBehavior === 'history' && from.name) {
-      to.meta.previousFullPath = from.fullPath
+      to.meta.previousFullPath = to.fullPath === from.fullPath
+        ? from.meta.previousFullPath
+        : from.fullPath
     }
     if (to.meta.requiresAiTools === true && !(await runtimeCapabilities()).aiTools) {
       const projectId = String(to.params.projectId ?? '')
