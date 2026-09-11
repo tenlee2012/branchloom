@@ -154,7 +154,7 @@ describe('people list', () => {
   })
 
   it.each([
-    ['主姓名', '赵雯', ['林晨', '赵雯']],
+    ['主姓名', '赵雯', ['赵雯', '林晨']],
     ['别名', '海叔', ['林海']],
     ['生平', '机械设计', ['林海']],
   ])('searches repository-backed %s text after 200 ms', async (_kind, search, expectedNames) => {

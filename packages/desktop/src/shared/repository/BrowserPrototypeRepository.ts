@@ -1,7 +1,7 @@
 import { compareGenealogyDates, normalizeIsoDate, validateLifeDates } from '../domain/date'
 import { findDuplicateNameEvidence } from '../domain/duplicateInspection'
 import { eventTypeLabel } from '../domain/eventTypes'
-import { getPrimaryName, personNameTypeLabels } from '../domain/personNames'
+import { getNameSearchRank, getPrimaryName, personNameTypeLabels } from '../domain/personNames'
 import { hasAncestorCycle, validateRelationship } from '../domain/relationships'
 import { createPersonMergePreview } from '../domain/personMerge'
 import { traverseFamilyGraph } from '../domain/familyGraph'
@@ -383,7 +383,7 @@ export class BrowserPrototypeRepository implements BranchloomRepository {
       people = people.filter((person) => this.personHasIssues(person) === safeQuery.hasIssues)
     }
 
-    people = [...people].sort((left, right) => this.comparePeople(left, right, safeQuery.sort))
+    people = [...people].sort((left, right) => this.comparePeople(left, right, safeQuery.sort, search))
     const total = people.length
     const start = (safeQuery.page - 1) * safeQuery.pageSize
     return cloneValue({
@@ -1831,10 +1831,11 @@ export class BrowserPrototypeRepository implements BranchloomRepository {
     ) || validateLifeDates(person).length > 0
   }
 
-  private comparePeople(left: Person, right: Person, sort: PersonQuery['sort']): number {
+  private comparePeople(left: Person, right: Person, sort: PersonQuery['sort'], search?: string): number {
     let result = 0
     if (sort === 'name') {
-      result = getPrimaryName(left).localeCompare(getPrimaryName(right), 'zh-CN')
+      result = search ? getNameSearchRank(left, search) - getNameSearchRank(right, search) : 0
+      result ||= getPrimaryName(left).localeCompare(getPrimaryName(right), 'zh-CN')
     } else if (sort === 'updatedAt') {
       result = right.updatedAt.localeCompare(left.updatedAt)
     } else if (left.birth && right.birth) {

@@ -1,7 +1,30 @@
 import { expect, test } from '@playwright/test'
-import { expectNoRuntimeErrors, resetDemo, watchRuntimeErrors } from './helpers/demo'
+import { expectNoRuntimeErrors, openDemo, resetDemo, watchRuntimeErrors } from './helpers/demo'
 
 test.beforeEach(async ({ page }) => resetDemo(page))
+
+test('exact-name matches come first in tree search and the people list', async ({ page }) => {
+  const errors = watchRuntimeErrors(page)
+  const treeSearch = page.getByRole('searchbox', { name: '搜索跳转人物' })
+  await treeSearch.fill('赵雯')
+  const results = page.getByRole('region', { name: '人物搜索结果' })
+  await expect(results).toContainText('找到 2 位人物')
+  await expect(results.getByRole('button').first()).toHaveAttribute('aria-label', '定位赵雯')
+  await treeSearch.press('Enter')
+  await expect(page.getByText('赵雯对其他人物的称呼', { exact: true })).toBeVisible()
+
+  await openDemo(page, '/people')
+  const peopleSearch = page.getByRole('searchbox', { name: '搜索人物', exact: true })
+  await peopleSearch.fill('赵雯')
+  await expect(page.locator('[data-person-name]')).toHaveText(['赵雯', '林晨'])
+  await expect(page.getByRole('option', { name: '按匹配程度' })).toBeAttached()
+  await page.reload()
+  await expect(page.locator('[data-person-name]')).toHaveText(['赵雯', '林晨'])
+  await peopleSearch.fill('')
+  await expect(page.locator('[data-person-name]').first()).toHaveText('陈芳')
+  await expect(page.getByRole('option', { name: '按姓名', exact: true })).toBeAttached()
+  expectNoRuntimeErrors(errors)
+})
 
 for (const width of [1440, 900]) {
   test(`partial-name search highlights and locates a person at ${width}px`, async ({ page }, testInfo) => {

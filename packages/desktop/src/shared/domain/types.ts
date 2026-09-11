@@ -291,6 +291,7 @@ export interface PersonQuery {
   hasIssues?: boolean
   page: number
   pageSize: number
+  /** With a search term, name ordering prioritizes name relevance before name and id ties. */
   sort: 'name' | 'updatedAt' | 'birth'
 }
 

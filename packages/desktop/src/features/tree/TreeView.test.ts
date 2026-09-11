@@ -302,6 +302,20 @@ describe('TreeView', () => {
     expect(wrapper.get('[aria-label="定位远房人物"]').isVisible()).toBe(true)
   })
 
+  it('puts an exact name before biography mentions and locates that person with Enter', async () => {
+    const { wrapper, locate } = await mountTree()
+    const search = wrapper.get('input[aria-label="搜索跳转人物"]')
+    await search.setValue('赵雯')
+    await flushPromises()
+
+    const results = wrapper.get('[aria-label="人物搜索结果"]').findAll('li button')
+    expect(results.map((button) => button.attributes('aria-label'))).toEqual(['定位赵雯', '定位林晨'])
+    await search.trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    expect(locate).toHaveBeenCalledWith('person-zhao-wen')
+    expect(wrapper.getComponent({ name: 'FamilyGraph' }).props('selectedPersonId')).toBe('person-zhao-wen')
+  })
+
   it('shows partial-name matches, highlights them without resetting the graph, and locates the result', async () => {
     const { wrapper, router, locate } = await mountTree()
     const canvas = wrapper.getComponent({ name: 'FamilyGraph' })

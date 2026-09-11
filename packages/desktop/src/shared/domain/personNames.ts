@@ -42,6 +42,18 @@ export function getPrimaryName(person: Pick<Person, 'names'>): string {
   return getPrimaryNameRecord(person)?.value ?? '未命名人物'
 }
 
+/** Lower ranks prefer exact names, then prefixes, then substrings over matches in other fields. */
+export function getNameSearchRank(person: Pick<Person, 'names'>, query: string): number {
+  const search = query.trim().toLocaleLowerCase()
+  if (!search) return 0
+  const primaryName = getPrimaryNameRecord(person)
+  return person.names.reduce((best, name) => {
+    const value = name.value.trim().toLocaleLowerCase()
+    const rank = value === search ? 0 : value.startsWith(search) ? 2 : value.includes(search) ? 4 : 6
+    return Math.min(best, rank + (name === primaryName ? 0 : 1))
+  }, 6)
+}
+
 export function isPrimaryName(_person: Pick<Person, 'names'>, name: PersonName): boolean {
   return name.primary
 }

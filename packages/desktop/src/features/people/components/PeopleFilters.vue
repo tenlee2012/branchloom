@@ -215,7 +215,7 @@ function inputValue(event: Event): string {
           aria-label="排序方式"
           @change="emit('update:sort', inputValue($event))"
         >
-          <option value="name">按姓名</option>
+          <option value="name">{{ search.trim() ? '按匹配程度' : '按姓名' }}</option>
           <option value="updatedAt">最近更新</option>
           <option value="birth">按出生时间</option>
         </select>
