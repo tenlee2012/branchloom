@@ -12,6 +12,11 @@ const destinations = computed(() => [
     active: route.path.endsWith('/manage/exchange'),
   },
   {
+    label: '编印族谱',
+    path: `/project/${projectId.value}/manage/publication`,
+    active: route.path.endsWith('/manage/publication'),
+  },
+  {
     label: '备份与历史',
     path: `/project/${projectId.value}/manage/history`,
     active: route.path.endsWith('/manage/history'),
@@ -50,7 +55,8 @@ const destinations = computed(() => [
   display: grid;
   min-height: 2.75rem;
   align-items: center;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-2);
   padding: .3rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -71,6 +77,8 @@ const destinations = computed(() => [
 .project-management-tabs__links {
   display: flex;
   grid-column: 2;
+  flex-wrap: wrap;
+  justify-content: center;
   justify-self: center;
   gap: .2rem;
 }
@@ -87,6 +95,7 @@ const destinations = computed(() => [
   font-weight: 650;
   line-height: 1;
   text-decoration: none;
+  white-space: nowrap;
 }
 
 .project-management-tabs a:hover {

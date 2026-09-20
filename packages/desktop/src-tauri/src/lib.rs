@@ -48,6 +48,8 @@ pub fn run() {
             commands::set_local_attachment,
             commands::read_attachment,
             commands::export_project_archive,
+            commands::publication_request,
+            commands::save_publication_pdf,
             commands::import_project_archive,
             commands::export_project_gedcom,
             commands::import_project_gedcom,

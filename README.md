@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  本地优先 · 无需注册 · 开放格式 · 家人异步协作 · 支持 macOS / Windows / Linux / Android
+  本地优先 · 无需注册 · 开放格式 · 家人异步协作 · 族谱编印 · 支持 macOS / Windows / Linux / Android
 </p>
 
 <p align="center">
@@ -104,6 +104,30 @@ Android 端目前不提供 CLI、Codex Skill 安装或“AI 工具”页面。
 - 管理地点、家庭事件、史料来源、引文与本地附件。
 - 在“查称呼”页面搜索并选择当前项目中的任意两个人物，自动查看双向日常称呼、交换人物及查看最短关系路径；人物详情和家谱树人物预览提供预填当前人物的快捷入口。查询独立于画布显示代数，按当前项目的完整人物与关系资料推算，支持桌面与手机布局；资料缺失或读取失败时明确提示，不将称呼写入家谱资料。
 
+### 编印纸质族谱
+
+在“项目管理 → 编印族谱”中，把家谱资料生成可直接打印的 PDF。支持三种成品：
+
+| 成品 | 展示形式与用途 |
+| --- | --- |
+| 现代横排谱册 | 横排文字、人物传记与资料章节，适合日常阅读和装订保存 |
+| 传统中文谱册 | 竖排宋体、自右向左阅读、右侧装订，适合传统谱册形式 |
+| 世系挂图 | 人物卡片与关系连线，支持单页大幅和多页拼接 |
+
+- 按全谱、分支、祖先或后代确定范围，设置关系类型、代数和排除人物；编印读取完整项目，不受家谱画布显示范围限制。
+- 谱册可组合封面、谱序、目录、世系图、人物传记、大事记、来源、附录和姓名索引；照片保持比例，已有 PDF 史料可按指定页序收入附录。
+- 支持 A4、A3、ISO B5、自定义纸张和镜像装订边距。传统正文中的数字和拉丁字符逐字直立；挂图跨页关系标明双方人物编号和页码。
+- 生成过程离线执行，内置中文字体；预览和保存使用同一份 PDF，包含可搜索文字、章节书签及内部页码链接。资料或方案变化后需重新生成。
+- 可保存、复制和删除多套编印方案，更新家谱资料后按原方案重新生成。方案随 `.blp` 和 GitHub 项目同步保留。
+
+使用时先设置收录范围、章节和纸张，点击生成，核对校对报告及 PDF 预览，再点击保存并在系统对话框中选择位置。生成和保存不会改写人物资料。
+
+在 PDF 阅读器中按实际纸张大小打印；分幅挂图按 100% 比例及页面上的行列编号拼接，双面谱册使用长边翻转。成品使用自然页序，印刷厂折手拼版由打印端处理。文件已存在时选择新名称保存。
+
+升级后项目格式为 `1.1.0`，兼容读取原有 `1.0.0` 项目；与家人交换新版 `.blp` 或同步项目时，各端应先升级到 v0.1.8 或更高版本。升级前建议导出一份 `.blp` 备份。
+
+macOS 原生流程和三种 PDF 成品已完成验收，Android 功能与样式已由用户真机验收确认。Windows、Linux 的编印交互实机验收、Android 万人负载测量及实体打印装订尚未完成。详见 [验证记录](specs/genealogy-publication-verification.md)、[PDF 成品验收](specs/genealogy-publication-pdf-review.md)和[Android 复测清单](specs/genealogy-publication-android-acceptance.md)。
+
 ### 核对、备份与迁移
 
 - 搜索人物，并检查日期异常、关系问题、重复人物和缺失附件。
@@ -139,12 +163,13 @@ Android 端目前不提供 CLI、Codex Skill 安装或“AI 工具”页面。
 
 | 文件名示例 | 适用设备 |
 | --- | --- |
-| `Branchloom_Desktop_Windows_x64_v0.1.5-setup.exe` | Windows 桌面电脑 |
-| `Branchloom_Desktop_macOS_Apple-Silicon_v0.1.5.dmg` | Apple 芯片 Mac（M1 及后续型号） |
-| `Branchloom_Desktop_macOS_Intel_v0.1.5.dmg` | Intel 芯片 Mac |
-| `Branchloom_Desktop_Linux_x64_v0.1.5.AppImage` / `.deb` | 64 位 Linux 桌面电脑 |
-| `Branchloom_Android_arm64_v0.1.5_release.apk` | Android 12 及以上的 ARM64 设备；已签名的 Release APK |
-| `Branchloom_iOS_arm64_v0.1.5.ipa` | iPhone；iOS 安装包尚未提供，此名称为后续发布预留 |
+| `Branchloom_Desktop_Windows_x64_v0.1.8-setup.exe` | Windows 桌面电脑 |
+| `Branchloom_Desktop_macOS_Apple-Silicon_v0.1.8.dmg` | Apple 芯片 Mac（M1 及后续型号） |
+| `Branchloom_Desktop_macOS_Intel_v0.1.8.dmg` | Intel 芯片 Mac |
+| `Branchloom_Desktop_Linux_x64_v0.1.8.AppImage` / `.deb` | 64 位 Linux 桌面电脑 |
+| `Branchloom_Android_arm64_v0.1.8_release.apk` | Android 12 及以上的 ARM64 设备；已签名的 Release APK |
+
+暂不提供 iOS 安装包。
 
 <details>
 <summary><strong>Android 安装提示</strong></summary>
@@ -196,6 +221,14 @@ pnpm install
 pnpm dev
 ```
 
+桌面开发验收可通过绝对路径指定隔离数据目录：
+
+```bash
+BRANCHLOOM_DATA_DIR="$(mktemp -d)" pnpm tauri dev
+```
+
+该桌面环境变量仅在 Debug 构建生效；正式安装版继续使用平台标准数据目录。
+
 常用检查：
 
 ```bash
@@ -207,14 +240,14 @@ pnpm test:cli
 发布版本只维护根 `Cargo.toml` 中的一处 workspace 版本。使用命令更新版本并自动刷新 `Cargo.lock`：
 
 ```bash
-pnpm release:version 0.1.6
+pnpm release:version 0.1.8
 ```
 
-发布 tag 必须与 workspace 版本一致，例如版本 `0.1.6` 对应 `v0.1.6`。
+发布 tag 必须与 workspace 版本一致，例如版本 `0.1.8` 对应 `v0.1.8`。
 
-版本发布说明保存在 `.github/release-notes/<tag>.md`（如 `.github/release-notes/v0.1.6.md`）。发布流水线创建或更新 Release 时优先使用对应说明；缺少该文件时使用默认安装说明。
+版本发布说明保存在 `.github/release-notes/<tag>.md`（如 [v0.1.8](.github/release-notes/v0.1.8.md)）。推送 tag 后，流水线先执行类型检查、前端与 Rust 测试，再创建 Release 草稿并上传各平台安装包；全部构建成功后再将草稿正式发布。缺少对应说明时使用默认安装说明。
 
-Android 构建（`pnpm build:android`、`pnpm build:android:release`）以及通过 `pnpm tauri android` 调用的初始化、开发和构建命令，会自动读取同一 workspace 版本并传给 Tauri。APK 的 `versionName` 与该版本一致，`versionCode` 按 [Tauri 默认规则](https://v2.tauri.app/reference/config/#versioncode) `major × 1000000 + minor × 1000 + patch` 生成，例如 `0.1.5` 对应 `1005`。无需在 `tauri.conf.json` 或生成的 `gen/android` 中另行维护版本号。
+Android 构建（`pnpm build:android`、`pnpm build:android:release`）以及通过 `pnpm tauri android` 调用的初始化、开发和构建命令，会自动读取同一 workspace 版本并传给 Tauri。APK 的 `versionName` 与该版本一致，`versionCode` 按 [Tauri 默认规则](https://v2.tauri.app/reference/config/#versioncode) `major × 1000000 + minor × 1000 + patch` 生成，例如 `0.1.8` 对应 `1008`。无需在 `tauri.conf.json` 或生成的 `gen/android` 中另行维护版本号。
 
 本地生成可安装的 Android Release APK，先复制 `.env.android.example` 为 `.env.android.local`，填入签名密钥的绝对路径 `ANDROID_KEYSTORE_PATH` 和别名 `ANDROID_KEY_ALIAS`，再运行：
 

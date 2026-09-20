@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import { pdfAssets } from './scripts/pdf-assets'
 
 const bridgePort = process.env.BRANCHLOOM_WEB_BRIDGE_PORT
 const bridgeToken = process.env.BRANCHLOOM_WEB_BRIDGE_TOKEN
@@ -15,7 +16,7 @@ const bridgeProxy = bridgePort && bridgeToken
   : undefined
 
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [vue(), pdfAssets()],
   server: {
     host: '127.0.0.1',
     port: 5173,

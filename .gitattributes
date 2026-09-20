@@ -1,0 +1,2 @@
+# PDF fixtures contain byte offsets and fixed-width cross-reference records.
+*.pdf binary

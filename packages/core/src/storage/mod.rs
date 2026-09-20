@@ -14,7 +14,8 @@ use crate::core::project::{NewProject, ProjectPatch, ProjectRecord};
 use crate::project_format::{ProjectData, PROJECT_COLLECTIONS};
 
 const INITIAL_MIGRATION: &str = include_str!("../../migrations/0001_initial.sql");
-pub const CURRENT_SCHEMA_VERSION: i64 = 5;
+const PUBLICATION_MIGRATION: &str = include_str!("../../migrations/0006_publication_plans.sql");
+pub const CURRENT_SCHEMA_VERSION: i64 = 6;
 pub const NORMALIZED_STATE_VERSION: u64 = 2;
 
 const LEGACY_TABLES: [&str; 23] = [
@@ -179,6 +180,7 @@ impl Storage {
         }
         if version == 0 {
             self.connection.execute_batch(INITIAL_MIGRATION)?;
+            self.connection.execute_batch(PUBLICATION_MIGRATION)?;
             return Ok(());
         }
         if self.table_exists("branchloom_metadata")? {
@@ -196,7 +198,7 @@ impl Storage {
                         CASE WHEN EXISTS(SELECT 1 FROM projects) THEN '1' ELSE '0' END",
                 [],
             )?;
-            transaction.pragma_update(None, "user_version", CURRENT_SCHEMA_VERSION)?;
+            transaction.execute_batch(PUBLICATION_MIGRATION)?;
             transaction.commit()?;
             return Ok(());
         }
@@ -287,6 +289,7 @@ impl Storage {
                 transaction.execute(&format!("DROP TABLE IF EXISTS {table}"), [])?;
             }
             transaction.execute_batch(INITIAL_MIGRATION)?;
+            transaction.execute_batch(PUBLICATION_MIGRATION)?;
             if let Some((state, payloads)) = parsed_state.as_ref() {
                 insert_normalized_state(&transaction, state, payloads)?;
                 mark_state_initialized(&transaction)?;
@@ -369,6 +372,7 @@ impl Storage {
             updated_at: timestamp,
             last_backup_at: None,
             backup_schedule: "weekly".to_owned(),
+            publication_plans: Vec::new(),
         };
         let data_json = serde_json::to_string(&project)?;
         let transaction = self
@@ -441,7 +445,8 @@ impl Storage {
             .expect("project serializes as object");
         for (key, value) in patch {
             match key.as_str() {
-                "name" | "description" | "defaultPersonId" | "backupSchedule" => {
+                "name" | "description" | "defaultPersonId" | "backupSchedule"
+                | "publicationPlans" => {
                     if value.is_null() {
                         object.remove(key);
                     } else {
@@ -456,6 +461,7 @@ impl Storage {
                 }
             }
         }
+        crate::publication::plan::validate_plans(project.get("publicationPlans"))?;
         let name = require_name(
             project
                 .get("name")
@@ -1150,6 +1156,14 @@ impl Storage {
         bump_data_revision(&transaction)?;
         transaction.commit()?;
         Ok(())
+    }
+
+    pub fn publication_snapshot(&self, project_id: &str) -> CoreResult<(i64, ProjectData)> {
+        let transaction = self.connection.unchecked_transaction()?;
+        let revision = self.data_revision()?;
+        let data = self.export_project_data(project_id)?;
+        transaction.commit()?;
+        Ok((revision, data))
     }
 
     pub fn export_project_data(&self, project_id: &str) -> CoreResult<ProjectData> {
@@ -2257,6 +2271,7 @@ fn collection_table(collection: &str) -> &'static str {
 }
 
 fn insert_project_json(transaction: &Transaction<'_>, value: &Value) -> CoreResult<()> {
+    crate::publication::plan::validate_plans(value.get("publicationPlans"))?;
     let id = required_string(value, "id")?;
     let name = required_string(value, "name")?;
     let description = value
@@ -2282,6 +2297,7 @@ fn insert_project_json(transaction: &Transaction<'_>, value: &Value) -> CoreResu
 }
 
 fn upsert_project_json(transaction: &Transaction<'_>, value: &Value) -> CoreResult<()> {
+    crate::publication::plan::validate_plans(value.get("publicationPlans"))?;
     let id = required_string(value, "id")?;
     let name = required_string(value, "name")?;
     let description = value

@@ -3,6 +3,10 @@
 通过共享 Rust 应用核心离线访问 Branchloom 的原生命令行工具。桌面端和 CLI 使用同一个
 `branchloom-core::ApplicationService`、SQLite Schema 和存储实现。
 
+编印方案属于项目的可选 `publicationPlans` 字段，随完整项目导入、导出和同步保留。新导出使用项目格式 `1.1.0`，仍可读取 `1.0.0`；共享数据库升级到 schema 6，CLI contract version 仍为 `3`。编印方案编辑及 PDF 生成入口在应用的“编印族谱”页面，当前没有公开的 PDF CLI 命令，也不通过 CLI `project update` 编辑此字段。
+
+共享核心内置的 Noto Serif CJK 字体版权声明及 OFL 许可，随 CLI 旁的安装回执 `thirdPartyNotices` 字段一并提供；应用内也可在“编印族谱”的纸张设置中查看。
+
 ## 环境要求
 
 - 从源码构建需要稳定版 Rust 工具链

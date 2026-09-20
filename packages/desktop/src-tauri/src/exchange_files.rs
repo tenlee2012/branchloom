@@ -202,6 +202,31 @@ mod tests {
     }
 
     #[test]
+    fn pdf_staging_supplies_a_new_path_for_non_overwriting_core_export() {
+        let cache = tempfile::tempdir().unwrap();
+        let mut output = Vec::new();
+        staging::export(
+            cache.path(),
+            "pdf",
+            |path| {
+                assert_eq!(path.extension().unwrap(), "pdf");
+                assert!(!path.exists());
+                let staging = tempfile::NamedTempFile::new_in(path.parent().unwrap()).unwrap();
+                std::fs::write(staging.path(), b"%PDF-complete-fixture").unwrap();
+                staging.persist_noclobber(path).unwrap();
+                Ok(())
+            },
+            |mut source| {
+                source.read_to_end(&mut output).unwrap();
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert_eq!(output, b"%PDF-complete-fixture");
+        assert_eq!(std::fs::read_dir(cache.path()).unwrap().count(), 0);
+    }
+
+    #[test]
     fn failures_clean_up_and_a_failed_export_never_opens_the_destination() {
         let cache = tempfile::tempdir().unwrap();
         let imported: Result<(), _> =

@@ -10,6 +10,11 @@ managed attachments, or sync baselines directly, or substitute package-internal 
 commands. Repository development follows the checkout's `AGENTS.md`; this installed-data workflow
 does not require developers to access user data or prohibit authorized edits to skill source files.
 
+For printed genealogy books or wall charts, direct users to the app's **编印族谱** page. There is no
+public PDF-generation or publication-plan editing CLI command. Project packages preserve optional
+`publicationPlans` in format `1.1.0`; importing format `1.0.0` remains supported. Do not substitute
+internal publication RPCs for the public CLI or discard the plans while exchanging project data.
+
 ## Before accessing data
 
 - Run `branchloom doctor --output json` once before the task's first data operation, using the

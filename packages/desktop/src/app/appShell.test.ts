@@ -180,6 +180,7 @@ describe('application shell', () => {
     for (const label of ['家谱树', '人物', '查称呼', '时间线', '资料来源']) {
       expect(navigation.get(`a[aria-label="${label}"]`).text()).toContain(label)
     }
+    expect(navigation.find('a[aria-label="编印族谱"]').exists()).toBe(false)
     expect(wrapper.get('nav[aria-label="项目管理导航"] a[aria-label="项目管理"]').text())
       .toContain('项目管理')
     const projectLinks = wrapper.findAll('nav[aria-label="项目管理导航"] a')
@@ -444,6 +445,7 @@ describe('application shell', () => {
     }
 
     const secondaryPaths = [
+      'manage/publication',
       'manage/checks',
       'manage/settings',
     ]
@@ -470,6 +472,22 @@ describe('application shell', () => {
     expect(router.resolve('/project/project-demo-family/tree').meta.workspaceMode).toBe('canvas')
     expect(router.resolve('/project/project-demo-family/collaboration-sync').meta.workspaceMode)
       .toBe('management')
+  })
+
+  it('refreshes the publication context without replacing its editor or losing keyboard focus', async () => {
+    const { wrapper } = await mountShell('/project/project-demo-family/manage/publication')
+    const label = wrapper.findAll('label').find((item) => item.text() === '族谱标题')!
+    const editor = label.get('input')
+    await editor.setValue('尚未保存的族谱标题')
+    editor.element.focus()
+    window.dispatchEvent(new Event(NATIVE_STATE_REFRESHED_EVENT))
+    await flushPromises()
+    expect(editor.element.isConnected).toBe(true)
+    expect(editor.element.value).toBe('尚未保存的族谱标题')
+    expect(document.activeElement).toBe(editor.element)
+    expect(wrapper.find('.app-topbar button[name="刷新资料"]').exists()).toBe(true)
+    expect(wrapper.find('nav[aria-label="项目导航"]').exists()).toBe(true)
+    wrapper.unmount()
   })
 
   it('opens the kinship page from a person, preserves its shell and selection on refresh, and returns to that person', async () => {
@@ -503,6 +521,50 @@ describe('application shell', () => {
       wrapper.unmount()
     },
   )
+
+  it('keeps the publication title and edits when leaving is cancelled', async () => {
+    const { wrapper, router } = await mountShell('/project/project-demo-family/manage/publication')
+    const title = wrapper.findAll('label').find((item) => item.text() === '族谱标题')!.get('input')
+    await title.setValue('未保存的编印标题')
+    await wrapper.get('.app-topbar a[aria-label="返回项目管理"]').trigger('click')
+    await flushPromises()
+    const dialog = new DOMWrapper(document.body).get('[role="dialog"]')
+    await dialog.findAll('button').find((button) => button.text() === '返回继续编辑')!.trigger('click')
+    await flushPromises()
+
+    expect(router.currentRoute.value.name).toBe('project-publication')
+    expect(document.title).toBe('编印族谱 · 有谱')
+    expect(title.element.value).toBe('未保存的编印标题')
+    wrapper.unmount()
+  })
+
+  it.each([false, true])('opens publication from project management and returns within the shared shell (mobile=%s)', async (mobile) => {
+    if (mobile) useMobileViewport()
+    const { wrapper, router } = await mountShell('/project/project-demo-family/manage/overview')
+    await wrapper.get('.project-overview__tools a[aria-label="打开编印族谱"]').trigger('click')
+    await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/project/project-demo-family/manage/publication'))
+    await flushPromises()
+
+    const tabs = wrapper.get('nav[aria-label="项目管理二级导航"]')
+    expect(tabs.get('a[aria-current="page"]').text()).toBe('编印族谱')
+    expect(wrapper.get('.app-topbar button[name="刷新资料"]')).toBeTruthy()
+    expect(wrapper.get('.project-layout__main--management')).toBeTruthy()
+    if (mobile) {
+      await wrapper.get('button[aria-label="打开菜单"]').trigger('click')
+      expect(mobileMenu().get('a[aria-label="项目管理"]').classes()).toContain('app-sidebar__link--active')
+      expect(mobileMenu().find('a[aria-label="编印族谱"]').exists()).toBe(false)
+      await mobileMenu().trigger('keydown', { key: 'Escape' })
+      await flushPromises()
+    } else {
+      expect(wrapper.get('.app-sidebar a[aria-label="项目管理"]').classes()).toContain('app-sidebar__link--active')
+    }
+    await wrapper.get('.app-topbar a[aria-label="返回项目管理"]').trigger('click')
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('project-overview'))
+    await router.push('/project/project-demo-family/publication')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/project/project-demo-family/manage/publication')
+    wrapper.unmount()
+  })
 
   it('keeps the project shell visible throughout project creation tasks', async () => {
     const repository = makeRepository()
@@ -551,6 +613,7 @@ describe('application shell', () => {
       ['/project/project-demo-family/kinship', 'project-people', '返回人物列表'],
       ['/project/project-demo-family/manage/new', 'project-overview', '返回项目管理'],
       ['/project/project-demo-family/manage/exchange', 'project-overview', '返回项目管理'],
+      ['/project/project-demo-family/manage/publication', 'project-overview', '返回项目管理'],
       ['/project/project-demo-family/manage/history', 'project-overview', '返回项目管理'],
       ['/project/project-demo-family/manage/checks', 'project-overview', '返回项目管理'],
       ['/project/project-demo-family/manage/settings', 'project-overview', '返回项目管理'],

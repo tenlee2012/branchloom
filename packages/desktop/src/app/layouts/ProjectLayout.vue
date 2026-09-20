@@ -6,6 +6,7 @@ import AppTopbar from '../components/AppTopbar.vue'
 import MobileProjectNavigation from '../components/MobileProjectNavigation.vue'
 import { useSessionStore } from '../stores/session'
 import { useBranchloomRepository } from '../../shared/repository/injection'
+import { NATIVE_STATE_REFRESHED_EVENT } from '../../shared/repository/TauriRepository'
 import { BrowserRecentProjectLocations } from '../../features/projects/model/recentProjectLocations'
 import { selectInitialProject } from '../startup'
 import { useMediaQuery } from '../../shared/composables/useMediaQuery'
@@ -37,7 +38,25 @@ let latestRequest = 0
 
 onMounted(() => {
   void loadRuntimeCapabilities().then(({ mobile }) => { nativeMobile.value = mobile }).catch(() => {})
+  window.addEventListener(NATIVE_STATE_REFRESHED_EVENT, refreshProjectInPlace)
 })
+
+async function refreshProjectInPlace() {
+  if (!route.meta.refreshInPlace || loadState.value !== 'ready') return
+  const projectId = String(route.params.projectId ?? '')
+  const request = ++latestRequest
+  try {
+    const project = await repository.getProject(projectId)
+    if (request !== latestRequest) return
+    if (!project) throw new Error('项目已不存在')
+    session.openProject(project, repository.getHistoryState())
+  } catch (error) {
+    if (request !== latestRequest) return
+    session.closeProject(projectId)
+    loadError.value = error instanceof Error ? error.message : '项目资料无法读取'
+    loadState.value = 'error'
+  }
+}
 
 function fitTreeCanvas() {
   routeView.value?.fitCanvas?.()
@@ -95,6 +114,7 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  window.removeEventListener(NATIVE_STATE_REFRESHED_EVENT, refreshProjectInPlace)
   latestRequest += 1
   session.closeProject()
 })

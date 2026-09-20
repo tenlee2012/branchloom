@@ -79,6 +79,26 @@ const routes: RouteRecordRaw[] = [
     component: () => import('./layouts/ProjectLayout.vue'),
     children: [
       {
+        path: 'manage/publication',
+        name: 'project-publication',
+        component: () => import('../features/publication/views/PublicationView.vue'),
+        meta: {
+          title: '编印族谱',
+          eyebrow: '项目管理',
+          workspaceMode: 'management',
+          refreshInPlace: true,
+          parent: {
+            name: 'project-overview',
+            label: '返回项目管理',
+            inheritParams: ['projectId'],
+          },
+        },
+      },
+      {
+        path: 'publication',
+        redirect: { name: 'project-publication' },
+      },
+      {
         path: 'tree',
         name: 'project-tree',
         component: () => import('../features/tree/views/TreeWorkspaceView.vue'),
@@ -286,8 +306,8 @@ export function createAppRouter(
     }
   })
 
-  router.afterEach((to) => {
-    updateWindowTitle(to.meta.title)
+  router.afterEach((to, _from, failure) => {
+    if (!failure) updateWindowTitle(to.meta.title)
   })
 
   return router

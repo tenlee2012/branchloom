@@ -135,7 +135,8 @@ function isProject(value: unknown): boolean {
     isString(value.createdAt) &&
     isString(value.updatedAt) &&
     isOptional(value.lastBackupAt, isString) &&
-    isOptional(value.backupSchedule, (candidate) => isOneOf(candidate, ['off', 'daily', 'weekly']))
+    isOptional(value.backupSchedule, (candidate) => isOneOf(candidate, ['off', 'daily', 'weekly'])) &&
+    isOptional(value.publicationPlans, (candidate) => Array.isArray(candidate) && candidate.every(isRecord))
 }
 
 function isPersonName(value: unknown): boolean {

@@ -160,6 +160,8 @@ struct InstallReceipt {
     content_sha256: String,
     #[serde(default)]
     files: Vec<FileHash>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    third_party_notices: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -725,6 +727,9 @@ impl AiToolsService {
                     contract_version: manifest.contract_version,
                     content_sha256: manifest.cli.sha256.clone(),
                     files: Vec::new(),
+                    third_party_notices: Some(
+                        include_str!("../../../core/assets/fonts/OFL.txt").to_owned(),
+                    ),
                 },
             )?;
             replacements.push(replacement(target.clone(), Some(staged), &nonce)?);
@@ -747,6 +752,7 @@ impl AiToolsService {
                     contract_version: manifest.contract_version,
                     content_sha256: manifest.skill.sha256.clone(),
                     files: manifest.skill.files.clone(),
+                    third_party_notices: None,
                 },
             )?;
             replacements.push(replacement(target.clone(), Some(staged), &nonce)?);
@@ -1449,6 +1455,15 @@ mod tests {
         assert_eq!(result.status.skill.state, AiToolComponentState::Installed);
         assert!(service.locations.cli.exists());
         assert!(service.locations.skill.join("SKILL.md").exists());
+        let receipt: InstallReceipt = serde_json::from_slice(
+            &fs::read(cli_receipt_path(&service.locations.cli).unwrap()).unwrap(),
+        )
+        .unwrap();
+        let notices = receipt.third_party_notices.unwrap();
+        assert!(
+            notices.contains("2017-2024 Adobe")
+                && notices.contains("SIL OPEN FONT LICENSE Version 1.1")
+        );
 
         fs::write(service.locations.skill.join("notes.txt"), b"keep me")
             .expect("write unknown skill file");

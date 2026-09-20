@@ -1,6 +1,11 @@
 # Branchloom CLI reference
 
 The machine protocol version is `3`. Read only the sections needed for the operation.
+
+The app's **编印族谱** workflow generates PDF books and charts. It has no public CLI command.
+Optional project `publicationPlans` are preserved in complete project exchange and sync, but are
+not an accepted `project update` input. New project exports use format `1.1.0`; the reader also
+accepts `1.0.0`. This file format change does not change CLI contract version `3`.
 Conversational approval rules live in [SKILL.md](../SKILL.md#preview-and-authorization);
 the examples below describe CLI syntax and do not grant permission to apply.
 

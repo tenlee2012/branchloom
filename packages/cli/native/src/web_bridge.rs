@@ -154,6 +154,9 @@ fn route(
     service: &mut ApplicationService,
 ) -> Result<Value, CoreError> {
     match (method, path) {
+        ("POST", "/publication") => {
+            service.publication_request(serde_json::from_value(body.clone())?)
+        }
         ("GET", "/health") => Ok(json!({ "ok": true })),
         ("GET", "/revision") => Ok(json!(service.data_revision()?)),
         ("POST", "/duplicates/list") => serde_json::to_value(

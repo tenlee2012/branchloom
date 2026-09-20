@@ -8,6 +8,7 @@ import {
   IconHistory,
   IconNetwork,
   IconPlus,
+  IconPrinter,
   IconRefresh,
   IconSettings,
   IconShieldCheck,
@@ -41,6 +42,13 @@ const managementLinks = computed(() => [
     description: '交换 GEDCOM、备份包与打印资料',
     icon: IconFileImport,
     to: `/project/${projectId.value}/manage/exchange`,
+  },
+  {
+    label: '编印族谱',
+    ariaLabel: '打开编印族谱',
+    description: '编排谱册与世系挂图，导出打印 PDF',
+    icon: IconPrinter,
+    to: `/project/${projectId.value}/manage/publication`,
   },
   {
     label: '项目设置',

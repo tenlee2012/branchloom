@@ -178,6 +178,17 @@
         "Does not invoke github connect, pull, or sync, even in preview mode",
         "Does not read, print, or persist a GitHub token"
       ]
+    },
+    {
+      "id": 17,
+      "prompt": "Use the installed Branchloom CLI to print my family genealogy as a traditional PDF book, reusing my saved publication plan.",
+      "expected_output": "Explains that the public CLI has no PDF generation command and directs the user to the app's 编印族谱 page to select the saved plan, generate, preview and save the PDF.",
+      "assertions": [
+        "Does not invent a PDF CLI command or call internal publication RPCs",
+        "Does not access SQLite or managed attachment files directly",
+        "Does not discard publicationPlans or recommend downgrading the project format",
+        "Does not claim to have generated or printed a file without an actual result"
+      ]
     }
   ]
 }

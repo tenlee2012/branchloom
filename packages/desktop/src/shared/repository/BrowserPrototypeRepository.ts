@@ -1,4 +1,5 @@
 import { compareGenealogyDates, normalizeIsoDate, validateLifeDates } from '../domain/date'
+import type { PublicationRequest } from '../domain/publication'
 import { findDuplicateNameEvidence } from '../domain/duplicateInspection'
 import { eventTypeLabel } from '../domain/eventTypes'
 import { getNameSearchRank, getPrimaryName, personNameTypeLabels } from '../domain/personNames'
@@ -197,6 +198,18 @@ function parsePendingStorageTransaction(raw: string): PendingStorageTransaction 
 }
 
 export class BrowserPrototypeRepository implements BranchloomRepository {
+  async publication<T = unknown>(input: PublicationRequest): Promise<T> {
+    if (input.operation === 'context') {
+      const project = await this.getProject(input.projectId)
+      const people = await this.listPeople(input.projectId, { page: 1, pageSize: 100_000, sort: 'name' })
+      return { revision: 0, project, people: people.items, attachments: await this.listAttachments(input.projectId) } as T
+    }
+    throw new RepositoryError('storage', '编印需要本地资料服务，请通过有谱应用或 Web 开发启动命令打开')
+  }
+
+  async savePublicationPdf(): Promise<boolean> {
+    throw new RepositoryError('storage', '保存 PDF 需要本地资料服务')
+  }
   private readonly storage: PrototypeStorage
   private readonly clock: () => Date | string
   private readonly idFactory: () => UUID

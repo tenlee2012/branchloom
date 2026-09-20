@@ -1,3 +1,5 @@
+import type { PublicationPlan, PublicationRequest } from './publication'
+
 export type UUID = string
 
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'failed'
@@ -40,6 +42,7 @@ export interface Project {
   updatedAt: string
   lastBackupAt?: string
   backupSchedule?: BackupSchedule
+  publicationPlans?: PublicationPlan[]
 }
 
 export interface PersonName {
@@ -435,6 +438,8 @@ export interface RestoreResult {
 }
 
 export interface BranchloomRepository {
+  publication<T = unknown>(input: PublicationRequest): Promise<T>
+  savePublicationPdf(projectId: string, jobId: string, title: string): Promise<boolean>
   listProjects(): Promise<Project[]>
   createProject(input: Pick<Project, 'name' | 'description'>): Promise<Project>
   getProject(projectId: UUID): Promise<Project>

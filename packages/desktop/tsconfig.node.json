@@ -14,5 +14,5 @@
     "composite": true,
     "types": ["node"]
   },
-  "include": ["e2e/**/*.ts", "playwright.config.ts", "vite.config.ts", "vitest.config.ts"]
+  "include": ["e2e/**/*.ts", "scripts/pdf-assets.ts", "playwright.config.ts", "vite.config.ts", "vitest.config.ts"]
 }

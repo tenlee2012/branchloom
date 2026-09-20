@@ -98,6 +98,7 @@ pub struct DesktopMutationResult {
 pub struct ApplicationService {
     storage: Storage,
     data_directory: PathBuf,
+    publications: crate::publication::Publications,
 }
 
 impl ApplicationService {
@@ -109,6 +110,7 @@ impl ApplicationService {
         let path = path.as_ref();
         Ok(Self {
             storage: Storage::open(path)?,
+            publications: Default::default(),
             data_directory: path
                 .parent()
                 .unwrap_or_else(|| Path::new("."))
@@ -118,6 +120,107 @@ impl ApplicationService {
 
     pub fn schema_version(&self) -> CoreResult<i64> {
         self.storage.schema_version()
+    }
+
+    pub fn publication_request(
+        &mut self,
+        request: crate::publication::Request,
+    ) -> CoreResult<Value> {
+        use crate::publication::plan::invalid;
+        self.get_project(&request.project_id)?;
+        self.publications.invalidate(self.data_revision()?);
+        match request.operation.as_str() {
+            "context" => {
+                let (revision, data) = self.storage.publication_snapshot(&request.project_id)?;
+                let people = data
+                    .collections
+                    .get("people")
+                    .into_iter()
+                    .flatten()
+                    .map(|person| json!({ "id": person["id"], "names": person["names"] }))
+                    .collect::<Vec<_>>();
+                Ok(
+                    json!({ "revision": revision, "project": data.project, "people": people,
+                    "attachments": data.collections.get("attachments") }),
+                )
+            }
+            "savePlan" | "deletePlan" => {
+                let mut plans = self.get_project(&request.project_id)?.publication_plans;
+                if request.operation == "savePlan" {
+                    let plan = request.plan.ok_or_else(|| invalid("缺少编印方案"))?;
+                    plan.validate()?;
+                    plans.retain(|p| p["id"] != plan.id);
+                    plans.push(serde_json::to_value(plan)?);
+                } else {
+                    let id = request.plan_id.ok_or_else(|| invalid("缺少方案 ID"))?;
+                    if !plans.iter().any(|p| p["id"] == id) {
+                        return Err(invalid("方案已不存在，请刷新后重试"));
+                    }
+                    plans.retain(|p| p["id"] != id);
+                }
+                self.update_project_value_if_revision(
+                    &request.project_id,
+                    &json!({"publicationPlans": plans}),
+                    request
+                        .expected_revision
+                        .ok_or_else(|| invalid("缺少资料版本，请刷新后重试"))?,
+                )?;
+                Ok(json!({"revision": self.data_revision()?, "plans": plans}))
+            }
+            "start" => {
+                let plan = request.plan.ok_or_else(|| invalid("缺少编印方案"))?;
+                let (revision, data) = self.storage.publication_snapshot(&request.project_id)?;
+                if request.expected_revision != Some(revision) {
+                    return Err(invalid("资料已更新，请刷新后重新生成"));
+                }
+                let mut assets = BTreeMap::new();
+                for attachment in data.collections.get("attachments").into_iter().flatten() {
+                    let id = required_record_string(attachment, "id")?;
+                    let hash = required_record_string(attachment, "contentHash")?;
+                    if hash.len() != 64 || !hash.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+                        continue;
+                    }
+                    assets.insert(
+                        id.to_owned(),
+                        self.attachment_path(&request.project_id, hash)?,
+                    );
+                }
+                self.publications
+                    .start(request.project_id, revision, plan, data, assets)
+            }
+            "pdfInfo" => {
+                let id = request
+                    .attachment_id
+                    .ok_or_else(|| invalid("缺少 PDF 附件 ID"))?;
+                let attachment = self
+                    .list_records(Resource::Attachment, &request.project_id)?
+                    .into_iter()
+                    .find(|a| a["id"] == id)
+                    .ok_or_else(|| invalid("PDF 附件不存在"))?;
+                let hash = required_record_string(&attachment, "contentHash")?;
+                let bytes = crate::publication::read_asset(
+                    &self.attachment_path(&request.project_id, hash)?,
+                    hash,
+                )?;
+                let pdf = crate::publication::inspect_pdf(bytes)?;
+                Ok(json!({"pages":pdf.pages().len()}))
+            }
+            _ => {
+                let revision = self.data_revision()?;
+                self.publications.request(&request, revision)
+            }
+        }
+    }
+
+    pub fn save_publication_pdf(
+        &self,
+        project_id: &str,
+        job_id: &str,
+        path: &Path,
+    ) -> CoreResult<()> {
+        self.get_project(project_id)?;
+        self.publications
+            .save(project_id, job_id, self.data_revision()?, path)
     }
 
     pub fn data_revision(&self) -> CoreResult<i64> {

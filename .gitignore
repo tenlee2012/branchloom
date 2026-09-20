@@ -45,5 +45,6 @@ id_ed25519
 *.blp
 
 # Local implementation notes and visual QA reports
+/output/
 /AI_TOOLS_INSTALLATION_SPEC.md
 /design-qa.md

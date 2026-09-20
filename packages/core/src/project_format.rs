@@ -13,7 +13,7 @@ use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
 use crate::core::error::{CoreError, CoreResult};
 
-pub const PROJECT_FORMAT_VERSION: &str = "1.0.0";
+pub const PROJECT_FORMAT_VERSION: &str = "1.1.0";
 pub const ARCHIVE_EXTENSION: &str = "blp";
 const MANIFEST_PATH: &str = "branchloom.jsonld";
 const PROJECT_PATH: &str = "project.jsonld";
@@ -59,6 +59,7 @@ impl ProjectData {
     }
 
     pub fn validate(&self) -> CoreResult<()> {
+        crate::publication::plan::validate_plans(self.project.get("publicationPlans"))?;
         let project_id = self.project_id()?;
         validate_identifier(project_id, "project id")?;
         for (collection, _, _) in PROJECT_COLLECTIONS {
@@ -227,7 +228,7 @@ impl ProjectTree {
 
     pub fn validate_manifest(&self) -> CoreResult<()> {
         let manifest: ProjectManifest = serde_json::from_slice(self.required_file(MANIFEST_PATH)?)?;
-        if manifest.format_version != PROJECT_FORMAT_VERSION {
+        if manifest.format_version != PROJECT_FORMAT_VERSION && manifest.format_version != "1.0.0" {
             return Err(CoreError::Validation(format!(
                 "unsupported project format version: {}",
                 manifest.format_version

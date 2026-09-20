@@ -37,6 +37,14 @@ The family tree's local kinship calculator uses `relationship.js` 1.2.9
 > OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 > SOFTWARE.
 
+## Genealogy PDF publication
+
+- Noto Serif CJK SC Regular 2.003 — SIL Open Font License 1.1. Copyright 2017–2024 Adobe. The unmodified font and full license are in [packages/core/assets/fonts](packages/core/assets/fonts/README.md). The font is subset-embedded in generated PDFs; its license is also available from the publication page and the installed CLI receipt.
+- `pdfjs-dist` 5.4.624 — Apache License 2.0. [PDF.js source](https://github.com/mozilla/pdf.js). PDF.js previews generated documents offline; its distributed CMap, standard-font and decoder license files are retained alongside those assets.
+- `krilla` 0.8.2 and its Hayro PDF-import dependencies — MIT OR Apache License 2.0. [Krilla source](https://github.com/LaurenzV/krilla), [Hayro source](https://github.com/LaurenzV/hayro).
+- `image` 0.25.10 — MIT OR Apache License 2.0. [Image source](https://github.com/image-rs/image).
+- `ttf-parser` 0.25.1 — MIT OR Apache License 2.0. [ttf-parser source](https://github.com/harfbuzz/ttf-parser).
+
 ## Release inventory
 
 Before publishing a binary release, generate and review a complete third-party license inventory from the exact npm and Cargo lockfiles used for that release. Include all required license texts, copyright notices, attributions, and source-availability statements with the distributed application or installer.

@@ -8,6 +8,9 @@ edition = "2021"
 [dependencies]
 base64 = "0.22"
 dirs = "6"
+krilla = { version = "0.8.2", features = ["pdf"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "gif"] }
+ttf-parser = "0.25"
 reqwest = { version = "0.13.4", default-features = false, features = ["blocking", "json", "rustls"] }
 rusqlite = { version = "0.39.0", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }

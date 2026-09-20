@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
-import { RouterView } from 'vue-router'
+import { RouterView, useRoute } from 'vue-router'
 import AppNotificationCenter from './app/components/AppNotificationCenter.vue'
 import { NATIVE_STATE_REFRESHED_EVENT } from './shared/repository/TauriRepository'
 
 const nativeStateRevision = ref(0)
+const route = useRoute()
 
 function refreshRouteState() {
-  nativeStateRevision.value += 1
+  if (!route.meta.refreshInPlace) nativeStateRevision.value += 1
 }
 
 onMounted(() => window.addEventListener(NATIVE_STATE_REFRESHED_EVENT, refreshRouteState))

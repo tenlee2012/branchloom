@@ -273,6 +273,18 @@ fn database_path(app: &AppHandle) -> Result<PathBuf, String> {
 
 #[cfg(desktop)]
 fn app_data_directory(_app: &AppHandle) -> Result<PathBuf, String> {
+    // Development UI acceptance must be able to use a disposable database.
+    // Release builds always keep the canonical shared application directory.
+    #[cfg(debug_assertions)]
+    if let Some(directory) = std::env::var_os("BRANCHLOOM_DATA_DIR") {
+        let directory = PathBuf::from(directory);
+        if !directory.is_absolute() {
+            return Err("开发测试数据目录必须使用绝对路径".to_owned());
+        }
+        std::fs::create_dir_all(&directory)
+            .map_err(|error| format!("无法创建测试数据目录：{error}"))?;
+        return Ok(directory);
+    }
     let directory =
         default_data_directory().map_err(|error| format!("无法确定应用数据目录：{error}"))?;
     std::fs::create_dir_all(&directory)
@@ -547,6 +559,42 @@ pub async fn export_project_archive(
             lock_session(&app.state::<DesktopProjectSession>())?
                 .export_project_archive(&input.project_id, path)
                 .map_err(|error| format!("无法导出 Branchloom 项目包：{error}"))
+        })
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn publication_request(
+    app: AppHandle,
+    input: branchloom_core::publication::Request,
+) -> Result<Value, String> {
+    crate::exchange_files::run(app, move |app| {
+        lock_session(&app.state::<DesktopProjectSession>())?
+            .publication_request(input)
+            .map_err(|error| error.to_string())
+    })
+    .await
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PublicationSaveInput {
+    project_id: String,
+    job_id: String,
+    path: tauri_plugin_fs::FilePath,
+}
+
+#[tauri::command]
+pub async fn save_publication_pdf(
+    app: AppHandle,
+    input: PublicationSaveInput,
+) -> Result<(), String> {
+    crate::exchange_files::run(app, move |app| {
+        crate::exchange_files::export(app, input.path, "pdf", |path| {
+            lock_session(&app.state::<DesktopProjectSession>())?
+                .save_publication_pdf(&input.project_id, &input.job_id, path)
+                .map_err(|error| error.to_string())
         })
     })
     .await

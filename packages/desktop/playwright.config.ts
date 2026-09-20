@@ -18,6 +18,7 @@ export default defineConfig({
   workers: 1,
   expect: { timeout: 8_000 },
   use: {
+    channel: process.env.BRANCHLOOM_E2E_CHANNEL,
     baseURL: testBaseUrl,
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',

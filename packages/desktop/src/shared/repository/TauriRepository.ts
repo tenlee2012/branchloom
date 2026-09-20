@@ -1,4 +1,5 @@
 import { isTauri } from '@tauri-apps/api/core'
+import type { PublicationRequest, PublicationStatus } from '../domain/publication'
 import type { BranchloomRepository, DuplicateCandidate, Snapshot } from '../domain/types'
 import { BrowserPrototypeRepository } from './BrowserPrototypeRepository'
 import {
@@ -20,6 +21,7 @@ export interface NativeStateSnapshot {
 }
 
 export interface NativeStateGateway {
+  publication?<T>(input: PublicationRequest): Promise<T>
   revision(): Promise<number>
   load(): Promise<NativeStateSnapshot>
   save(state: NormalizedStatePayload, expectedRevision: number): Promise<number>
@@ -352,6 +354,34 @@ async function readLocalAttachment(projectId: string, contentHash: string): Prom
   return nativeDataRequest('read_attachment', '/attachment/read', { projectId, contentHash })
 }
 
+async function savePublicationPdf(projectId: string, jobId: string, title: string): Promise<boolean> {
+  const stem = title.trim().replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').replace(/\.+$/g, '')
+  const fileName = `${Array.from(stem).slice(0, 70).join('') || '族谱'}.pdf`
+  if (isTauri()) {
+    const { save } = await import('@tauri-apps/plugin-dialog')
+    const selected = await save({ title: '保存族谱 PDF', defaultPath: fileName, filters: [{ name: 'PDF 文档', extensions: ['pdf'] }] })
+    if (!selected) return false
+    const path = /^(content|file):\/\//i.test(selected) || selected.toLowerCase().endsWith('.pdf') ? selected : `${selected}.pdf`
+    const { invoke } = await import('@tauri-apps/api/core')
+    await invoke('save_publication_pdf', { input: { projectId, jobId, path } })
+    return true
+  }
+  const status = await nativeDataRequest<PublicationStatus>('publication_request', '/publication', { operation: 'status', projectId, jobId })
+  if (status.state !== 'ready' || status.stale) throw new Error('资料已更新或 PDF 尚未完成，请重新生成')
+  const chunks: Uint8Array<ArrayBuffer>[] = []
+  for (let offset = 0; offset < status.bytes; offset += 1_048_576) {
+    const result = await nativeDataRequest<{ data: string }>('publication_request', '/publication', { operation: 'read', projectId, jobId, offset, length: Math.min(1_048_576, status.bytes - offset) })
+    chunks.push(Uint8Array.from(atob(result.data), (ch) => ch.charCodeAt(0)))
+  }
+  const url = URL.createObjectURL(new Blob(chunks, { type: 'application/pdf' }))
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = fileName
+  anchor.click()
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  return true
+}
+
 async function nativeDataRequest<T>(
   command: string,
   webPath: string,
@@ -432,6 +462,17 @@ export async function createTauriRepository(
 
   return new Proxy({} as BranchloomRepository, {
     get(_target, property) {
+      if (property === 'publication' && gateway.publication) {
+        return async <T>(input: PublicationRequest): Promise<T> => {
+          const result = await gateway.publication!<T>(input)
+          if (input.operation === 'savePlan' || input.operation === 'deletePlan') {
+            installSnapshot(await gateway.load(), true)
+            notifyProjectDataChanged()
+          }
+          return result
+        }
+      }
+      if (property === 'savePublicationPdf' && gateway.publication) return savePublicationPdf
       if (property === refreshNativeStateSymbol) {
         return async (force = false) => {
           if (!force && await gateway.revision() === revision) return false
@@ -488,6 +529,7 @@ export async function createTauriRepository(
 }
 
 export const tauriStateGateway: NativeStateGateway = {
+  publication: (input) => nativeDataRequest('publication_request', '/publication', { ...input }),
   async revision() {
     const { invoke } = await import('@tauri-apps/api/core')
     return invoke<number>('data_revision')
@@ -525,6 +567,7 @@ export const tauriStateGateway: NativeStateGateway = {
 }
 
 export const webStateGateway: NativeStateGateway = {
+  publication: (input) => nativeDataRequest('publication_request', '/publication', { ...input }),
   revision: () => webBridgeRequest<number>('/revision'),
   async load() {
     const snapshot = await webBridgeRequest<NativeStateSnapshot>('/state')

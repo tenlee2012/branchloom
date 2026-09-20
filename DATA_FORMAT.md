@@ -5,8 +5,8 @@ Branchloom 使用一种基于 JSON-LD 1.1 的开放文本格式保存族谱项�
 
 > - 状态：v1 核心格式已实现；字段级 context 与 Schema 约束仍在完善
 > - 格式名称：Branchloom JSON-LD Repository Format
-> - 格式版本：`1.0.0`
-> - 最后更新：2026-09-06
+> - 格式版本：`1.1.0`
+> - 最后更新：2026-09-20
 
 如果你只是想了解自己的数据如何保存，请先阅读“快速理解”和“一个最小例子”。如果你
 准备实现导入器、导出器或同步客户端，请继续阅读后面的完整规则。
@@ -225,7 +225,7 @@ media/** filter=lfs diff=lfs merge=lfs -text
   "@id": "urn:uuid:018f9690-0a12-7e11-8b94-39c71d9c15ef",
   "@type": "Repository",
   "format": "branchloom-json-ld",
-  "formatVersion": "1.0.0",
+  "formatVersion": "1.1.0",
   "project": "urn:uuid:018f96ab-2f41-7d31-91f8-11a04ce81b21",
   "projectFile": "project.jsonld",
   "contextDocument": {
@@ -439,6 +439,29 @@ exact | about | before | after | range | unknown
 - `defaultPerson` 必须引用当前存在的人物。
 - `coverAttachment` 必须引用当前存在的图片附件。
 - `backupSchedule`、`lastBackupAt` 等设备设置不进入项目文件。
+
+### 编印方案（1.1.0）
+
+项目增加可选的 `publicationPlans` 数组，缺省为空，导出时空数组可以省略。它属于可迁移的项目资料，随 JSON-LD 工作树、`.blp` 及项目快照保存；成品 PDF、临时任务和预览缓存不进入项目。生成 PDF 不修改项目资料。
+
+每项使用独立 UUID `id`，并保存以下设置，字段名采用 camelCase：
+
+| 字段 | 内容 |
+| --- | --- |
+| `name`, `format` | 方案名称；`modern`、`traditional` 或 `chart` |
+| `title`, `subtitle`, `editor`, `edition`, `date`, `preface` | 用户填写的封面和谱序文字 |
+| `scope` | `mode`（all/branch/ancestors/descendants）、`roots`、`generations`（null 表示不限）、`startGeneration`、`partners`、`parentTypes`、`exclude` |
+| `chapters` | 依次启用的 cover/preface/contents/tree/biographies/events/sources/appendices/index |
+| `fields` | 启用的 names/status/dates/places/biography/notes/relationships/careers/titles/photos/citations |
+| `paper` | `widthMm`, `heightMm`, `marginMm`, `gutterMm`, `fontSize`, `duplex` |
+| `chart` | `tiled`, `fontSize`, `overlapMm` |
+| `coverAttachmentId` | 封面附件 ID 或 null |
+| `images` | `{ attachmentId, personId, caption }`；personId 为 null 时作为史料插页 |
+| `appendices` | `{ attachmentId, pages }`；页码表达式如 `2,1-3`，一基页码，保留顺序和重复页 |
+
+方案中的实体引用保留应用稳定 ID，不转换为文件路径；生成时从同一项目快照解析，不允许跨项目取资料。兼容已有导入记录的非 UUID 稳定 ID。资料删除后不隐式改写方案，失效的根人物或所选附件在生成时明确报错，用户调整方案后重试。
+
+共享核心校验字段类型、枚举、重复章节、纸面范围和页码表达式；未知方案字段不能静默丢弃。每项目最多 100 套方案；方案设置采用项目 revision 并发保护。同一 `publicationPlans` 字段的并发修改按现有字段级三方合并规则处理，不能假定两端各增一套方案会自动合并。
 
 ## 人物与姓名
 
@@ -737,7 +760,7 @@ Git 历史可能继续包含删除前的数据。删除当前文件不等于从�
 ```text
 Branchloom-Operation: <uuid>
 Branchloom-Device: <uuid>
-Branchloom-Format: 1.0.0
+Branchloom-Format: 1.1.0
 ```
 
 设备 ID 用于诊断，不包含账号 token 或私人凭据。
@@ -838,6 +861,8 @@ Schema 应约束字段类型、必填字段、enum、UUID、URI、时间戳、�
 - patch：不改变数据语义的规范或校验修正。
 
 客户端行为：
+
+当前实现读取 `1.0.0` 和 `1.1.0`，新导出统一写 `1.1.0`。旧实现只接受 `1.0.0`，因此会明确拒绝新版项目，避免写回时丢失编印方案。SQLite 使用向前迁移 `0006_publication_plans.sql` 升级到 schema 6；公共 CLI 协议仍为 contract version 3，文件格式版本与协议版本相互独立。
 
 - 不理解 major 版本时必须拒绝写入。
 - 不理解 `requiredFeatures` 时只能只读打开或明确拒绝。

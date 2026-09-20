@@ -4,5 +4,6 @@ pub mod core;
 pub mod data_location;
 pub mod gedcom;
 pub mod project_format;
+pub mod publication;
 pub mod storage;
 pub mod sync;

@@ -31,4 +31,6 @@ pub struct ProjectRecord {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_backup_at: Option<String>,
     pub backup_schedule: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub publication_plans: Vec<serde_json::Value>,
 }
