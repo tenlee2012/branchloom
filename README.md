@@ -124,7 +124,7 @@ Android 端目前不提供 CLI、Codex Skill 安装或“AI 工具”页面。
 
 在 PDF 阅读器中按实际纸张大小打印；分幅挂图按 100% 比例及页面上的行列编号拼接，双面谱册使用长边翻转。成品使用自然页序，印刷厂折手拼版由打印端处理。文件已存在时选择新名称保存。
 
-升级后项目格式为 `1.1.0`，兼容读取原有 `1.0.0` 项目；与家人交换新版 `.blp` 或同步项目时，各端应先升级到 v0.1.8 或更高版本。升级前建议导出一份 `.blp` 备份。
+升级后项目格式为 `1.1.0`，兼容读取原有 `1.0.0` 项目；与家人交换新版 `.blp` 或同步项目时，各端应先升级到 v0.1.9 或更高版本。升级前建议导出一份 `.blp` 备份。
 
 macOS 原生流程和三种 PDF 成品已完成验收，Android 功能与样式已由用户真机验收确认。Windows、Linux 的编印交互实机验收、Android 万人负载测量及实体打印装订尚未完成。详见 [验证记录](specs/genealogy-publication-verification.md)、[PDF 成品验收](specs/genealogy-publication-pdf-review.md)和[Android 复测清单](specs/genealogy-publication-android-acceptance.md)。
 
@@ -163,11 +163,11 @@ macOS 原生流程和三种 PDF 成品已完成验收，Android 功能与样式�
 
 | 文件名示例 | 适用设备 |
 | --- | --- |
-| `Branchloom_Desktop_Windows_x64_v0.1.8-setup.exe` | Windows 桌面电脑 |
-| `Branchloom_Desktop_macOS_Apple-Silicon_v0.1.8.dmg` | Apple 芯片 Mac（M1 及后续型号） |
-| `Branchloom_Desktop_macOS_Intel_v0.1.8.dmg` | Intel 芯片 Mac |
-| `Branchloom_Desktop_Linux_x64_v0.1.8.AppImage` / `.deb` | 64 位 Linux 桌面电脑 |
-| `Branchloom_Android_arm64_v0.1.8_release.apk` | Android 12 及以上的 ARM64 设备；已签名的 Release APK |
+| `Branchloom_Desktop_Windows_x64_v0.1.9-setup.exe` | Windows 桌面电脑 |
+| `Branchloom_Desktop_macOS_Apple-Silicon_v0.1.9.dmg` | Apple 芯片 Mac（M1 及后续型号） |
+| `Branchloom_Desktop_macOS_Intel_v0.1.9.dmg` | Intel 芯片 Mac |
+| `Branchloom_Desktop_Linux_x64_v0.1.9.AppImage` / `.deb` | 64 位 Linux 桌面电脑 |
+| `Branchloom_Android_arm64_v0.1.9_release.apk` | Android 12 及以上的 ARM64 设备；已签名的 Release APK |
 
 暂不提供 iOS 安装包。
 
@@ -240,14 +240,14 @@ pnpm test:cli
 发布版本只维护根 `Cargo.toml` 中的一处 workspace 版本。使用命令更新版本并自动刷新 `Cargo.lock`：
 
 ```bash
-pnpm release:version 0.1.8
+pnpm release:version 0.1.9
 ```
 
-发布 tag 必须与 workspace 版本一致，例如版本 `0.1.8` 对应 `v0.1.8`。
+发布 tag 必须与 workspace 版本一致，例如版本 `0.1.9` 对应 `v0.1.9`。
 
-版本发布说明保存在 `.github/release-notes/<tag>.md`（如 [v0.1.8](.github/release-notes/v0.1.8.md)）。推送 tag 后，流水线先执行类型检查、前端与 Rust 测试，再创建 Release 草稿并上传各平台安装包；全部构建成功后再将草稿正式发布。缺少对应说明时使用默认安装说明。
+版本发布说明保存在 `.github/release-notes/<tag>.md`（如 [v0.1.9](.github/release-notes/v0.1.9.md)）。推送 tag 后，流水线先执行类型检查、前端与 Rust 测试，再创建 Release 草稿并上传各平台安装包；全部构建成功后再将草稿正式发布。缺少对应说明时使用默认安装说明。
 
-Android 构建（`pnpm build:android`、`pnpm build:android:release`）以及通过 `pnpm tauri android` 调用的初始化、开发和构建命令，会自动读取同一 workspace 版本并传给 Tauri。APK 的 `versionName` 与该版本一致，`versionCode` 按 [Tauri 默认规则](https://v2.tauri.app/reference/config/#versioncode) `major × 1000000 + minor × 1000 + patch` 生成，例如 `0.1.8` 对应 `1008`。无需在 `tauri.conf.json` 或生成的 `gen/android` 中另行维护版本号。
+Android 构建（`pnpm build:android`、`pnpm build:android:release`）以及通过 `pnpm tauri android` 调用的初始化、开发和构建命令，会自动读取同一 workspace 版本并传给 Tauri。APK 的 `versionName` 与该版本一致，`versionCode` 按 [Tauri 默认规则](https://v2.tauri.app/reference/config/#versioncode) `major × 1000000 + minor × 1000 + patch` 生成，例如 `0.1.9` 对应 `1009`。无需在 `tauri.conf.json` 或生成的 `gen/android` 中另行维护版本号。
 
 本地生成可安装的 Android Release APK，先复制 `.env.android.example` 为 `.env.android.local`，填入签名密钥的绝对路径 `ANDROID_KEYSTORE_PATH` 和别名 `ANDROID_KEY_ALIAS`，再运行：
 

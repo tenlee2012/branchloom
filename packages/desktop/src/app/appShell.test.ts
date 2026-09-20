@@ -121,13 +121,14 @@ describe('application shell', () => {
   it('forwards the root experience into the latest project tree', async () => {
     const { wrapper, router } = await mountShell('/')
 
-    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('project-tree'))
+    // The first tree navigation also loads the lazy route's modules on cold CI workers.
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('project-tree'), { timeout: 5_000 })
     expect(wrapper.find('nav[aria-label="项目导航"]').exists()).toBe(true)
     expect(wrapper.get('button[name="刷新资料"]').text()).toContain('刷新资料')
     expect(wrapper.find('.prototype-notice').exists()).toBe(false)
 
     wrapper.unmount()
-  })
+  }, 10_000)
 
   it.each(['/new', '/project/project-demo-family/manage/overview'])(
     'returns from GitHub import to %s through a single header back button',

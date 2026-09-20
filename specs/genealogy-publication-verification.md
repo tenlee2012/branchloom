@@ -18,7 +18,7 @@
 | `pnpm test:unit` | 554 项通过，含项目管理子菜单、窄屏导航、原地刷新保留输入/焦点，以及取消离开后标题不变 |
 | `pnpm build` | 通过；PDF worker、字体、CMap、解码器进入离线产物。已有家谱布局引擎大分块提示仍在 |
 | `pnpm test:cli` | PDF 成品修正后重跑通过：核心 85、CLI 单测 4、CLI 集成 15；万人测试另行显式运行 |
-| `cargo test --workspace --offline` | v0.1.8 发布前重跑：120 项通过（Tauri 16、CLI 单测 4、CLI 集成 15、核心 85）；万人测试默认忽略，已另行显式执行 |
+| `cargo test --workspace --offline` | v0.1.9 发布前重跑：120 项通过（Tauri 16、CLI 单测 4、CLI 集成 15、核心 85）；万人测试默认忽略，已另行显式执行 |
 | Chrome 编印端到端测试 | 4 项全部通过，48.8 秒；含键盘进入管理子菜单、模拟缺少 `URL.parse`、三类 PDF 预览导出、窄屏、并发冲突、失败重试 |
 | 全量 Chrome 端到端测试 | 35 项中 30 项通过、5 项原有流程失败，见下文 |
 | `cargo fmt --all -- --check`、`git diff --check` | 通过 |
@@ -40,6 +40,8 @@ Chrome 的四个编印测试验证：
 全量 E2E 的 5 项失败均在此次修改范围之外：项目包页面旧文案断言、新建人物旧抽屉定位，以及托管存储明确禁用的 `mergePeople`、`cleanupProject`、`restoreSnapshot`。相关禁用分支和 UI 在仓库 HEAD 已存在；未通过削弱断言或实现无关维护功能来掩盖失败。
 
 Clippy 的原有问题位于 `application.rs` 的 `set_local_attachment_file_if_revision` 参数数目、`mutation_arg` 显式生命周期，以及 `contract.rs` 的布尔表达式和 3 处闰年取模表达式。普通 Clippy 能完成；严格模式仍失败。此次模块出现过的一条 glyph clone lint 已修正。
+
+发布流水线补充：v0.1.8 两次运行分别在原有 `appShell` 与 `projects` 首次进入家谱树测试中触发默认 1 秒等待超时，其余 553 项通过。两处等待改为 5 秒、单项测试上限 10 秒，保留路由和界面断言；正式发布版本更新为 v0.1.9。v0.1.8 未生成 Release。
 
 ## 万人规模
 
@@ -73,7 +75,7 @@ Clippy 的原有问题位于 `application.rs` 的 `set_local_attachment_file_if_
 | Windows | 共用实现已接入 | 对应系统构建、预览、文件对话框和输出实测 |
 | Linux | 共用实现已接入 | 对应系统构建、预览、文件对话框和输出实测 |
 
-未执行的项目仍作为验证限制披露，不能以共享代码替代四平台实测。依用户要求在原工作目录的新分支 `codex/genealogy-publication` 开发，未使用 worktree。2026-09-20 用户确认 Android 真机验收正常，并要求将功能发布为正式版本；发布版本为 v0.1.8。用户原有 `.gitignore` 与图标修改不属于本次发布范围。
+未执行的项目仍作为验证限制披露，不能以共享代码替代四平台实测。依用户要求在原工作目录的新分支 `codex/genealogy-publication` 开发，未使用 worktree。2026-09-20 用户确认 Android 真机验收正常，并要求将功能发布为正式版本；发布版本为 v0.1.9。用户原有 `.gitignore` 与图标修改不属于本次发布范围。
 
 ## macOS 原生窗口验收补充
 

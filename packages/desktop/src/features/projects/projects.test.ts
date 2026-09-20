@@ -84,13 +84,14 @@ describe('project entry', () => {
   it('opens the latest project tree instead of the retired promotional home', async () => {
     const { wrapper, router } = await mountProjects('/')
 
-    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('project-tree'))
+    // The first tree navigation also loads the lazy route's modules on cold CI workers.
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('project-tree'), { timeout: 5_000 })
     expect(router.currentRoute.value.params.projectId).toBe('project-demo-family')
     expect(wrapper.find('.home-view').exists()).toBe(false)
     expect(wrapper.get('nav[aria-label="项目导航"]')).toBeTruthy()
 
     wrapper.unmount()
-  })
+  }, 10_000)
 
   it('opens project creation when the repository is empty', async () => {
     const repository = overrideListProjects(makeRepository(), async () => [])
