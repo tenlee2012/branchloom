@@ -165,11 +165,11 @@ macOS 原生流程和三种 PDF 成品已完成验收，Android 功能与样式�
 
 | 文件名示例 | 适用设备 |
 | --- | --- |
-| `Branchloom_Desktop_Windows_x64_v0.1.9-setup.exe` | Windows 桌面电脑 |
-| `Branchloom_Desktop_macOS_Apple-Silicon_v0.1.9.dmg` | Apple 芯片 Mac（M1 及后续型号） |
-| `Branchloom_Desktop_macOS_Intel_v0.1.9.dmg` | Intel 芯片 Mac |
-| `Branchloom_Desktop_Linux_x64_v0.1.9.AppImage` / `.deb` | 64 位 Linux 桌面电脑 |
-| `Branchloom_Android_arm64_v0.1.9_release.apk` | Android 12 及以上的 ARM64 设备；已签名的 Release APK |
+| `Branchloom_Desktop_Windows_x64_v0.1.10-setup.exe` | Windows 桌面电脑 |
+| `Branchloom_Desktop_macOS_Apple-Silicon_v0.1.10.dmg` | Apple 芯片 Mac（M1 及后续型号） |
+| `Branchloom_Desktop_macOS_Intel_v0.1.10.dmg` | Intel 芯片 Mac |
+| `Branchloom_Desktop_Linux_x64_v0.1.10.AppImage` / `.deb` | 64 位 Linux 桌面电脑 |
+| `Branchloom_Android_arm64_v0.1.10_release.apk` | Android 12 及以上的 ARM64 设备；已签名的 Release APK |
 
 暂不提供 iOS 安装包。
 
@@ -242,14 +242,14 @@ pnpm test:cli
 发布版本只维护根 `Cargo.toml` 中的一处 workspace 版本。使用命令更新版本并自动刷新 `Cargo.lock`：
 
 ```bash
-pnpm release:version 0.1.9
+pnpm release:version 0.1.10
 ```
 
-发布 tag 必须与 workspace 版本一致，例如版本 `0.1.9` 对应 `v0.1.9`。
+发布 tag 必须与 workspace 版本一致，例如版本 `0.1.10` 对应 `v0.1.10`。
 
-版本发布说明保存在 `.github/release-notes/<tag>.md`（如 [v0.1.9](.github/release-notes/v0.1.9.md)）。推送 tag 后，流水线先执行类型检查、前端与 Rust 测试，再创建 Release 草稿并上传各平台安装包；全部构建成功后再将草稿正式发布。缺少对应说明时使用默认安装说明。
+版本发布说明保存在 `.github/release-notes/<tag>.md`（如 [v0.1.10](.github/release-notes/v0.1.10.md)）。推送 tag 后，流水线先执行类型检查、前端与 Rust 测试，再创建 Release 草稿并上传各平台安装包；全部构建成功后再将草稿正式发布。缺少对应说明时使用默认安装说明。
 
-Android 构建（`pnpm build:android`、`pnpm build:android:release`）以及通过 `pnpm tauri android` 调用的初始化、开发和构建命令，会自动读取同一 workspace 版本并传给 Tauri。APK 的 `versionName` 与该版本一致，`versionCode` 按 [Tauri 默认规则](https://v2.tauri.app/reference/config/#versioncode) `major × 1000000 + minor × 1000 + patch` 生成，例如 `0.1.9` 对应 `1009`。无需在 `tauri.conf.json` 或生成的 `gen/android` 中另行维护版本号。
+Android 构建（`pnpm build:android`、`pnpm build:android:release`）以及通过 `pnpm tauri android` 调用的初始化、开发和构建命令，会自动读取同一 workspace 版本并传给 Tauri。APK 的 `versionName` 与该版本一致，`versionCode` 按 [Tauri 默认规则](https://v2.tauri.app/reference/config/#versioncode) `major × 1000000 + minor × 1000 + patch` 生成，例如 `0.1.10` 对应 `1010`。无需在 `tauri.conf.json` 或生成的 `gen/android` 中另行维护版本号。
 
 本地生成可安装的 Android Release APK，先复制 `.env.android.example` 为 `.env.android.local`，填入签名密钥的绝对路径 `ANDROID_KEYSTORE_PATH` 和别名 `ANDROID_KEY_ALIAS`，再运行：
 

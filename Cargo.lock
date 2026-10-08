@@ -363,7 +363,7 @@ dependencies = [
 
 [[package]]
 name = "branchloom"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "branchloom-core",
  "keyring",
@@ -381,7 +381,7 @@ dependencies = [
 
 [[package]]
 name = "branchloom-cli"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "branchloom-core",
  "serde",
@@ -394,7 +394,7 @@ dependencies = [
 
 [[package]]
 name = "branchloom-core"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "base64 0.22.1",
  "dirs",
