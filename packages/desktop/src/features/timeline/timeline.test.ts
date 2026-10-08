@@ -8,6 +8,7 @@ import type {
   FamilyEvent,
   GenealogyDate,
   Person,
+  Place,
   Source,
 } from '../../shared/domain/types'
 import { BrowserPrototypeRepository } from '../../shared/repository/BrowserPrototypeRepository'
@@ -103,6 +104,29 @@ async function mountEditor(options: {
       people,
       sources: options.sources ?? [],
       ...(options.event ? { event: options.event } : {}),
+    },
+    global: {
+      plugins: [pinia],
+      provide: { [branchloomRepositoryKey as symbol]: repository },
+      stubs: { Teleport: true },
+    },
+  })
+  mountedWrappers.push(wrapper)
+  await flushPromises()
+  return { wrapper, repository, session }
+}
+
+async function mountPlaceManager(repository: BranchloomRepository = makeRepository()) {
+  const pinia = createPinia()
+  setActivePinia(pinia)
+  const session = useSessionStore(pinia)
+  session.openProject(await repository.getProject(PROJECT_ID))
+  const wrapper = mount(PlaceManager, {
+    attachTo: document.body,
+    props: {
+      open: true,
+      projectId: PROJECT_ID,
+      places: await repository.listPlaces(PROJECT_ID),
     },
     global: {
       plugins: [pinia],
@@ -212,41 +236,166 @@ describe('timeline grouping', () => {
 
 describe('place management', () => {
   it('creates, edits and removes an unused place through the timeline workspace', async () => {
-    const repository = makeRepository()
-    const pinia = createPinia()
-    setActivePinia(pinia)
-    useSessionStore(pinia).openProject(await repository.getProject(PROJECT_ID))
-    const wrapper = mount(PlaceManager, {
-      attachTo: document.body,
-      props: {
-        open: true,
-        projectId: PROJECT_ID,
-        places: await repository.listPlaces(PROJECT_ID),
-      },
-      global: {
-        plugins: [pinia],
-        provide: { [branchloomRepositoryKey as symbol]: repository },
-        stubs: { Teleport: true },
-      },
-    })
-    mountedWrappers.push(wrapper)
+    const { wrapper, repository } = await mountPlaceManager()
 
-    await wrapper.findAll('button').find((button) => button.text() === '新建地点')!.trigger('click')
     await wrapper.get('input[name="placeName"]').setValue('新建地点')
     await wrapper.get('input[name="placeAliases"]').setValue('旧称；别称')
     await wrapper.get('textarea[name="placeNotes"]').setValue('地点备注')
-    await wrapper.get('button[name="保存地点"]').trigger('click')
+    await wrapper.get('button[name="新建地点"]').trigger('click')
     await flushPromises()
 
     const created = (await repository.listPlaces(PROJECT_ID)).find(({ name }) => name === '新建地点')
     expect(created).toMatchObject({ aliases: ['旧称', '别称'], notes: '地点备注' })
+    expect(wrapper.emitted('close')).toHaveLength(1)
 
-    await wrapper.setProps({ places: await repository.listPlaces(PROJECT_ID) })
+    await wrapper.setProps({ open: false, places: await repository.listPlaces(PROJECT_ID) })
+    await wrapper.setProps({ open: true })
+    await wrapper.get('select[name="placeRecord"]').setValue(created!.id)
+    await wrapper.get('input[name="placeName"]').setValue('修订地点')
+    await wrapper.get('button[name="保存地点"]').trigger('click')
+    await flushPromises()
+    expect((await repository.listPlaces(PROJECT_ID)).find(({ id }) => id === created!.id))
+      .toMatchObject({ name: '修订地点', aliases: ['旧称', '别称'], notes: '地点备注' })
+    expect(wrapper.emitted('close')).toHaveLength(2)
+
+    await wrapper.setProps({ open: false, places: await repository.listPlaces(PROJECT_ID) })
+    await wrapper.setProps({ open: true })
     await wrapper.get('select[name="placeRecord"]').setValue(created!.id)
     await wrapper.get('button[name="删除地点"]').trigger('click')
     await wrapper.get('button[name="确认删除地点"]').trigger('click')
     await flushPromises()
     expect((await repository.listPlaces(PROJECT_ID)).some(({ id }) => id === created!.id)).toBe(false)
+  })
+
+  it('opens a blank creation form with a single create button and resets all fields when leaving an existing place', async () => {
+    const { wrapper, repository } = await mountPlaceManager()
+    expect((wrapper.get('select[name="placeRecord"]').element as HTMLSelectElement).value).toBe('')
+    expect((wrapper.get('input[name="placeName"]').element as HTMLInputElement).value).toBe('')
+    expect(wrapper.findAll('.place-manager__actions button').map((button) => button.text())).toEqual(['新建地点'])
+    expect(wrapper.get('button[name="新建地点"]').attributes('disabled')).toBeDefined()
+
+    const existing = (await repository.listPlaces(PROJECT_ID))[0]!
+    await wrapper.get('select[name="placeRecord"]').setValue(existing.id)
+    expect((wrapper.get('input[name="placeName"]').element as HTMLInputElement).value).toBe(existing.name)
+    await wrapper.get('input[name="placeAliases"]').setValue('临时别名')
+    await wrapper.get('select[name="placeParent"]').setValue((await repository.listPlaces(PROJECT_ID))[1]!.id)
+    await wrapper.get('textarea[name="placeNotes"]').setValue('临时备注')
+    await wrapper.get('select[name="placeRecord"]').setValue('')
+
+    for (const selector of ['input[name="placeName"]', 'input[name="placeAliases"]', 'select[name="placeParent"]', 'textarea[name="placeNotes"]', 'input[name="placeLatitude"]', 'input[name="placeLongitude"]']) {
+      expect((wrapper.get(selector).element as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement).value).toBe('')
+    }
+    expect(wrapper.findAll('.place-manager__actions button').map((button) => button.text())).toEqual(['新建地点'])
+  })
+
+  it('creates Fuzhou under Fujian without renaming any previously saved place', async () => {
+    const base = makeRepository()
+    const parent = (await base.listPlaces(PROJECT_ID)).find(({ id }) => id === 'place-fujian')!
+    const before = await base.listPlaces(PROJECT_ID)
+    const savePlace = vi.fn(base.savePlace.bind(base))
+    const { wrapper } = await mountPlaceManager(proxyRepository(base, { savePlace }))
+    await wrapper.get('select[name="placeRecord"]').setValue(parent.id)
+    await wrapper.get('select[name="placeRecord"]').setValue('')
+    await wrapper.get('input[name="placeName"]').setValue('福州市')
+    await wrapper.get('select[name="placeParent"]').setValue(parent.id)
+    await wrapper.get('input[name="placeLatitude"]').setValue('26.0745')
+    await wrapper.get('input[name="placeLongitude"]').setValue('119.2965')
+    await wrapper.get('button[name="新建地点"]').trigger('click')
+    await flushPromises()
+
+    const after = await base.listPlaces(PROJECT_ID)
+    const created = after.find(({ name }) => name === '福州市')
+    expect(created).toMatchObject({ projectId: PROJECT_ID, parentId: parent.id, coordinates: { latitude: 26.0745, longitude: 119.2965 } })
+    expect(savePlace).toHaveBeenCalledTimes(1)
+    expect(after.filter(({ id }) => before.some((place) => place.id === id))).toEqual(before)
+    expect(after).toHaveLength(before.length + 1)
+    expect(wrapper.emitted('changed')).toHaveLength(1)
+    expect(wrapper.emitted('close')).toHaveLength(1)
+
+    await wrapper.setProps({ open: false, places: after })
+    await wrapper.setProps({ open: true })
+    await wrapper.get('select[name="placeRecord"]').setValue(created!.id)
+    expect((wrapper.get('input[name="placeName"]').element as HTMLInputElement).value).toBe('福州市')
+    expect((wrapper.get('select[name="placeParent"]').element as HTMLSelectElement).value).toBe(parent.id)
+    expect((wrapper.get('input[name="placeLatitude"]').element as HTMLInputElement).value).toBe('26.0745')
+    expect((wrapper.get('input[name="placeLongitude"]').element as HTMLInputElement).value).toBe('119.2965')
+
+    await wrapper.get('input[name="placeLatitude"]').setValue('')
+    await wrapper.get('input[name="placeLongitude"]').setValue('')
+    await wrapper.get('button[name="保存地点"]').trigger('click')
+    await flushPromises()
+    const cleared = (await base.listPlaces(PROJECT_ID)).find(({ id }) => id === created!.id)!
+    expect(cleared.coordinates).toBeUndefined()
+    expect(cleared).toMatchObject({ name: '福州市', parentId: parent.id })
+  })
+
+  it('keeps an invalid GPS draft open without submitting any data', async () => {
+    const base = makeRepository()
+    const savePlace = vi.fn(base.savePlace.bind(base))
+    const { wrapper } = await mountPlaceManager(proxyRepository(base, { savePlace }))
+    await wrapper.get('input[name="placeName"]').setValue('GPS 校验地点')
+    await wrapper.get('input[name="placeLatitude"]').setValue('26.0745')
+    await wrapper.get('button[name="新建地点"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toContain('同时填写')
+    expect(savePlace).not.toHaveBeenCalled()
+    expect(wrapper.emitted('close')).toBeUndefined()
+    expect((wrapper.get('input[name="placeLatitude"]').element as HTMLInputElement).value).toBe('26.0745')
+
+    await wrapper.get('input[name="placeLongitude"]').setValue('181')
+    await wrapper.get('button[name="新建地点"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toContain('经度必须')
+    expect(savePlace).not.toHaveBeenCalled()
+  })
+
+  it('submits only once during saving and while the parent closes the dialog', async () => {
+    const base = makeRepository()
+    const pending = deferred<Place>()
+    const savePlace = vi.fn(() => pending.promise)
+    const { wrapper, session } = await mountPlaceManager(proxyRepository(base, { savePlace }))
+    await wrapper.get('input[name="placeName"]').setValue('只提交一次的地点')
+    await wrapper.get('form').trigger('submit')
+    await wrapper.get('form').trigger('submit')
+    expect(savePlace).toHaveBeenCalledTimes(1)
+    expect(wrapper.get('button[name="新建地点"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('select[name="placeRecord"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('input[name="placeName"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('select[name="placeParent"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('input[name="placeLatitude"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('input[name="placeLongitude"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('button[aria-label="关闭地点管理"]').trigger('click')
+    expect(wrapper.emitted('close')).toBeUndefined()
+
+    pending.resolve({ id: 'place-once', projectId: PROJECT_ID, name: '只提交一次的地点', aliases: [], notes: '' })
+    await flushPromises()
+    expect(session.saveStatus).toBe('saved')
+    expect(wrapper.emitted('close')).toHaveLength(1)
+    await wrapper.get('form').trigger('submit')
+    expect(savePlace).toHaveBeenCalledTimes(1)
+  })
+
+  it('retains the draft and allows a retry after saving fails', async () => {
+    const base = makeRepository()
+    const savePlace = vi.fn(base.savePlace.bind(base)).mockRejectedValueOnce(new Error('测试保存失败'))
+    const { wrapper, session } = await mountPlaceManager(proxyRepository(base, { savePlace }))
+    const parent = (await base.listPlaces(PROJECT_ID))[0]!
+    await wrapper.get('input[name="placeName"]').setValue('重试地点')
+    await wrapper.get('select[name="placeParent"]').setValue(parent.id)
+    await wrapper.get('button[name="新建地点"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[role="alert"]').text()).toBe('测试保存失败')
+    expect(session.saveStatus).toBe('failed')
+    expect((wrapper.get('input[name="placeName"]').element as HTMLInputElement).value).toBe('重试地点')
+    expect((wrapper.get('select[name="placeParent"]').element as HTMLSelectElement).value).toBe(parent.id)
+    expect(wrapper.emitted('close')).toBeUndefined()
+
+    await wrapper.get('button[name="新建地点"]').trigger('click')
+    await flushPromises()
+    expect(savePlace).toHaveBeenCalledTimes(2)
+    expect(wrapper.emitted('close')).toHaveLength(1)
+    expect((await base.listPlaces(PROJECT_ID)).filter(({ name }) => name === '重试地点')).toHaveLength(1)
   })
 })
 

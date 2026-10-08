@@ -189,6 +189,18 @@
         "Does not discard publicationPlans or recommend downgrading the project format",
         "Does not claim to have generated or printed a file without an actual result"
       ]
+    },
+    {
+      "id": 18,
+      "prompt": "给 Branchloom 中的福州市地点录入 GPS：纬度 26.0745，经度 119.2965，并告诉我备份是否会保留坐标。",
+      "expected_output": "Explains how to use the app's 管理地点 dialog for the optional WGS84 decimal-degree coordinate pair, because the public place write schema remains unpublished. Explains that .blp and GitHub sync retain coordinates while GEDCOM does not, and does not claim to have written the data.",
+      "assertions": [
+        "Does not invent a published place write schema or bypass schema discovery",
+        "Does not directly edit SQLite or call internal Tauri commands",
+        "Keeps latitude and longitude together and accepts zero as a valid coordinate",
+        "Does not infer or query a coordinate from the place name",
+        "Does not claim that GEDCOM retains GPS coordinates or that a migration map is already implemented"
+      ]
     }
   ]
 }

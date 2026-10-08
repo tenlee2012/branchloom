@@ -15,6 +15,12 @@ public PDF-generation or publication-plan editing CLI command. Project packages 
 `publicationPlans` in format `1.1.0`; importing format `1.0.0` remains supported. Do not substitute
 internal publication RPCs for the public CLI or discard the plans while exchanging project data.
 
+Places may have optional WGS84 decimal-degree `coordinates` with both numeric `latitude` and
+`longitude`. Complete project exchange and sync preserve them; GEDCOM does not. The place write
+schema is still unpublished, so direct coordinate editing to the app's **管理地点** dialog rather
+than guessing CLI input. Do not infer or fetch coordinates from a place name. See
+[coordinate data details](references/cli-reference.md#place-coordinates).
+
 ## Before accessing data
 
 - Run `branchloom doctor --output json` once before the task's first data operation, using the

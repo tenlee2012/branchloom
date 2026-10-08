@@ -445,7 +445,7 @@ pub fn writable_fields(resource: Resource) -> &'static [&'static str] {
             "sourceIds",
             "notes",
         ],
-        Resource::Place => &["name", "parentId", "aliases", "notes"],
+        Resource::Place => &["name", "parentId", "aliases", "notes", "coordinates"],
         Resource::Source => &[
             "title",
             "type",
@@ -515,6 +515,7 @@ pub fn prepare_create_input(resource: Resource, input: &Value) -> CoreResult<Val
             object.entry("notes").or_insert(json!(""));
             validate_citation(&normalized)?;
         }
+        Resource::Place => crate::core::place::validate_coordinates(normalized.get("coordinates"))?,
         _ => {}
     }
     Ok(normalized)
@@ -532,6 +533,7 @@ pub fn validate_record(resource: Resource, value: &Value) -> CoreResult<()> {
         Resource::Relationship => validate_relationship(value)?,
         Resource::Source => validate_source(value)?,
         Resource::Citation => validate_citation(value)?,
+        Resource::Place => crate::core::place::validate_coordinates(value.get("coordinates"))?,
         _ => {}
     }
     Ok(())

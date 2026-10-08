@@ -1,4 +1,5 @@
 import type { PrototypeState } from '../domain/types'
+import { isPlaceCoordinates } from '../domain/placeCoordinates'
 
 export const PROTOTYPE_STORAGE_KEY = 'branchloom.prototype.v1'
 export const SNAPSHOT_PAYLOADS_STORAGE_KEY = 'branchloom.prototype.v1.snapshot-payloads'
@@ -210,6 +211,7 @@ function isPlace(value: unknown): boolean {
     isString(value.name) &&
     isOptional(value.parentId, isString) &&
     isStringArray(value.aliases) &&
+    isOptional(value.coordinates, isPlaceCoordinates) &&
     isString(value.notes)
 }
 

@@ -269,9 +269,15 @@ function removeRelationship(relationshipId: string) {
   closeRelationshipEditor()
 }
 
-function applyRelative(savedPerson: Person, savedRelationship: Relationship) {
+function applyRelative(savedPerson: Person, savedRelationship: Relationship, additionalRelationships: Relationship[] = []) {
   applySaved(savedPerson)
   applyRelationship(savedRelationship)
+  for (const relationship of [savedRelationship, ...additionalRelationships]) {
+    if (relationship.projectId !== projectId.value) continue
+    const index = projectRelationships.value.findIndex(({ id }) => id === relationship.id)
+    if (index < 0) projectRelationships.value.push(relationship)
+    else projectRelationships.value[index] = relationship
+  }
 }
 
 function openNewRelationship() {

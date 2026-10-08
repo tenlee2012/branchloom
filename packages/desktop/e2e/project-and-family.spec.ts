@@ -25,6 +25,11 @@ async function quickAddRelative(
   await dialog.getByLabel('关系性质').selectOption(input.relationshipType
     ?? (input.category === 'partner' ? 'married' : 'biological'))
   if (input.direction) await dialog.getByLabel('关系方向').selectOption(input.direction)
+  if (input.direction === 'current-is-parent') {
+    await expect(dialog.getByText('正在读取另一位家长的候选资料…')).toBeHidden()
+    const otherParent = dialog.getByRole('combobox', { name: '另一位家长', exact: true })
+    if (await otherParent.count()) await otherParent.selectOption({ label: '仅关联当前家长' })
+  }
   await dialog.getByRole('button', { name: '添加并关联', exact: true }).click()
   await expect(dialog).toBeHidden()
 }
@@ -75,10 +80,12 @@ test('tree person shortcuts preset a child relationship and save it atomically',
   await expect(dialog.getByLabel('关系性质')).toHaveValue('')
   await dialog.getByLabel('姓名').fill('快捷添加子女')
   await dialog.getByLabel('关系性质').selectOption('biological')
+  await dialog.getByRole('combobox', { name: '另一位家长', exact: true }).selectOption({ label: '仅关联当前家长' })
   await dialog.getByRole('button', { name: '添加并关联', exact: true }).click()
 
   await expect(dialog).toBeHidden()
-  await expect(page.getByLabel('跳转人物', { exact: true })).toContainText('快捷添加子女')
+  await page.getByRole('searchbox', { name: '搜索跳转人物' }).fill('快捷添加子女')
+  await expect(page.getByRole('button', { name: '定位快捷添加子女', exact: true })).toBeVisible()
   expectNoRuntimeErrors(errors)
 })
 

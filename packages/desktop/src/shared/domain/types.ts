@@ -117,6 +117,12 @@ export interface FamilyEvent {
   notes: string
 }
 
+/** WGS84 coordinates in decimal degrees; latitude and longitude are stored together. */
+export interface PlaceCoordinates {
+  latitude: number
+  longitude: number
+}
+
 export interface Place {
   id: UUID
   projectId: UUID
@@ -124,6 +130,7 @@ export interface Place {
   parentId?: UUID
   aliases: string[]
   notes: string
+  coordinates?: PlaceCoordinates
 }
 
 export type OrganizationType =
@@ -480,6 +487,7 @@ export interface BranchloomRepository {
   savePersonWithRelationship(
     person: Person,
     relationship: Relationship,
+    additionalRelationships?: Relationship[],
   ): Promise<{ person: Person; relationship: Relationship }>
   listEvents(projectId: UUID): Promise<FamilyEvent[]>
   saveEvent(event: FamilyEvent): Promise<FamilyEvent>

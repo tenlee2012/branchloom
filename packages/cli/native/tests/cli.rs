@@ -432,6 +432,124 @@ fn person_describe_publishes_scope_and_write_schema() {
 }
 
 #[test]
+fn place_coordinates_follow_preview_apply_and_shared_validation() {
+    let data_dir = tempdir().expect("temporary CLI data directory");
+    let path = data_dir.path().to_str().expect("data path");
+    let mut service = ApplicationService::open(database_path(data_dir.path())).expect("open core");
+    service
+        .create_project_with_id(
+            "project-gps".to_owned(),
+            NewProject {
+                name: "GPS test".to_owned(),
+                description: String::new(),
+            },
+        )
+        .expect("create project");
+    let revision = service.data_revision().expect("revision");
+    drop(service);
+    let input = data_dir.path().join("place.json");
+    let input_path = input.to_str().expect("input path");
+    for coordinates in [
+        json!({ "latitude": 26 }),
+        json!({ "latitude": 91, "longitude": 119 }),
+        json!({ "latitude": 26, "longitude": "119" }),
+    ] {
+        fs::write(
+            &input,
+            json!({
+                "name": "Test place", "aliases": [], "notes": "", "coordinates": coordinates
+            })
+            .to_string(),
+        )
+        .expect("write invalid coordinates");
+        let (status, envelope, _) = run(&[
+            "place",
+            "create",
+            "--data-dir",
+            path,
+            "--project",
+            "project-gps",
+            "--input",
+            input_path,
+            "--output",
+            "json",
+        ]);
+        assert_ne!(status, 0);
+        assert_eq!(envelope["error"]["code"], "VALIDATION_ERROR");
+    }
+    let service =
+        ApplicationService::open(database_path(data_dir.path())).expect("verify no writes");
+    assert_eq!(service.data_revision().expect("revision"), revision);
+    assert!(service
+        .list_records(Resource::Place, "project-gps")
+        .expect("places")
+        .is_empty());
+    drop(service);
+
+    let coordinates = json!({ "latitude": 26.0745, "longitude": 119.2965 });
+    fs::write(
+        &input,
+        json!({
+            "name": "Test place", "aliases": [], "notes": "", "coordinates": coordinates
+        })
+        .to_string(),
+    )
+    .expect("write GPS input");
+    let (status, preview, stderr) = run(&[
+        "place",
+        "create",
+        "--data-dir",
+        path,
+        "--project",
+        "project-gps",
+        "--input",
+        input_path,
+        "--output",
+        "json",
+    ]);
+    assert_eq!(status, 0);
+    assert!(stderr.is_empty());
+    assert_eq!(preview["contractVersion"], 3);
+    assert_eq!(preview["data"]["status"], "preview");
+    assert!(preview["data"]["patch"]
+        .as_array()
+        .expect("patch")
+        .iter()
+        .any(|entry| entry["path"] == "/coordinates" && entry["value"] == coordinates));
+    let etag = preview["data"]["etag"].as_str().expect("etag");
+    let (status, applied, stderr) = run(&[
+        "place",
+        "create",
+        "--data-dir",
+        path,
+        "--project",
+        "project-gps",
+        "--input",
+        input_path,
+        "--apply",
+        "--if-match",
+        etag,
+        "--output",
+        "json",
+    ]);
+    assert_eq!(status, 0);
+    assert!(stderr.is_empty());
+    assert_eq!(applied["data"]["record"]["coordinates"], coordinates);
+    assert!(applied["data"]["changeSetId"].as_str().is_some());
+    let (_, listed, _) = run(&[
+        "place",
+        "list",
+        "--data-dir",
+        path,
+        "--project",
+        "project-gps",
+        "--output",
+        "json",
+    ]);
+    assert_eq!(listed["data"][0]["coordinates"], coordinates);
+}
+
+#[test]
 fn event_describe_and_write_use_the_published_schema() {
     let (status, description, stderr) = run(&["event", "describe", "--output", "json"]);
     assert_eq!(status, 0);

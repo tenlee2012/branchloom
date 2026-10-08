@@ -449,12 +449,12 @@ function toggleBranch(personId: string) {
   collapsedPersonIds.value = next
 }
 
-function handleRelativeSaved(person: Person, relationship: Relationship) {
+function handleRelativeSaved(person: Person, relationship: Relationship, additionalRelationships: Relationship[] = []) {
   if (!data.value) return
   data.value = {
     ...data.value,
     people: [...data.value.people, person],
-    relationships: [...data.value.relationships, relationship],
+    relationships: [...data.value.relationships, relationship, ...additionalRelationships],
   }
   quickAddOpen.value = false
 }

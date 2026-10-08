@@ -68,6 +68,9 @@ impl ProjectData {
             })?;
             let mut ids = BTreeSet::new();
             for entity in entities {
+                if collection == "places" {
+                    crate::core::place::validate_coordinates(entity.get("coordinates"))?;
+                }
                 let id = required_string(entity, "id")?;
                 validate_identifier(id, "entity id")?;
                 if !ids.insert(id.to_owned()) {
@@ -774,7 +777,11 @@ mod tests {
         )
         .expect("write attachment");
 
-        let data = test_project_data(&attachment_hash);
+        let mut data = test_project_data(&attachment_hash);
+        data.collections.get_mut("places").expect("places").push(json!({
+            "id": "place-test", "projectId": "project-test", "name": "GPS test place",
+            "aliases": [], "notes": "", "coordinates": { "latitude": 26.0745, "longitude": 119.2965 }
+        }));
         let tree =
             ProjectTree::from_project_data(&data, &attachments_root).expect("create project tree");
         let archive = directory.path().join("family.blp");
@@ -782,6 +789,10 @@ mod tests {
         let decoded = ProjectTree::read_archive(&archive).expect("read project archive");
 
         assert_eq!(decoded, tree);
+        assert_eq!(
+            ProjectTree::from_project_data(&data, &attachments_root).expect("repeat export"),
+            tree
+        );
         assert_eq!(
             decoded.parse_project_data().expect("parse project data"),
             data
@@ -816,6 +827,45 @@ mod tests {
             .keys()
             .all(|path| !path.starts_with("media/sha256/")));
         assert_eq!(tree.parse_project_data().expect("parse project data"), data);
+    }
+
+    #[test]
+    fn rejects_invalid_place_coordinates_on_export_and_import() {
+        let directory = tempdir().expect("temporary directory");
+        let mut data = test_project_data("unused");
+        data.collections
+            .get_mut("attachments")
+            .expect("attachments")
+            .clear();
+        data.collections
+            .get_mut("places")
+            .expect("places")
+            .push(json!({
+                "id": "place-test", "projectId": "project-test", "name": "GPS test place",
+                "aliases": [], "notes": "", "coordinates": { "latitude": 0, "longitude": 0 }
+            }));
+        let tree = ProjectTree::from_project_data(&data, directory.path()).expect("valid tree");
+        let mut files = tree.into_files();
+        let path = "data/places/pl/place-test.jsonld";
+        let mut place: Value =
+            serde_json::from_slice(files.get(path).expect("place file")).expect("parse place");
+        place["coordinates"]["latitude"] = json!(91);
+        files.insert(
+            path.to_owned(),
+            canonical_pretty_json(&place).expect("place JSON"),
+        );
+        let invalid = ProjectTree::rebuild_manifest(files).expect("rebuild checksums");
+        assert!(matches!(
+            invalid.parse_project_data(),
+            Err(CoreError::Validation(_))
+        ));
+
+        data.collections.get_mut("places").expect("places")[0]["coordinates"] =
+            json!({ "latitude": 26 });
+        assert!(matches!(
+            ProjectTree::from_project_data(&data, directory.path()),
+            Err(CoreError::Validation(_))
+        ));
     }
 
     #[test]

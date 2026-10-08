@@ -6,7 +6,7 @@ Branchloom 使用一种基于 JSON-LD 1.1 的开放文本格式保存族谱项�
 > - 状态：v1 核心格式已实现；字段级 context 与 Schema 约束仍在完善
 > - 格式名称：Branchloom JSON-LD Repository Format
 > - 格式版本：`1.1.0`
-> - 最后更新：2026-09-20
+> - 最后更新：2026-10-06
 
 如果你只是想了解自己的数据如何保存，请先阅读“快速理解”和“一个最小例子”。如果你
 准备实现导入器、导出器或同步客户端，请继续阅读后面的完整规则。
@@ -585,10 +585,27 @@ eventType, title, date, place, participants, sources, notes
 ### 地点
 
 ```text
-name, parentPlace, aliases, notes
+name, parentPlace, aliases, notes, coordinates
 ```
 
 地点父级必须属于同一项目，并且不能形成环路。
+
+`coordinates` 是可选的 WGS84 GPS 坐标值对象，单位为十进制度：
+
+```json
+{
+  "latitude": 26.0745,
+  "longitude": 119.2965
+}
+```
+
+- 经纬度必须同时存在，且都是有限数值；纬度范围 `[-90, 90]`，经度范围 `[-180, 180]`，边界和 `0` 均有效。
+- 东经、北纬使用正数，西经、南纬使用负数。坐标对象只接受 `latitude`、`longitude` 两个字段。
+- 没有坐标时省略整个 `coordinates`，不写 `null`、空对象或只有一个分量的坐标。
+- 原有地点缺省为无坐标，坐标不从上级地点推断，不按地点名称自动查询或换算。
+- SQLite 实体 JSON、JSON-LD 工作树、`.blp` 和项目快照保留此字段；本次是格式 `1.1.0` 的可选字段扩展，不改 SQLite Schema 或 CLI contract version `3`。
+- 同步将一对经纬度作为同一字段处理：修改地点备注和修改坐标可自动合并；双方改变坐标时产生 `/coordinates` 冲突，不拼接两端不同点的经纬度。
+- 当前 GEDCOM 映射不保留坐标；导出预览与结果给出提示，完整备份使用 `.blp`。
 
 ### 机构
 

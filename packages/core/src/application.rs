@@ -330,31 +330,19 @@ impl ApplicationService {
                 let mut person = mutation_arg(args, 0)?.clone();
                 strip_runtime_media_record(Resource::Person, &mut person);
                 let relationship = mutation_arg(args, 1)?.clone();
+                let additional_relationships = match args.get(2) {
+                    Some(value) => value.as_array().ok_or_else(|| {
+                        CoreError::Validation("additional relationships must be an array".to_owned())
+                    })?.as_slice(),
+                    None => &[],
+                };
                 validate_record(Resource::Person, &person)?;
-                validate_record(Resource::Relationship, &relationship)?;
                 let project_id = required_record_string(&person, "projectId")?;
-                if required_record_string(&relationship, "projectId")? != project_id {
-                    return Err(CoreError::Validation(
-                        "person and relationship must belong to the same project".to_owned(),
-                    ));
-                }
                 let person_id = required_record_string(&person, "id")?;
-                let from = required_record_string(&relationship, "fromPersonId")?;
-                let to = required_record_string(&relationship, "toPersonId")?;
-                if from != person_id && to != person_id {
+                if self.get_record(Resource::Person, person_id)?.is_some() {
                     return Err(CoreError::Validation(
-                        "relationship must reference the new person".to_owned(),
+                        "quick-add requires a new person id".to_owned(),
                     ));
-                }
-                for endpoint in [from, to] {
-                    if endpoint != person_id {
-                        self.validate_same_project_reference(
-                            "relationship",
-                            Resource::Person,
-                            endpoint,
-                            project_id,
-                        )?;
-                    }
                 }
                 self.validate_optional_record_reference(
                     "person",
@@ -377,28 +365,51 @@ impl ApplicationService {
                     Resource::Source,
                     project_id,
                 )?;
-                self.validate_optional_record_reference(
-                    "relationship",
-                    &relationship,
-                    "placeId",
-                    Resource::Place,
-                    project_id,
-                )?;
-                self.validate_record_reference_array(
-                    "relationship",
-                    &relationship,
-                    "sourceIds",
-                    Resource::Source,
-                    project_id,
-                )?;
-                self.save_desktop_records(
-                    method,
-                    &[
-                        (Resource::Person, person.clone()),
-                        (Resource::Relationship, relationship.clone()),
-                    ],
-                    expected_revision,
-                )?;
+                let mut records = vec![(Resource::Person, person.clone())];
+                let mut relationship_ids = HashSet::new();
+                for entry in std::iter::once(&relationship).chain(additional_relationships) {
+                    validate_record(Resource::Relationship, entry)?;
+                    if required_record_string(entry, "projectId")? != project_id {
+                        return Err(CoreError::Validation(
+                            "person and relationship must belong to the same project".to_owned(),
+                        ));
+                    }
+                    if !relationship_ids.insert(required_record_string(entry, "id")?) {
+                        return Err(CoreError::Validation(
+                            "quick-add relationship ids must be distinct".to_owned(),
+                        ));
+                    }
+                    if self.get_record(Resource::Relationship, required_record_string(entry, "id")?)?.is_some() {
+                        return Err(CoreError::Validation(
+                            "quick-add requires a new relationship id".to_owned(),
+                        ));
+                    }
+                    let from = required_record_string(entry, "fromPersonId")?;
+                    let to = required_record_string(entry, "toPersonId")?;
+                    if from != person_id && to != person_id {
+                        return Err(CoreError::Validation(
+                            "relationship must reference the new person".to_owned(),
+                        ));
+                    }
+                    for endpoint in [from, to] {
+                        if endpoint != person_id {
+                            self.validate_same_project_reference(
+                                "relationship",
+                                Resource::Person,
+                                endpoint,
+                                project_id,
+                            )?;
+                        }
+                    }
+                    self.validate_optional_record_reference(
+                        "relationship", entry, "placeId", Resource::Place, project_id,
+                    )?;
+                    self.validate_record_reference_array(
+                        "relationship", entry, "sourceIds", Resource::Source, project_id,
+                    )?;
+                    records.push((Resource::Relationship, entry.clone()));
+                }
+                self.save_desktop_records(method, &records, expected_revision)?;
                 json!({ "person": person, "relationship": relationship })
             }
             "saveOrganizationWithCareer" => {
@@ -1219,7 +1230,8 @@ impl ApplicationService {
             | Resource::Relationship
             | Resource::Event
             | Resource::Source
-            | Resource::Citation => self.validate_record(resource, record)?,
+            | Resource::Citation
+            | Resource::Place => self.validate_record(resource, record)?,
             _ => {}
         }
         match resource {
@@ -2039,7 +2051,7 @@ fn gedcom_export_summary(data: &ProjectData) -> GedcomSummary {
     .into_iter()
     .map(|collection| data.collections[collection].len())
     .sum::<usize>();
-    let warnings = (unsupported_count > 0)
+    let mut warnings: Vec<String> = (unsupported_count > 0)
         .then(|| {
             format!(
                 "{unsupported_count} 条 Branchloom 扩展记录不属于首版 GEDCOM 映射范围，完整备份请使用 .blp 项目包"
@@ -2047,6 +2059,15 @@ fn gedcom_export_summary(data: &ProjectData) -> GedcomSummary {
         })
         .into_iter()
         .collect();
+    let coordinate_count = data.collections["places"]
+        .iter()
+        .filter(|place| place.get("coordinates").is_some())
+        .count();
+    if coordinate_count > 0 {
+        warnings.push(format!(
+            "{coordinate_count} 个地点的 GPS 坐标不会写入 GEDCOM，完整备份请使用 .blp 项目包"
+        ));
+    }
     GedcomSummary {
         people: data.collections["people"].len(),
         relationships: data.collections["relationships"].len(),
@@ -2373,6 +2394,7 @@ fn validate_normalized_state_for_synchronization(state: &Value) -> CoreResult<()
                         | Resource::Event
                         | Resource::Source
                         | Resource::Citation
+                        | Resource::Place
                 ) {
                     validate_record(resource, record)?;
                 }
@@ -2585,6 +2607,72 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
+
+    #[test]
+    fn desktop_place_coordinates_are_validated_persisted_and_cleared_atomically() {
+        let directory = tempdir().expect("temporary data directory");
+        let database = directory.path().join("branchloom.sqlite3");
+        let mut service = ApplicationService::open(&database).expect("open core");
+        service
+            .create_project_with_id(
+                "project-test".to_owned(),
+                NewProject {
+                    name: "GPS test".to_owned(),
+                    description: String::new(),
+                },
+            )
+            .expect("create project");
+        let legacy = json!({
+            "id": "place-test", "projectId": "project-test", "name": "Test place", "aliases": [], "notes": ""
+        });
+        let revision = service.data_revision().expect("revision");
+        service
+            .apply_desktop_mutation_if_revision("savePlace", &json!([legacy]), revision)
+            .expect("legacy place");
+        let mut place = legacy.clone();
+        place["coordinates"] = json!({ "latitude": 26.0745, "longitude": 119.2965 });
+        let revision = service.data_revision().expect("revision");
+        service
+            .apply_desktop_mutation_if_revision("savePlace", &json!([place]), revision)
+            .expect("save GPS");
+        let before_invalid = service.data_revision().expect("revision");
+        let mut invalid = place.clone();
+        invalid["coordinates"]["latitude"] = json!(91);
+        assert!(matches!(
+            service.apply_desktop_mutation_if_revision(
+                "savePlace",
+                &json!([invalid]),
+                before_invalid
+            ),
+            Err(CoreError::Validation(_))
+        ));
+        assert_eq!(service.data_revision().expect("revision"), before_invalid);
+        drop(service);
+
+        let mut service = ApplicationService::open(&database).expect("reopen core");
+        assert_eq!(
+            service
+                .get_record(Resource::Place, "place-test")
+                .expect("get place"),
+            Some(place)
+        );
+        let summary = service
+            .export_project_gedcom("project-test", directory.path().join("family.ged"))
+            .expect("export GEDCOM");
+        assert!(summary
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("GPS")));
+        service
+            .apply_desktop_mutation_if_revision("savePlace", &json!([legacy]), before_invalid)
+            .expect("clear GPS");
+        assert_eq!(
+            service
+                .get_record(Resource::Place, "place-test")
+                .expect("get place"),
+            Some(legacy)
+        );
+    }
 
     #[test]
     fn gedcom_export_atomically_replaces_an_existing_destination() {
@@ -3270,6 +3358,166 @@ mod tests {
             service.create_manual_snapshot("project-test", "   "),
             Err(CoreError::Validation(message)) if message.contains("requires")
         ));
+    }
+
+    #[test]
+    fn desktop_quick_add_saves_both_parents_atomically() {
+        let directory = tempdir().expect("temporary data directory");
+        let database = directory.path().join("branchloom.sqlite3");
+        let mut service = ApplicationService::open(&database).expect("open core");
+        for id in ["project-a", "project-b"] {
+            service
+                .create_project_with_id(
+                    id.to_owned(),
+                    NewProject {
+                        name: id.to_owned(),
+                        description: String::new(),
+                    },
+                )
+                .expect("create project");
+        }
+        let person = |id: &str, project_id: &str| {
+            json!({
+                "id": id, "projectId": project_id,
+                "names": [{ "value": id, "type": "personal", "primary": true }],
+                "sex": "unknown", "status": "unknown", "biography": "", "notes": "",
+                "sourceIds": [], "updatedAt": "2026-01-01T00:00:00Z"
+            })
+        };
+        for (id, project_id) in [
+            ("mother", "project-a"),
+            ("father", "project-a"),
+            ("other-parent", "project-b"),
+        ] {
+            service
+                .put_record(Resource::Person, id, project_id, &person(id, project_id))
+                .expect("create parent");
+        }
+        let child = person("child", "project-a");
+        let primary = json!({
+            "id": "mother-child", "projectId": "project-a",
+            "fromPersonId": "mother", "toPersonId": "child",
+            "category": "parent", "type": "biological", "sourceIds": [], "notes": ""
+        });
+        let additional = json!({
+            "id": "father-child", "projectId": "project-a",
+            "fromPersonId": "father", "toPersonId": "child",
+            "category": "parent", "type": "biological", "sourceIds": [], "notes": ""
+        });
+        let revision = service.data_revision().expect("read revision");
+        for patch in [
+            json!({ "fromPersonId": "other-parent" }),
+            json!({ "fromPersonId": "missing-parent" }),
+            json!({ "projectId": "project-b" }),
+            json!({ "toPersonId": "mother" }),
+            json!({ "id": "mother-child" }),
+            json!({ "type": "invalid" }),
+            json!({ "sourceIds": ["missing-source"] }),
+            json!({ "placeId": "missing-place" }),
+        ] {
+            let mut invalid = additional.clone();
+            invalid
+                .as_object_mut()
+                .expect("relationship object")
+                .extend(patch.as_object().expect("patch object").clone());
+            service
+                .apply_desktop_mutation_if_revision(
+                    "savePersonWithRelationship",
+                    &json!([child, primary, [invalid]]),
+                    revision,
+                )
+                .expect_err("invalid additional relationship must reject the whole write");
+            assert_eq!(
+                service.data_revision().expect("revision after failure"),
+                revision
+            );
+            assert!(service
+                .get_record(Resource::Person, "child")
+                .expect("read child")
+                .is_none());
+            assert!(service
+                .list_records(Resource::Relationship, "project-a")
+                .expect("read relationships")
+                .is_empty());
+        }
+        service
+            .apply_desktop_mutation_if_revision(
+                "savePersonWithRelationship",
+                &json!([child, primary, {}]),
+                revision,
+            )
+            .expect_err("additional relationships must be an array");
+
+        let outcome = service
+            .apply_desktop_mutation_if_revision(
+                "savePersonWithRelationship",
+                &json!([child, primary, [additional]]),
+                revision,
+            )
+            .expect("save child and both parent relationships");
+        assert_eq!(outcome.revision, revision + 1);
+        assert_eq!(
+            outcome.result,
+            json!({ "person": child, "relationship": primary })
+        );
+        assert_eq!(
+            service
+                .get_record(Resource::Person, "child")
+                .expect("read child"),
+            Some(child)
+        );
+        assert_eq!(
+            service
+                .get_record(Resource::Relationship, "mother-child")
+                .expect("read mother relationship"),
+            Some(primary)
+        );
+        assert_eq!(
+            service
+                .get_record(Resource::Relationship, "father-child")
+                .expect("read father relationship"),
+            Some(additional)
+        );
+        let connection = rusqlite::Connection::open(&database).expect("read test audit");
+        let (changes, items): (i64, i64) = connection
+            .query_row(
+                "SELECT COUNT(DISTINCT change_sets.id), COUNT(change_items.id) FROM change_sets
+             JOIN change_items ON change_items.change_set_id = change_sets.id
+             WHERE change_sets.operation = 'savePersonWithRelationship'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("read change set count");
+        assert_eq!((changes, items), (1, 3));
+
+        let next_child = person("next-child", "project-a");
+        let next_relationship = json!({
+            "id": "mother-next-child", "projectId": "project-a",
+            "fromPersonId": "mother", "toPersonId": "next-child",
+            "category": "parent", "type": "biological", "sourceIds": [], "notes": ""
+        });
+        let next_args = json!([next_child, next_relationship]);
+        assert!(matches!(
+            service.apply_desktop_mutation_if_revision(
+                "savePersonWithRelationship",
+                &next_args,
+                revision,
+            ),
+            Err(CoreError::RevisionConflict { .. })
+        ));
+        assert!(service
+            .get_record(Resource::Person, "next-child")
+            .expect("read child after conflict")
+            .is_none());
+        let legacy = service
+            .apply_desktop_mutation_if_revision(
+                "savePersonWithRelationship",
+                &next_args,
+                outcome.revision,
+            )
+            .expect("two-argument single-parent writes remain supported");
+        assert_eq!(legacy.revision, outcome.revision + 1);
+        assert_eq!(legacy.result["relationship"], next_args[1]);
     }
 
     #[test]

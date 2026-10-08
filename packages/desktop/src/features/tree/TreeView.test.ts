@@ -1,4 +1,4 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { DOMWrapper, flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import cytoscape from 'cytoscape'
@@ -508,11 +508,40 @@ describe('TreeView', () => {
     relationshipType.dispatchEvent(new Event('change', { bubbles: true }))
     const direction = document.querySelector<HTMLSelectElement>('select[name="direction"]')!
     expect(direction.value).toBe('current-is-parent')
+    const additionalParent = document.querySelector<HTMLSelectElement>('select[name="additionalParentId"]')!
+    additionalParent.value = '__current-parent-only__'
+    additionalParent.dispatchEvent(new Event('change', { bubbles: true }))
+    await flushPromises()
     document.querySelector<HTMLButtonElement>('button[name="添加并关联"]')!.click()
     await flushPromises()
 
     expect(wrapper.getComponent({ name: 'FamilyGraph' }).props('graph').nodes)
       .toContainEqual(expect.objectContaining({ primaryName: '陈小禾', generation: 1 }))
+  })
+
+  it('immediately renders both parents after adding a child from the mother', async () => {
+    const { wrapper } = await mountTree()
+    await wrapper.get('button[aria-label="选择陈芳"]').trigger('click')
+    await wrapper.get('button[aria-label="为陈芳添加子女"]').trigger('click')
+    await flushPromises()
+    const dialog = new DOMWrapper(document.querySelector<HTMLFormElement>('form.quick-relative')!)
+    await dialog.get('input[name="relativeName"]').setValue('双亲连线子女')
+    await dialog.get('select[name="relationshipType"]').setValue('biological')
+    await dialog.get('select[name="additionalParentId"]').setValue('person-lin-hai')
+    await dialog.get('select[name="additionalParentType"]').setValue('biological')
+    await dialog.get('button[name="添加并关联"]').trigger('click')
+    await flushPromises()
+
+    const graph = wrapper.getComponent({ name: 'FamilyGraph' }).props('graph')
+    const child = graph.nodes.find((node: { primaryName: string }) => node.primaryName === '双亲连线子女')
+    expect(child).toBeDefined()
+    expect(graph.edges.filter((edge: { target: string }) => edge.target === child.id).map((edge: { source: string }) => edge.source).sort())
+      .toEqual(['person-chen-fang', 'person-lin-hai'])
+    const rendered = buildCytoscapeElements(graph, { avatars: false, dates: false, places: false, relationships: true })
+    const childEdge = rendered.find(({ data }) => data?.familyRole === 'child' && data?.target === child.id)
+    expect(childEdge).toBeDefined()
+    expect(rendered.filter(({ data }) => data?.familyRole === 'parent' && data?.familyId === childEdge!.data!.familyId)
+      .map(({ data }) => data?.source).sort()).toEqual(['person-chen-fang', 'person-lin-hai'])
   })
 
   it('shows accessible loading, error, missing-center, and threshold warning states', async () => {

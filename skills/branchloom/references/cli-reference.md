@@ -222,6 +222,20 @@ accepts no boundaries. The core validates real calendar dates and rejects revers
 For CLI writes, `date.display` is a desktop compatibility field, not storage for unparsed source
 text; preserve uncertainty with `precision` and only supply boundaries supported by the source.
 
+## Place coordinates
+
+Place records can include optional `coordinates: { "latitude": 26.0745, "longitude": 119.2965 }`.
+The fixed coordinate system is WGS84, in decimal degrees. Both numbers must be finite; latitude
+is in `[-90, 90]` and longitude is in `[-180, 180]`, including zero and the boundary values.
+Omit the entire field when no coordinates are known; do not supply a partial pair, null, a string
+number, an unknown coordinate system, or coordinates inferred from the parent place.
+
+This is a record-format addition under contract version `3`; the full place write schema remains
+unpublished. Follow the `schemaStatus: published` requirement and direct users to **管理地点** for
+coordinate editing and clearing. This section describes stored data and does not authorize
+schema-driven place writes. `.blp`, snapshots, and GitHub sync retain coordinates. Sync treats
+the coordinate pair as one field. GEDCOM omits GPS coordinates and warns during export.
+
 ## Relationship input
 
 Relationships use the `add` action and are always high risk:

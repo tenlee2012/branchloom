@@ -149,6 +149,18 @@ branchloom citation describe --output json
 并通过 `targetType` 和 `targetId` 指向 `person`、`relationship`、`event` 或 `career`。
 关系涉及的人物、地点和来源，以及引文的来源与目标，都必须存在于同一项目。
 
+## 地点 GPS 坐标
+
+地点记录增加可选的 `coordinates`：`{ "latitude": 26.0745, "longitude": 119.2965 }`。
+坐标采用 WGS84 十进制度，纬度范围为 `[-90, 90]`，经度范围为 `[-180, 180]`；
+两项都必须是有限数值，`0` 有效。缺省为无坐标。共享核心在桌面、CLI 写入和项目交换时
+校验同一结构，非法或不完整坐标不会提交。
+
+该字段随完整项目备份和同步保存；GEDCOM 不保留坐标，导出预览与结果会提示。
+这是可选字段扩展，CLI contract version 仍为 `3`。地点 `describe` 的完整写入 Schema
+目前仍未发布，Agent 应遵守 `schemaStatus: published` 要求，通过桌面“管理地点”录入，
+不要依据此数据说明猜测或绕过 Schema 校验。桌面将经纬度同时清空并保存可移除坐标。
+
 ## 批量写入人物与关系
 
 需要一次创建多个人物并立即建立关系时，使用原子批次。输入文件根对象包含 `actions`；

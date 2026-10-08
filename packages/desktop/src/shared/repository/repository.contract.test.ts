@@ -531,6 +531,35 @@ export function repositoryContract(name: string, makeContext: MakeContext): void
         .rejects.toSatisfy((error) => expectCode(error, 'validation'))
     })
 
+    it('preserves place GPS coordinates across reopening, editing and clearing', async () => {
+      const context = makeContext()
+      const place: Place = {
+        id: 'place-gps', projectId: 'project-demo-family', name: 'GPS 测试地点', aliases: [], notes: '',
+        coordinates: { latitude: 26.0745, longitude: 119.2965 },
+      }
+      await context.repository.savePlace(place)
+      const reopened = context.reopen()
+      const stored = (await reopened.listPlaces(place.projectId)).find(({ id }) => id === place.id)!
+      expect(stored).toEqual(place)
+      await reopened.savePlace({ ...stored, name: '修订地点' })
+      expect((await reopened.listPlaces(place.projectId)).find(({ id }) => id === place.id)?.coordinates).toEqual(place.coordinates)
+      const { coordinates: _, ...cleared } = stored
+      await reopened.savePlace(cleared)
+      expect((await context.reopen().listPlaces(place.projectId)).find(({ id }) => id === place.id)?.coordinates).toBeUndefined()
+    })
+
+    it('rejects invalid place coordinates without changing stored data or history', async () => {
+      const { repository } = makeContext()
+      const places = await repository.listPlaces('project-demo-family')
+      const history = repository.getHistoryState()
+      for (const coordinates of [{ latitude: 91, longitude: 119 }, { latitude: 26, longitude: -181 }, { latitude: NaN, longitude: 0 }]) {
+        await expect(repository.savePlace({ ...places[0]!, coordinates }))
+          .rejects.toSatisfy((error) => expectCode(error, 'validation'))
+      }
+      expect(await repository.listPlaces('project-demo-family')).toEqual(places)
+      expect(repository.getHistoryState()).toEqual(history)
+    })
+
     it('rejects cross-project id takeovers and invalid typed foreign keys', async () => {
       const { repository } = makeContext()
       const demo = createDemoState()

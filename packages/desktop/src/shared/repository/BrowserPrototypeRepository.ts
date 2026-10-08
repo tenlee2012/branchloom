@@ -2,6 +2,7 @@ import { compareGenealogyDates, normalizeIsoDate, validateLifeDates } from '../d
 import type { PublicationRequest } from '../domain/publication'
 import { findDuplicateNameEvidence } from '../domain/duplicateInspection'
 import { eventTypeLabel } from '../domain/eventTypes'
+import { isPlaceCoordinates } from '../domain/placeCoordinates'
 import { getNameSearchRank, getPrimaryName, personNameTypeLabels } from '../domain/personNames'
 import { hasAncestorCycle, validateRelationship } from '../domain/relationships'
 import { createPersonMergePreview } from '../domain/personMerge'
@@ -763,9 +764,11 @@ export class BrowserPrototypeRepository implements BranchloomRepository {
   async savePersonWithRelationship(
     person: Person,
     relationship: Relationship,
+    additionalRelationships: Relationship[] = [],
   ): Promise<{ person: Person; relationship: Relationship }> {
     const nextPerson = cloneValue(person)
     const nextRelationship = cloneValue(relationship)
+    const nextRelationships = [nextRelationship, ...cloneValue(additionalRelationships)]
     this.validateEntityProject(this.state.people, nextPerson)
     if (this.state.people.some(({ id }) => id === nextPerson.id)) {
       this.validation('Quick-add requires a new person id')
@@ -780,29 +783,27 @@ export class BrowserPrototypeRepository implements BranchloomRepository {
     this.optionalPlace(nextPerson.deathPlaceId, nextPerson.projectId)
     this.requireSources(nextPerson.sourceIds ?? [], nextPerson.projectId)
 
-    this.validateEntityProject(this.state.relationships, nextRelationship)
-    if (this.state.relationships.some(({ id }) => id === nextRelationship.id)) {
-      this.validation('Quick-add requires a new relationship id')
-    }
-    if (nextRelationship.projectId !== nextPerson.projectId) {
-      this.validation('Person and relationship must belong to the same project')
-    }
-    if (
-      nextRelationship.fromPersonId !== nextPerson.id &&
-      nextRelationship.toPersonId !== nextPerson.id
-    ) {
-      this.validation('Quick-add relationship must reference the new person')
-    }
-
     const next = cloneValue(this.state)
     next.people.push(nextPerson)
-    this.requirePersonInStateProject(next, nextRelationship.fromPersonId, nextRelationship.projectId)
-    this.requirePersonInStateProject(next, nextRelationship.toPersonId, nextRelationship.projectId)
-    this.optionalPlace(nextRelationship.placeId, nextRelationship.projectId)
-    this.requireSources(nextRelationship.sourceIds, nextRelationship.projectId)
-    const issue = validateRelationship(nextRelationship, next.relationships)
-    if (issue?.severity === 'error') this.validation(issue.message)
-    next.relationships = upsert(next.relationships, nextRelationship)
+    for (const entry of nextRelationships) {
+      this.validateEntityProject(next.relationships, entry)
+      if (next.relationships.some(({ id }) => id === entry.id)) {
+        this.validation('Quick-add requires a new relationship id')
+      }
+      if (entry.projectId !== nextPerson.projectId) {
+        this.validation('Person and relationship must belong to the same project')
+      }
+      if (entry.fromPersonId !== nextPerson.id && entry.toPersonId !== nextPerson.id) {
+        this.validation('Quick-add relationship must reference the new person')
+      }
+      this.requirePersonInStateProject(next, entry.fromPersonId, entry.projectId)
+      this.requirePersonInStateProject(next, entry.toPersonId, entry.projectId)
+      this.optionalPlace(entry.placeId, entry.projectId)
+      this.requireSources(entry.sourceIds, entry.projectId)
+      const issue = validateRelationship(entry, next.relationships)
+      if (issue?.severity === 'error') this.validation(issue.message)
+      next.relationships.push(entry)
+    }
     this.commit(next)
     return cloneValue({ person: nextPerson, relationship: nextRelationship })
   }
@@ -858,6 +859,9 @@ export class BrowserPrototypeRepository implements BranchloomRepository {
     const value = cloneValue(place)
     this.validateEntityProject(this.state.places, value)
     if (!value.name.trim()) this.validation('Place name is required')
+    if (value.coordinates !== undefined && !isPlaceCoordinates(value.coordinates)) {
+      this.validation('Place coordinates must contain WGS84 latitude (-90 to 90) and longitude (-180 to 180)')
+    }
     if (value.parentId === value.id) this.validation('Place cannot be its own parent')
     this.optionalPlace(value.parentId, value.projectId)
     const next = cloneValue(this.state)

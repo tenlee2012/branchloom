@@ -524,6 +524,138 @@ describe('atomic quick-add relative workflow', () => {
     expect(await repository.listRelationships(PROJECT_ID)).toContainEqual(relationship)
   })
 
+  it('requires an explicit choice and relationship type for the other parent', async () => {
+    const base = makeRepository()
+    const save = vi.spyOn(base, 'savePersonWithRelationship')
+    const { wrapper } = await mountQuickAdd(base, 'child')
+    await flushPromises()
+    await wrapper.get('input[name="relativeName"]').setValue('双亲子女')
+    await wrapper.get('select[name="relationshipType"]').setValue('biological')
+    expect(wrapper.get('select[name="additionalParentId"]').text()).toContain('陈芳（前配偶）')
+    await wrapper.get('button[name="添加并关联"]').trigger('click')
+    expect(wrapper.get('select[name="additionalParentId"]').attributes('aria-invalid')).toBe('true')
+    expect(save).not.toHaveBeenCalled()
+
+    await wrapper.get('select[name="additionalParentId"]').setValue('person-chen-fang')
+    await wrapper.get('button[name="添加并关联"]').trigger('click')
+    expect(wrapper.get('select[name="additionalParentType"]').attributes('aria-invalid')).toBe('true')
+    expect(save).not.toHaveBeenCalled()
+  })
+
+  it('saves a child with both chosen parents and undoes them together', async () => {
+    const repository = makeRepository()
+    const { wrapper } = await mountQuickAdd(repository, 'child')
+    await flushPromises()
+    await wrapper.get('input[name="relativeName"]').setValue('双亲子女')
+    await wrapper.get('select[name="relationshipType"]').setValue('biological')
+    await wrapper.get('select[name="additionalParentId"]').setValue('person-chen-fang')
+    await wrapper.get('select[name="additionalParentType"]').setValue('biological')
+    await wrapper.get('button[name="添加并关联"]').trigger('click')
+    await flushPromises()
+
+    const [child, primary, additional] = wrapper.emitted('saved')![0] as [Person, Relationship, Relationship[]]
+    expect(primary).toMatchObject({ fromPersonId: 'person-lin-hai', toPersonId: child.id, type: 'biological' })
+    expect(additional).toEqual([expect.objectContaining({ fromPersonId: 'person-chen-fang', toPersonId: child.id, type: 'biological' })])
+    const childRelationships = (await repository.listRelationships(PROJECT_ID)).filter(({ toPersonId }) => toPersonId === child.id)
+    expect(childRelationships).toHaveLength(2)
+    expect(repository.getHistoryState()).toEqual({ canUndo: true, canRedo: false })
+    await repository.undo()
+    await expect(repository.getPerson(child.id)).rejects.toMatchObject({ code: 'not-found' })
+    expect((await repository.listRelationships(PROJECT_ID)).some(({ toPersonId }) => toPersonId === child.id)).toBe(false)
+    expect(repository.getHistoryState().canUndo).toBe(false)
+    await repository.redo()
+    expect((await repository.listRelationships(PROJECT_ID)).filter(({ toPersonId }) => toPersonId === child.id)).toHaveLength(2)
+  })
+
+  it('keeps one parent when the user explicitly chooses to associate only the current parent', async () => {
+    const repository = makeRepository()
+    const { wrapper } = await mountQuickAdd(repository, 'child')
+    await flushPromises()
+    await wrapper.get('input[name="relativeName"]').setValue('单亲子女')
+    await wrapper.get('select[name="relationshipType"]').setValue('biological')
+    await wrapper.get('select[name="additionalParentId"]').setValue('__current-parent-only__')
+    await wrapper.get('button[name="添加并关联"]').trigger('click')
+    await flushPromises()
+    const [child] = wrapper.emitted('saved')![0] as [Person]
+    expect((await repository.listRelationships(PROJECT_ID)).filter(({ toPersonId }) => toPersonId === child.id))
+      .toEqual([expect.objectContaining({ fromPersonId: 'person-lin-hai' })])
+  })
+
+  it('allows different parent relationship types and clears choices when switching direction', async () => {
+    const { wrapper } = await mountQuickAdd(makeRepository(), 'child')
+    await flushPromises()
+    await wrapper.get('input[name="relativeName"]').setValue('不同关系子女')
+    await wrapper.get('select[name="relationshipType"]').setValue('biological')
+    await wrapper.get('select[name="additionalParentId"]').setValue('person-chen-fang')
+    await wrapper.get('select[name="additionalParentType"]').setValue('adoptive')
+    await wrapper.get('select[name="direction"]').setValue('relative-is-parent')
+    expect(wrapper.find('select[name="additionalParentId"]').exists()).toBe(false)
+    await wrapper.get('select[name="direction"]').setValue('current-is-parent')
+    await flushPromises()
+    expect((wrapper.get('select[name="additionalParentId"]').element as HTMLSelectElement).value).toBe('')
+    await wrapper.get('select[name="additionalParentId"]').setValue('person-chen-fang')
+    await wrapper.get('select[name="additionalParentType"]').setValue('adoptive')
+    await wrapper.get('button[name="添加并关联"]').trigger('click')
+    await flushPromises()
+    const [, primary, additional] = wrapper.emitted('saved')![0] as [Person, Relationship, Relationship[]]
+    expect(primary.type).toBe('biological')
+    expect(additional[0]!.type).toBe('adoptive')
+  })
+
+  it('can add a child when no partner has been recorded', async () => {
+    const repository = makeRepository()
+    await repository.deleteRelationship('relationship-hai-fang')
+    const { wrapper } = await mountQuickAdd(repository, 'child')
+    await flushPromises()
+    expect(wrapper.find('select[name="additionalParentId"]').exists()).toBe(false)
+    await wrapper.get('input[name="relativeName"]').setValue('无伴侣记录子女')
+    await wrapper.get('select[name="relationshipType"]').setValue('biological')
+    await wrapper.get('button[name="添加并关联"]').trigger('click')
+    await flushPromises()
+    const [child] = wrapper.emitted('saved')![0] as [Person]
+    expect((await repository.listRelationships(PROJECT_ID)).filter(({ toPersonId }) => toPersonId === child.id))
+      .toEqual([expect.objectContaining({ fromPersonId: 'person-lin-hai' })])
+  })
+
+  it('blocks saving while candidates load or fail and supports retry', async () => {
+    const base = makeRepository()
+    let rejectLoad!: (error: Error) => void
+    const pending = new Promise<Relationship[]>((_resolve, reject) => { rejectLoad = reject })
+    const listRelationships = vi.fn().mockReturnValueOnce(pending)
+      .mockImplementation(() => base.listRelationships(PROJECT_ID))
+    const save = vi.spyOn(base, 'savePersonWithRelationship')
+    const { wrapper } = await mountQuickAdd(proxyRepository(base, { listRelationships }), 'child')
+    expect(wrapper.get('button[name="添加并关联"]').attributes('disabled')).toBeDefined()
+    rejectLoad(new Error('read failed'))
+    await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toContain('read failed')
+    expect(wrapper.get('button[name="添加并关联"]').attributes('disabled')).toBeDefined()
+    expect(save).not.toHaveBeenCalled()
+    await wrapper.get('button[name="重新读取家长候选"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('button[name="添加并关联"]').attributes('disabled')).toBeUndefined()
+    expect(wrapper.get('select[name="additionalParentId"]').text()).toContain('陈芳')
+  })
+
+  it('does not leave a child, a first relationship, or history when the additional relationship is invalid', async () => {
+    const repository = makeRepository()
+    const child = minimalPerson('child-invalid-parent', '失败子女')
+    const primary = parentRelationship('parent-first', 'person-lin-hai', child.id)
+    const before = await repository.listRelationships(PROJECT_ID)
+    const invalidRelationships = [
+      parentRelationship('parent-other', 'person-missing', child.id),
+      { ...parentRelationship('parent-other', 'person-chen-fang', child.id), projectId: 'other-project' },
+      parentRelationship(primary.id, 'person-chen-fang', child.id),
+      parentRelationship('parent-other', 'person-chen-fang', 'person-lin-chen'),
+    ]
+    for (const additional of invalidRelationships) {
+      await expect(repository.savePersonWithRelationship(child, primary, [additional])).rejects.toThrow()
+      await expect(repository.getPerson(child.id)).rejects.toMatchObject({ code: 'not-found' })
+      expect(await repository.listRelationships(PROJECT_ID)).toEqual(before)
+      expect(repository.getHistoryState()).toEqual({ canUndo: false, canRedo: false })
+    }
+  })
+
   it('leaves no orphan or history entry when atomic persistence fails', async () => {
     const repository = makeRepository()
     await repository.updateProject(PROJECT_ID, { name: 'redo target' })

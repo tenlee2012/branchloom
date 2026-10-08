@@ -869,29 +869,33 @@ fn merge_json_value(
         return ours.cloned();
     }
 
-    if let (Some(Value::Object(base)), Some(Value::Object(ours)), Some(Value::Object(theirs))) =
-        (base, ours, theirs)
-    {
-        let keys = base
-            .keys()
-            .chain(ours.keys())
-            .chain(theirs.keys())
-            .cloned()
-            .collect::<BTreeSet<_>>();
-        let mut merged = Map::new();
-        for key in keys {
-            let child_pointer = format!("{pointer}/{}", escape_pointer(&key));
-            if let Some(value) = merge_json_value(
-                &child_pointer,
-                base.get(&key),
-                ours.get(&key),
-                theirs.get(&key),
-                context,
-            ) {
-                merged.insert(key, value);
+    // Keep a GPS point together instead of combining latitude and longitude from different edits.
+    let atomic_coordinates = pointer == "/coordinates" && context.path.starts_with("data/places/");
+    if !atomic_coordinates {
+        if let (Some(Value::Object(base)), Some(Value::Object(ours)), Some(Value::Object(theirs))) =
+            (base, ours, theirs)
+        {
+            let keys = base
+                .keys()
+                .chain(ours.keys())
+                .chain(theirs.keys())
+                .cloned()
+                .collect::<BTreeSet<_>>();
+            let mut merged = Map::new();
+            for key in keys {
+                let child_pointer = format!("{pointer}/{}", escape_pointer(&key));
+                if let Some(value) = merge_json_value(
+                    &child_pointer,
+                    base.get(&key),
+                    ours.get(&key),
+                    theirs.get(&key),
+                    context,
+                ) {
+                    merged.insert(key, value);
+                }
             }
+            return Some(Value::Object(merged));
         }
-        return Some(Value::Object(merged));
     }
 
     let field = if pointer.is_empty() {
@@ -1933,6 +1937,50 @@ mod tests {
         .expect("parse person");
         assert_eq!(person["name"], "Alice Smith");
         assert_eq!(person["note"], "Research");
+    }
+
+    #[test]
+    fn place_coordinates_merge_with_notes_but_never_mix_two_gps_points() {
+        let place_tree = |coordinates: Value, notes: &str| {
+            let mut files = base_files();
+            files.insert(
+                "data/places/pl/place-test.jsonld".to_owned(),
+                serde_json::to_vec_pretty(&json!({
+                    "id": "place-test", "projectId": "project-test", "name": "Test place",
+                    "coordinates": coordinates, "notes": notes
+                }))
+                .expect("place JSON"),
+            );
+            ProjectTree::rebuild_manifest(files).expect("place tree")
+        };
+        let coordinates = json!({ "latitude": 26, "longitude": 119 });
+        let local_coordinates = json!({ "latitude": 27, "longitude": 119 });
+        let remote_coordinates = json!({ "latitude": 26, "longitude": 120 });
+        let base = place_tree(coordinates.clone(), "");
+        let ours = place_tree(local_coordinates.clone(), "");
+        let notes = place_tree(coordinates, "Research");
+        let result =
+            merge_project_trees(Some(&base), Some(&ours), Some(&notes)).expect("merge notes");
+        assert!(result.conflicts.is_empty());
+        let merged = result.tree.expect("merged tree");
+        let record: Value = serde_json::from_slice(
+            merged
+                .files()
+                .get("data/places/pl/place-test.jsonld")
+                .expect("place file"),
+        )
+        .expect("parse place");
+        assert_eq!(record["coordinates"], local_coordinates);
+        assert_eq!(record["notes"], "Research");
+
+        let theirs = place_tree(remote_coordinates.clone(), "");
+        let result =
+            merge_project_trees(Some(&base), Some(&ours), Some(&theirs)).expect("merge GPS");
+        assert_eq!(result.conflicts.len(), 1);
+        assert_eq!(result.conflicts[0].field, "/coordinates");
+        assert_eq!(result.conflicts[0].ours, Some(local_coordinates));
+        assert_eq!(result.conflicts[0].theirs, Some(remote_coordinates));
+        assert!(result.tree.is_none());
     }
 
     #[test]
