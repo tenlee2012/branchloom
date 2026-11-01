@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '../../../shared/i18n'
 import { RouterLink } from 'vue-router'
 import type { FamilyEvent } from '../../../shared/domain/types'
 import { eventTypeLabel, formatEventDate, type TimelineGroup } from '../model/groupEvents'
@@ -23,7 +24,7 @@ const emit = defineEmits<{ edit: [event: FamilyEvent] }>()
     <header class="timeline-group__header">
       <span class="timeline-group__marker" aria-hidden="true" />
       <h2 :id="`timeline-group-${group.key}`">{{ group.label }}</h2>
-      <span>{{ group.events.length }} 件</span>
+      <span>{{ t('{0} 件', [group.events.length]) }}</span>
     </header>
 
     <ol class="timeline-group__events">
@@ -36,7 +37,7 @@ const emit = defineEmits<{ edit: [event: FamilyEvent] }>()
           <button
             class="timeline-event__title"
             type="button"
-            :aria-label="`编辑事件：${event.title || eventTypeLabel(event.type)}`"
+            :aria-label="t('编辑事件：{0}', [event.title || eventTypeLabel(event.type)])"
             @click="emit('edit', event)"
           >
             {{ event.title || eventTypeLabel(event.type) }}
@@ -44,13 +45,13 @@ const emit = defineEmits<{ edit: [event: FamilyEvent] }>()
           <p v-if="event.placeId && placeNames[event.placeId]" class="timeline-event__place">
             {{ placeNames[event.placeId] }}
           </p>
-          <ul v-if="event.participantIds.length" class="timeline-event__participants" aria-label="参与人物">
+          <ul v-if="event.participantIds.length" class="timeline-event__participants" :aria-label="t('参与人物')">
             <li v-for="personId in event.participantIds" :key="personId">
               <RouterLink
                 :to="{ name: 'person-detail', params: { projectId, personId } }"
-                :aria-label="`打开人物详情：${personNames[personId] ?? '未命名人物'}`"
+                :aria-label="t('打开人物详情：{0}', [personNames[personId] ?? t('未命名人物')])"
               >
-                {{ personNames[personId] ?? '未命名人物' }}
+                {{ personNames[personId] ?? t('未命名人物') }}
               </RouterLink>
               <small v-if="event.participantRoles?.[personId]">
                 {{ event.participantRoles[personId] }}

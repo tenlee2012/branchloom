@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '../../../shared/i18n'
 import { IconAlertTriangle, IconTrash } from '@tabler/icons-vue'
 import { ref, watch } from 'vue'
 import BaseButton from '../../../design-system/BaseButton.vue'
@@ -35,44 +36,42 @@ watch(() => props.project.id, closeDialogs)
         <span class="danger-zone__heading-icon" aria-hidden="true">
           <IconAlertTriangle :size="18" />
         </span>
-        <div><p>高风险操作</p><h2 id="danger-zone-title">危险区域</h2></div>
+        <div><p>{{ t('高风险操作') }}</p><h2 id="danger-zone-title">{{ t('危险区域') }}</h2></div>
       </div>
-      <span class="danger-zone__guard">需要逐字确认</span>
+      <span class="danger-zone__guard">{{ t('需要逐字确认') }}</span>
     </header>
     <article>
       <div class="danger-zone__copy">
-        <h3>删除当前项目</h3>
-        <p>删除当前项目中的人物、关系、事件、来源和附件记录。此操作无法撤销。</p>
+        <h3>{{ t('删除当前项目') }}</h3>
+        <p>{{ t('删除当前项目中的人物、关系、事件、来源和附件记录。此操作无法撤销。') }}</p>
       </div>
-      <BaseButton name="删除当前项目" variant="danger" @click="openDelete">
-        <IconTrash :size="18" aria-hidden="true" />
-        删除当前项目
-      </BaseButton>
+      <BaseButton :name="t('删除当前项目')" variant="danger" @click="openDelete">
+        <IconTrash :size="18" aria-hidden="true" /> {{ t('删除当前项目') }} </BaseButton>
     </article>
   </section>
 
   <BaseDialog
     :open="deleteOpen"
-    title="删除当前项目？"
-    description="项目中的人物、关系、事件、来源和附件记录将被永久删除。"
-    close-label="取消删除项目"
+    :title="t('删除当前项目？')"
+    :description="t('项目中的人物、关系、事件、来源和附件记录将被永久删除。')"
+    :close-label="t('取消删除项目')"
     @close="closeDialogs"
   >
     <div class="danger-zone__dialog">
       <label>
-        <span>输入项目名称“{{ project.name }}”以确认</span>
+        <span>{{ t('输入项目名称“{0}”以确认', [project.name]) }}</span>
         <input v-model="deleteConfirmation" name="deleteProjectConfirmation" autocomplete="off" />
       </label>
       <p v-if="failure" role="alert">{{ failure }}</p>
       <div class="danger-zone__actions">
-        <BaseButton variant="secondary" :disabled="busy" @click="closeDialogs">取消</BaseButton>
+        <BaseButton variant="secondary" :disabled="busy" @click="closeDialogs">{{ t('取消') }}</BaseButton>
         <BaseButton
-          name="确认删除当前项目"
+          :name="t('确认删除当前项目')"
           variant="danger"
           :loading="busy"
           :disabled="deleteConfirmation !== project.name || busy"
           @click="emit('deleteConfirmed')"
-        >确认删除</BaseButton>
+        >{{ t('确认删除') }}</BaseButton>
       </div>
     </div>
   </BaseDialog>

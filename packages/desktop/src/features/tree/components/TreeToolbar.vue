@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '../../../shared/i18n'
 import { computed, ref, watch } from 'vue'
 import {
   IconMinus,
@@ -90,27 +91,25 @@ function commitZoom(event: Event, fallbackLevel: number) {
 </script>
 
 <template>
-  <aside class="tree-toolbar" aria-label="家谱树工具栏">
-    <div class="tree-toolbar__mode" aria-label="家谱范围">
-      <button type="button" :class="{ active: mode === 'combined' }" @click="emit('updateMode', 'combined')">综合</button>
-      <button type="button" :class="{ active: mode === 'ancestors' }" @click="emit('updateMode', 'ancestors')">祖先</button>
-      <button type="button" :class="{ active: mode === 'descendants' }" @click="emit('updateMode', 'descendants')">后代</button>
-      <label class="visually-hidden" for="tree-mode">查看</label>
+  <aside class="tree-toolbar" :aria-label="t('家谱树工具栏')">
+    <div class="tree-toolbar__mode" :aria-label="t('家谱范围')">
+      <button type="button" :class="{ active: mode === 'combined' }" @click="emit('updateMode', 'combined')">{{ t('综合') }}</button>
+      <button type="button" :class="{ active: mode === 'ancestors' }" @click="emit('updateMode', 'ancestors')">{{ t('祖先') }}</button>
+      <button type="button" :class="{ active: mode === 'descendants' }" @click="emit('updateMode', 'descendants')">{{ t('后代') }}</button>
+      <label class="visually-hidden" for="tree-mode">{{ t('查看') }}</label>
       <select id="tree-mode" class="visually-hidden" name="treeMode" :value="mode" @change="emit('updateMode', ($event.target as HTMLSelectElement).value as TreeMode)">
-        <option value="combined">综合家庭</option>
-        <option value="ancestors">祖先</option>
-        <option value="descendants">后代</option>
+        <option value="combined">{{ t('综合家庭') }}</option>
+        <option value="ancestors">{{ t('祖先') }}</option>
+        <option value="descendants">{{ t('后代') }}</option>
       </select>
     </div>
 
-    <div class="tree-toolbar__generation" aria-label="显示代数">
-      <button type="button" :disabled="mode === 'descendants'" @click="emit('updateGenerationsUp', generationsUp === 8 ? 1 : generationsUp + 1)">上 {{ generationsUp }} 代</button>
-      <button type="button" :disabled="mode === 'ancestors'" @click="emit('updateGenerationsDown', generationsDown === 8 ? 1 : generationsDown + 1)">下 {{ generationsDown }} 代</button>
-      <label class="visually-hidden">向上
-        <input name="generationsUp" type="number" min="0" max="8" :value="generationsUp" :disabled="mode === 'descendants'" @input="emit('updateGenerationsUp', numberValue($event, generationsUp))" />
+    <div class="tree-toolbar__generation" :aria-label="t('显示代数')">
+      <button type="button" :disabled="mode === 'descendants'" @click="emit('updateGenerationsUp', generationsUp === 8 ? 1 : generationsUp + 1)">{{ t('上 {0} 代', [generationsUp]) }}</button>
+      <button type="button" :disabled="mode === 'ancestors'" @click="emit('updateGenerationsDown', generationsDown === 8 ? 1 : generationsDown + 1)">{{ t('下 {0} 代', [generationsDown]) }}</button>
+      <label class="visually-hidden">{{ t('向上') }} <input name="generationsUp" type="number" min="0" max="8" :value="generationsUp" :disabled="mode === 'descendants'" @input="emit('updateGenerationsUp', numberValue($event, generationsUp))" />
       </label>
-      <label class="visually-hidden">向下
-        <input name="generationsDown" type="number" min="0" max="8" :value="generationsDown" :disabled="mode === 'ancestors'" @input="emit('updateGenerationsDown', numberValue($event, generationsDown))" />
+      <label class="visually-hidden">{{ t('向下') }} <input name="generationsDown" type="number" min="0" max="8" :value="generationsDown" :disabled="mode === 'ancestors'" @input="emit('updateGenerationsDown', numberValue($event, generationsDown))" />
       </label>
     </div>
 
@@ -118,8 +117,8 @@ function commitZoom(event: Event, fallbackLevel: number) {
       <IconSearch :size="18" :stroke-width="1.7" aria-hidden="true" />
       <input
         type="search"
-        aria-label="搜索跳转人物"
-        placeholder="搜索人物（姓名/字号）"
+        :aria-label="t('搜索跳转人物')"
+        :placeholder="t('搜索人物（姓名/字号）')"
         :value="personSearch"
         :aria-describedby="showSearchResults ? 'tree-search-feedback' : undefined"
         @focus="searchDismissed = false"
@@ -127,32 +126,32 @@ function commitZoom(event: Event, fallbackLevel: number) {
         @keydown.enter.prevent="locateFirstResult"
         @keydown.down.prevent="resultList?.querySelector('button')?.focus()"
       />
-      <label class="visually-hidden" for="tree-person-jump">跳转人物</label>
+      <label class="visually-hidden" for="tree-person-jump">{{ t('跳转人物') }}</label>
       <select id="tree-person-jump" class="visually-hidden" name="personJump" :value="centerPersonId" @change="emit('jump', ($event.target as HTMLSelectElement).value)">
-        <option value="" disabled>选择人物</option>
+        <option value="" disabled>{{ t('选择人物') }}</option>
         <option v-for="person in people" :key="person.id" :value="person.id">{{ primaryName(person) }}</option>
       </select>
-      <div v-if="showSearchResults" class="tree-toolbar__search-results" role="region" aria-label="人物搜索结果">
+      <div v-if="showSearchResults" class="tree-toolbar__search-results" role="region" :aria-label="t('人物搜索结果')">
         <p id="tree-search-feedback" role="status">
-          <template v-if="searchState === 'loading' || searchState === 'idle'">正在搜索人物…</template>
-          <template v-else-if="searchState === 'error'">搜索失败：{{ searchError }}</template>
-          <template v-else-if="!searchResults.length">未找到匹配人物</template>
-          <template v-else>找到 {{ searchTotal }} 位人物，点击定位<template v-if="searchTotal > searchResults.length">；当前显示前 {{ searchResults.length }} 位，请缩小关键词</template>。</template>
+          <template v-if="searchState === 'loading' || searchState === 'idle'">{{ t('正在搜索人物…') }}</template>
+          <template v-else-if="searchState === 'error'">{{ t('搜索失败：{0}', [searchError]) }}</template>
+          <template v-else-if="!searchResults.length">{{ t('未找到匹配人物') }}</template>
+          <template v-else>{{ t('找到 {0} 位人物，点击定位', [searchTotal]) }}<template v-if="searchTotal > searchResults.length">{{ t('；当前显示前 {0} 位，请缩小关键词', [searchResults.length]) }}</template>。</template>
         </p>
-        <button v-if="searchState === 'error'" type="button" @click="emit('retrySearch')">重新搜索</button>
+        <button v-if="searchState === 'error'" type="button" @click="emit('retrySearch')">{{ t('重新搜索') }}</button>
         <ul v-if="searchState === 'ready'" ref="resultList">
           <li v-for="person in searchResults" :key="person.id">
-            <button type="button" :aria-label="`定位${primaryName(person)}`" @click="locate(person.id)">
+            <button type="button" :aria-label="t('定位{0}', [primaryName(person)])" @click="locate(person.id)">
               <strong>{{ primaryName(person) }}</strong>
-              <span>{{ person.birth?.display ?? '出生日期未记录' }}</span>
+              <span>{{ person.birth?.display ?? t('出生日期未记录') }}</span>
             </button>
           </li>
         </ul>
       </div>
     </div>
 
-    <div class="tree-toolbar__zoom" aria-label="缩放">
-      <button type="button" aria-label="缩小" @click="emit('zoomOut')"><IconMinus :size="18" aria-hidden="true" /></button>
+    <div class="tree-toolbar__zoom" :aria-label="t('缩放')">
+      <button type="button" :aria-label="t('缩小')" @click="emit('zoomOut')"><IconMinus :size="18" aria-hidden="true" /></button>
       <label class="tree-toolbar__zoom-value">
         <input
           name="zoomPercent"
@@ -161,33 +160,31 @@ function commitZoom(event: Event, fallbackLevel: number) {
           max="250"
           step="1"
           inputmode="numeric"
-          aria-label="缩放百分比"
+          :aria-label="t('缩放百分比')"
           :value="zoomPercent(zoomLevel)"
           @change="commitZoom($event, zoomLevel)"
           @keydown.enter.prevent="commitZoom($event, zoomLevel)"
         />
         <span aria-hidden="true">%</span>
       </label>
-      <button type="button" aria-label="放大" @click="emit('zoomIn')"><IconPlus :size="18" aria-hidden="true" /></button>
+      <button type="button" :aria-label="t('放大')" @click="emit('zoomIn')"><IconPlus :size="18" aria-hidden="true" /></button>
     </div>
 
     <details class="tree-toolbar__density">
-      <summary>显示</summary>
+      <summary>{{ t('显示') }}</summary>
       <div class="tree-toolbar__density-menu">
-        <label><input name="showAvatars" type="checkbox" :checked="density.avatars" @change="emit('updateDensity', { ...density, avatars: ($event.target as HTMLInputElement).checked })" />头像</label>
-        <label><input name="showDates" type="checkbox" :checked="density.dates" @change="emit('updateDensity', { ...density, dates: ($event.target as HTMLInputElement).checked })" />生卒日期</label>
-        <label><input name="showPlaces" type="checkbox" :checked="density.places" @change="emit('updateDensity', { ...density, places: ($event.target as HTMLInputElement).checked })" />地点</label>
-        <label><input name="showRelationships" type="checkbox" :checked="density.relationships" @change="emit('updateDensity', { ...density, relationships: ($event.target as HTMLInputElement).checked })" />关系说明</label>
-        <label><input name="showNames" type="checkbox" :checked="density.names" @change="emit('updateDensity', { ...density, names: ($event.target as HTMLInputElement).checked })" />字、号等姓名</label>
+        <label><input name="showAvatars" type="checkbox" :checked="density.avatars" @change="emit('updateDensity', { ...density, avatars: ($event.target as HTMLInputElement).checked })" />{{ t('头像') }}</label>
+        <label><input name="showDates" type="checkbox" :checked="density.dates" @change="emit('updateDensity', { ...density, dates: ($event.target as HTMLInputElement).checked })" />{{ t('生卒日期') }}</label>
+        <label><input name="showPlaces" type="checkbox" :checked="density.places" @change="emit('updateDensity', { ...density, places: ($event.target as HTMLInputElement).checked })" />{{ t('地点') }}</label>
+        <label><input name="showRelationships" type="checkbox" :checked="density.relationships" @change="emit('updateDensity', { ...density, relationships: ($event.target as HTMLInputElement).checked })" />{{ t('关系说明') }}</label>
+        <label><input name="showNames" type="checkbox" :checked="density.names" @change="emit('updateDensity', { ...density, names: ($event.target as HTMLInputElement).checked })" />{{ t('字、号等姓名') }}</label>
       </div>
     </details>
 
     <div class="tree-toolbar__actions">
-      <BaseButton class="tree-toolbar__relayout" name="重新布局" size="sm" variant="secondary" @click="emit('relayout')"><IconRefresh :size="17" aria-hidden="true" />重新布局</BaseButton>
+      <BaseButton class="tree-toolbar__relayout" :name="t('重新布局')" size="sm" variant="secondary" @click="emit('relayout')"><IconRefresh :size="17" aria-hidden="true" />{{ t('重新布局') }}</BaseButton>
     </div>
-    <button v-if="collapsedCount" class="tree-toolbar__collapsed" type="button" @click="emit('clearCollapsed')">
-      已收起 {{ collapsedCount }} 个分支 · 全部展开
-    </button>
+    <button v-if="collapsedCount" class="tree-toolbar__collapsed" type="button" @click="emit('clearCollapsed')"> {{ t('已收起 {0} 个分支 · 全部展开', [collapsedCount]) }} </button>
   </aside>
 </template>
 

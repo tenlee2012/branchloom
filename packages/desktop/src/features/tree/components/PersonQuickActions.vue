@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '../../../shared/i18n'
 import { computed } from 'vue'
 import {
   IconArrowDownRight,
@@ -51,35 +52,35 @@ const positionStyle = computed(() => {
     :class="`person-quick-actions--${placement}`"
     :style="positionStyle"
     :data-placement="placement"
-    :aria-label="`为${personName}添加关系`"
+    :aria-label="t('为{0}添加关系', [personName])"
     @keydown.esc.stop="emit('close')"
   >
     <header class="person-quick-actions__header">
       <div>
-        <span>关系快捷</span>
-        <strong>为 {{ personName }} 添加</strong>
+        <span>{{ t('关系快捷') }}</span>
+        <strong>{{ t('为 {0} 添加', [personName]) }}</strong>
       </div>
-      <button type="button" :aria-label="`关闭${personName}的关系快捷项`" @click="emit('close')">
+      <button type="button" :aria-label="t('关闭{0}的关系快捷项', [personName])" @click="emit('close')">
         <IconX :size="16" aria-hidden="true" />
       </button>
     </header>
 
-    <div class="person-quick-actions__grid" role="toolbar" :aria-label="`${personName}的关系快捷项`">
-      <button type="button" :aria-label="`为${personName}添加父母`" @click="emit('action', 'parent')">
+    <div class="person-quick-actions__grid" role="toolbar" :aria-label="t('{0}的关系快捷项', [personName])">
+      <button type="button" :aria-label="t('为{0}添加父母', [personName])" @click="emit('action', 'parent')">
         <IconArrowUpRight :size="19" aria-hidden="true" />
-        <span>添加父母</span>
+        <span>{{ t('添加父母') }}</span>
       </button>
-      <button class="person-quick-actions__partner" type="button" :aria-label="`为${personName}添加伴侣`" @click="emit('action', 'partner')">
+      <button class="person-quick-actions__partner" type="button" :aria-label="t('为{0}添加伴侣', [personName])" @click="emit('action', 'partner')">
         <IconHeart :size="19" aria-hidden="true" />
-        <span>添加伴侣</span>
+        <span>{{ t('添加伴侣') }}</span>
       </button>
-      <button type="button" :aria-label="`为${personName}添加子女`" @click="emit('action', 'child')">
+      <button type="button" :aria-label="t('为{0}添加子女', [personName])" @click="emit('action', 'child')">
         <IconArrowDownRight :size="19" aria-hidden="true" />
-        <span>添加子女</span>
+        <span>{{ t('添加子女') }}</span>
       </button>
-      <button class="person-quick-actions__more" type="button" :aria-label="`为${personName}选择更多关系`" @click="emit('action', 'custom')">
+      <button class="person-quick-actions__more" type="button" :aria-label="t('为{0}选择更多关系', [personName])" @click="emit('action', 'custom')">
         <IconDots :size="20" aria-hidden="true" />
-        <span>更多关系</span>
+        <span>{{ t('更多关系') }}</span>
       </button>
     </div>
   </aside>

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import LanguageSelect from '../components/LanguageSelect.vue'
+import { t } from '../../shared/i18n'
 import { IconBrandGithub, IconRobot } from '@tabler/icons-vue'
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
@@ -23,23 +25,23 @@ onMounted(async () => {
   <div class="home-layout">
     <header class="home-layout__header" data-tauri-drag-region>
       <PageBackLink v-if="isGithubImport" placement="topbar" />
-      <RouterLink v-else class="home-layout__brand" to="/" aria-label="Branchloom 首页">
+      <RouterLink v-else class="home-layout__brand" to="/" :aria-label="t('Branchloom 首页')">
         <span aria-hidden="true">B</span>
         <strong>Branchloom</strong>
       </RouterLink>
       <div class="home-layout__header-actions">
-        <p>一座属于你们家的私人档案馆</p>
+        <LanguageSelect />
+        <p>{{ t('一座属于你们家的私人档案馆') }}</p>
         <RouterLink
           v-if="!isGithubImport"
           class="home-layout__github-import"
           to="/github-import"
-          aria-label="从 GitHub 导入项目"
+          :aria-label="t('从 GitHub 导入项目')"
         >
-          <IconBrandGithub :size="17" aria-hidden="true" /><span>从 GitHub 导入</span>
+          <IconBrandGithub :size="17" aria-hidden="true" /><span>{{ t('从 GitHub 导入') }}</span>
         </RouterLink>
         <RouterLink v-if="aiToolsAvailable" class="home-layout__ai-tools" to="/ai-tools">
-          <IconRobot :size="17" aria-hidden="true" />AI 工具
-        </RouterLink>
+          <IconRobot :size="17" aria-hidden="true" />{{ t('AI 工具') }} </RouterLink>
         <DataRefreshButton v-if="!isGithubImport" />
       </div>
     </header>
@@ -47,7 +49,7 @@ onMounted(async () => {
       <PageBackLink v-if="!isGithubImport" />
       <RouterView />
     </main>
-    <footer class="home-layout__footer">离线优先 · 本地保存 · 家族共同记忆</footer>
+    <footer class="home-layout__footer">{{ t('离线优先 · 本地保存 · 家族共同记忆') }}</footer>
   </div>
 </template>
 
@@ -104,7 +106,9 @@ onMounted(async () => {
 
 .home-layout__header-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--space-4);
 }
 

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localizeSystemMessage, t } from '../../../shared/i18n'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSessionStore } from '../../../app/stores/session'
@@ -55,7 +56,7 @@ async function loadProject() {
     project.value = loadedProject
   } catch (error) {
     if (request !== projectRequest) return
-    centerError.value = error instanceof Error ? error.message : '中心人物状态暂时无法读取'
+    centerError.value = error instanceof Error ? localizeSystemMessage(error.message) : t('中心人物状态暂时无法读取')
   }
 }
 
@@ -96,7 +97,7 @@ async function toggleCenter(person: Person) {
     session.openProject(saved, repository.getHistoryState())
   } catch (error) {
     if (scopedProjectId !== projectId.value) return
-    const details = error instanceof Error ? error.message : '中心人物暂时无法更新'
+    const details = error instanceof Error ? localizeSystemMessage(error.message) : t('中心人物暂时无法更新')
     centerError.value = details
     session.saveStatus = 'failed'
     session.saveError = details
@@ -125,7 +126,7 @@ async function openDelete(person: Person) {
     }
   } catch (error) {
     if (request !== deleteRequest) return
-    deleteError.value = error instanceof Error ? error.message : '关联资料无法读取'
+    deleteError.value = error instanceof Error ? localizeSystemMessage(error.message) : t('关联资料无法读取')
   } finally {
     if (request === deleteRequest) deleteLoading.value = false
   }
@@ -157,7 +158,7 @@ async function confirmDelete() {
     await peopleQuery.retry()
   } catch (error) {
     if (request !== deleteRequest) return
-    const details = error instanceof Error ? error.message : '本地资料暂时无法写入'
+    const details = error instanceof Error ? localizeSystemMessage(error.message) : t('本地资料暂时无法写入')
     deleteError.value = details
     session.saveStatus = 'failed'
     session.saveError = details
@@ -171,15 +172,15 @@ async function confirmDelete() {
   <section class="people-view" aria-labelledby="people-view-title">
     <header class="people-view__heading">
       <div>
-        <p>人物档案与检索</p>
-        <h1 id="people-view-title">人物档案</h1>
+        <p>{{ t('人物档案与检索') }}</p>
+        <h1 id="people-view-title">{{ t('人物档案') }}</h1>
       </div>
       <div class="people-view__heading-actions">
         <div class="people-view__count" aria-live="polite">
           <strong>{{ peopleQuery.result.value.total }}</strong>
-          <span>位人物</span>
+          <span>{{ t('位人物') }}</span>
         </div>
-        <BaseButton name="新建人物" @click="createPerson">新建人物</BaseButton>
+        <BaseButton :name="t('新建人物')" @click="createPerson">{{ t('新建人物') }}</BaseButton>
       </div>
     </header>
 
@@ -207,34 +208,28 @@ async function confirmDelete() {
 
     <div class="people-view__summary">
       <p aria-live="polite">
-        {{ selectedIds.length > 0 ? `已选择 ${selectedIds.length} 人` : '可选择人物查看或导出资料' }}
+        {{ selectedIds.length > 0 ? t('已选择 {0} 人', [selectedIds.length]) : t('可选择人物查看或导出资料') }}
       </p>
-      <span v-if="peopleQuery.loadState.value === 'ready'">
-        共 {{ peopleQuery.result.value.total }} 条结果
-      </span>
+      <span v-if="peopleQuery.loadState.value === 'ready'"> {{ t('共 {0} 条结果', [peopleQuery.result.value.total]) }} </span>
     </div>
 
     <p v-if="centerError" class="people-view__center-error" role="alert">{{ centerError }}</p>
 
-    <div v-if="peopleQuery.loadState.value === 'loading'" class="people-view__state" role="status">
-      正在查找人物档案…
-    </div>
+    <div v-if="peopleQuery.loadState.value === 'loading'" class="people-view__state" role="status"> {{ t('正在查找人物档案…') }} </div>
 
     <div
       v-else-if="peopleQuery.loadState.value === 'error'"
       class="people-view__state people-view__state--error"
       role="alert"
     >
-      <strong>人物资料未能读取</strong>
+      <strong>{{ t('人物资料未能读取') }}</strong>
       <span>{{ peopleQuery.loadError.value }}</span>
       <BaseButton
         variant="secondary"
         size="sm"
-        aria-label="重试载入人物"
+        :aria-label="t('重试载入人物')"
         @click="peopleQuery.retry"
-      >
-        重新读取
-      </BaseButton>
+      > {{ t('重新读取') }} </BaseButton>
     </div>
 
     <div
@@ -243,14 +238,12 @@ async function confirmDelete() {
       role="status"
     >
       <EmptyState
-        title="没有找到符合条件的人物"
-        description="试试修改关键词或清除筛选条件。"
+        :title="t('没有找到符合条件的人物')"
+        :description="t('试试修改关键词或清除筛选条件。')"
       >
-        <span class="people-view__empty-mark">人</span>
+        <span class="people-view__empty-mark">{{ t('人') }}</span>
         <template #actions>
-          <BaseButton variant="secondary" size="sm" @click="peopleQuery.clearFilters">
-            清除条件
-          </BaseButton>
+          <BaseButton variant="secondary" size="sm" @click="peopleQuery.clearFilters"> {{ t('清除条件') }} </BaseButton>
         </template>
       </EmptyState>
     </div>
@@ -268,34 +261,28 @@ async function confirmDelete() {
         @set-center="toggleCenter"
       />
 
-      <nav class="people-view__pagination" aria-label="人物分页">
+      <nav class="people-view__pagination" :aria-label="t('人物分页')">
         <BaseButton
           variant="secondary"
           size="sm"
           :disabled="peopleQuery.page.value <= 1"
-          aria-label="上一页"
+          :aria-label="t('上一页')"
           @click="peopleQuery.goToPage(peopleQuery.page.value - 1)"
-        >
-          ← 上一页
-        </BaseButton>
-        <span aria-label="分页信息">
-          第 {{ peopleQuery.page.value }} / {{ peopleQuery.totalPages.value }} 页
-        </span>
+        > {{ t('← 上一页') }} </BaseButton>
+        <span :aria-label="t('分页信息')"> {{ t('第 {0} / {1} 页', [peopleQuery.page.value, peopleQuery.totalPages.value]) }} </span>
         <BaseButton
           variant="secondary"
           size="sm"
           :disabled="peopleQuery.page.value >= peopleQuery.totalPages.value"
-          aria-label="下一页"
+          :aria-label="t('下一页')"
           @click="peopleQuery.goToPage(peopleQuery.page.value + 1)"
-        >
-          下一页 →
-        </BaseButton>
+        > {{ t('下一页 →') }} </BaseButton>
       </nav>
     </template>
 
     <DeletePersonDialog
       :open="Boolean(deletingPerson)"
-      :person-name="deletingPerson ? getPrimaryName(deletingPerson) : '这位人物'"
+      :person-name="deletingPerson ? getPrimaryName(deletingPerson) : t('这位人物')"
       :impact="deleteImpact"
       :loading="deleteLoading"
       :deleting="deleting"

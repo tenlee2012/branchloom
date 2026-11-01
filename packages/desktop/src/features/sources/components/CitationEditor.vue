@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localizeSystemMessage, t } from '../../../shared/i18n'
 import { computed, reactive, ref, watch } from 'vue'
 import { useSessionStore } from '../../../app/stores/session'
 import BaseButton from '../../../design-system/BaseButton.vue'
@@ -103,7 +104,7 @@ function personName(person: Person) {
 function relationshipName(relationship: Relationship) {
   const from = props.people.find(({ id }) => id === relationship.fromPersonId)
   const to = props.people.find(({ id }) => id === relationship.toPersonId)
-  return `${from ? personName(from) : '未知人物'} — ${to ? personName(to) : '未知人物'}（${relationship.category === 'parent' ? '亲子' : '伴侣'}）`
+  return `${from ? personName(from) : t('未知人物')} — ${to ? personName(to) : t('未知人物')}（${relationship.category === 'parent' ? t('亲子') : t('伴侣')}）`
 }
 
 const targets = computed(() => {
@@ -115,7 +116,7 @@ const targets = computed(() => {
       const organization = props.organizations.find(({ id }) => id === career.organizationId)
       return {
         id: career.id,
-        label: [person ? personName(person) : '未知人物', organization?.name, career.positionTitle]
+        label: [person ? personName(person) : t('未知人物'), organization?.name, career.positionTitle]
           .filter(Boolean)
           .join(' · '),
       }
@@ -178,21 +179,21 @@ function candidate(): Citation {
 }
 
 function validate(citation: Citation): string | undefined {
-  if (!citation.sourceId) return '请选择引用来源。'
-  if (!citation.targetId) return '请选择引用所支持的人物、关系或事件。'
+  if (!citation.sourceId) return t('请选择引用来源。')
+  if (!citation.targetId) return t('请选择引用所支持的人物、关系或事件。')
   for (const boundary of [citation.accessedAt?.start, citation.accessedAt?.end]) {
-    if (boundary && !normalizeIsoDate(boundary)) return '访问或记录日期边界必须是有效的 ISO 日期。'
+    if (boundary && !normalizeIsoDate(boundary)) return t('访问或记录日期边界必须是有效的 ISO 日期。')
   }
-  if (citation.accessedAt?.precision === 'before' && !citation.accessedAt.end) return '早于日期需要填写结束边界。'
-  if (citation.accessedAt?.precision === 'after' && !citation.accessedAt.start) return '晚于日期需要填写开始边界。'
+  if (citation.accessedAt?.precision === 'before' && !citation.accessedAt.end) return t('早于日期需要填写结束边界。')
+  if (citation.accessedAt?.precision === 'after' && !citation.accessedAt.start) return t('晚于日期需要填写开始边界。')
   if (citation.accessedAt?.precision === 'range' && (!citation.accessedAt.start || !citation.accessedAt.end)) {
-    return '日期范围需要填写开始和结束边界。'
+    return t('日期范围需要填写开始和结束边界。')
   }
   if (citation.accessedAt?.precision === 'range'
     && citation.accessedAt.start
     && citation.accessedAt.end
     && isDefinitelyReversedDateRange(citation.accessedAt.start, citation.accessedAt.end)) {
-    return '日期范围的开始边界晚于结束边界，请核对。'
+    return t('日期范围的开始边界晚于结束边界，请核对。')
   }
   return undefined
 }
@@ -217,9 +218,9 @@ async function submit() {
     emit('saved', saved)
     emit('close')
   } catch (error) {
-    const details = error instanceof Error && error.message.trim()
-      ? error.message
-      : '本地引用暂时无法写入'
+    const details = error instanceof Error && localizeSystemMessage(error.message).trim()
+      ? localizeSystemMessage(error.message)
+      : t('本地引用暂时无法写入')
     saveFailure.value = details
     session.saveStatus = 'failed'
     session.saveError = details
@@ -254,7 +255,7 @@ async function removeCitation() {
     emit('deleted', citation.id)
     emit('close')
   } catch (error) {
-    const details = error instanceof Error ? error.message : '本地引用暂时无法删除'
+    const details = error instanceof Error ? localizeSystemMessage(error.message) : t('本地引用暂时无法删除')
     saveFailure.value = details
     session.saveStatus = 'failed'
     session.saveError = details
@@ -268,90 +269,90 @@ async function removeCitation() {
 <template>
   <BaseDrawer
     :open="open"
-    :title="citation ? '编辑引用' : '新建引用'"
-    description="引用把具体资料位置连接到人物、关系或事件。"
-    close-label="关闭引用编辑器"
+    :title="citation ? t('编辑引用') : t('新建引用')"
+    :description="t('引用把具体资料位置连接到人物、关系或事件。')"
+    :close-label="t('关闭引用编辑器')"
     @close="requestClose"
   >
     <form class="citation-editor" novalidate @submit.prevent="submit">
-      <BaseField id="citation-source" label="来源" required>
+      <BaseField id="citation-source" :label="t('来源')" required>
         <BaseSelectControl><select id="citation-source" v-model="draft.sourceId" name="citationSource">
-            <option value="">请选择来源</option>
+            <option value="">{{ t('请选择来源') }}</option>
             <option v-for="source in sources" :key="source.id" :value="source.id">{{ source.title }}</option>
           </select></BaseSelectControl>
       </BaseField>
       <div class="citation-editor__grid">
-        <BaseField id="citation-target-type" label="资料类型">
+        <BaseField id="citation-target-type" :label="t('资料类型')">
           <BaseSelectControl><select id="citation-target-type" v-model="draft.targetType" name="citationTargetType">
-              <option value="person">人物</option>
-              <option value="relationship">关系</option>
-              <option value="event">事件</option>
-              <option value="career">人物履历</option>
+              <option value="person">{{ t('人物') }}</option>
+              <option value="relationship">{{ t('关系') }}</option>
+              <option value="event">{{ t('事件') }}</option>
+              <option value="career">{{ t('人物履历') }}</option>
             </select></BaseSelectControl>
         </BaseField>
-        <BaseField id="citation-target" label="支持的资料" required>
+        <BaseField id="citation-target" :label="t('支持的资料')" required>
           <BaseSelectControl><select id="citation-target" v-model="draft.targetId" name="citationTargetId">
-              <option value="">请选择资料</option>
+              <option value="">{{ t('请选择资料') }}</option>
               <option v-for="target in targets" :key="target.id" :value="target.id">{{ target.label }}</option>
             </select></BaseSelectControl>
         </BaseField>
       </div>
-      <BaseField id="citation-locator" label="页码、章节或定位信息">
+      <BaseField id="citation-locator" :label="t('页码、章节或定位信息')">
         <input id="citation-locator" v-model="draft.locator" name="citationLocator" />
       </BaseField>
-      <BaseField id="citation-excerpt" label="原文摘录">
+      <BaseField id="citation-excerpt" :label="t('原文摘录')">
         <textarea id="citation-excerpt" v-model="draft.excerpt" name="citationExcerpt" rows="4" />
       </BaseField>
       <fieldset class="citation-editor__date">
-        <legend>访问或记录日期</legend>
-        <label><span>日期语义</span><BaseSelectControl><select v-model="draft.accessedPrecision" name="accessedPrecision">
-            <option value="exact">精确</option><option value="about">约</option><option value="before">早于</option>
-            <option value="after">晚于</option><option value="range">范围</option><option value="unknown">未知</option>
+        <legend>{{ t('访问或记录日期') }}</legend>
+        <label><span>{{ t('日期语义') }}</span><BaseSelectControl><select v-model="draft.accessedPrecision" name="accessedPrecision">
+            <option value="exact">{{ t('精确') }}</option><option value="about">{{ t('约') }}</option><option value="before">{{ t('早于') }}</option>
+            <option value="after">{{ t('晚于') }}</option><option value="range">{{ t('范围') }}</option><option value="unknown">{{ t('未知') }}</option>
           </select></BaseSelectControl></label>
-        <label><span>显示文字</span><input v-model="draft.accessedDisplay" name="accessedDisplay" /></label>
-        <label><span>开始边界</span><input v-model="draft.accessedStart" name="accessedStart" /></label>
-        <label><span>结束边界</span><input v-model="draft.accessedEnd" name="accessedEnd" /></label>
+        <label><span>{{ t('显示文字') }}</span><input v-model="draft.accessedDisplay" name="accessedDisplay" /></label>
+        <label><span>{{ t('开始边界') }}</span><input v-model="draft.accessedStart" name="accessedStart" /></label>
+        <label><span>{{ t('结束边界') }}</span><input v-model="draft.accessedEnd" name="accessedEnd" /></label>
       </fieldset>
       <fieldset class="citation-editor__attachments">
-        <legend>相关附件</legend>
-        <p v-if="attachments.length === 0">暂无可关联附件。</p>
+        <legend>{{ t('相关附件') }}</legend>
+        <p v-if="attachments.length === 0">{{ t('暂无可关联附件。') }}</p>
         <label v-for="attachment in attachments" :key="attachment.id">
           <input v-model="draft.attachmentIds" type="checkbox" :value="attachment.id" />
-          <span>{{ attachment.name }}<small v-if="attachment.missing">（缺失）</small></span>
+          <span>{{ attachment.name }}<small v-if="attachment.missing">{{ t('（缺失）') }}</small></span>
         </label>
       </fieldset>
-      <BaseField id="citation-notes" label="备注">
+      <BaseField id="citation-notes" :label="t('备注')">
         <textarea id="citation-notes" v-model="draft.notes" name="citationNotes" rows="4" />
       </BaseField>
       <p v-if="validationError" class="citation-editor__error" role="alert">{{ validationError }}</p>
       <div v-if="saveFailure" class="citation-editor__error" role="alert">
-        <strong>保存失败，引用尚未写入。</strong>
-        <details open><summary>错误详情</summary><p>{{ saveFailure }}</p></details>
+        <strong>{{ t('保存失败，引用尚未写入。') }}</strong>
+        <details open><summary>{{ t('错误详情') }}</summary><p>{{ saveFailure }}</p></details>
       </div>
       <footer class="citation-editor__actions">
-        <BaseButton v-if="citation" name="删除引用" variant="danger" :disabled="saving" @click="confirmDelete = true">删除引用</BaseButton>
+        <BaseButton v-if="citation" :name="t('删除引用')" variant="danger" :disabled="saving" @click="confirmDelete = true">{{ t('删除引用') }}</BaseButton>
         <span class="citation-editor__spacer" />
-        <BaseButton name="取消引用编辑" variant="secondary" :disabled="saving" @click="requestClose">取消</BaseButton>
-        <BaseButton name="保存引用" type="submit" :loading="saving">保存引用</BaseButton>
+        <BaseButton :name="t('取消引用编辑')" variant="secondary" :disabled="saving" @click="requestClose">{{ t('取消') }}</BaseButton>
+        <BaseButton :name="t('保存引用')" type="submit" :loading="saving">{{ t('保存引用') }}</BaseButton>
       </footer>
     </form>
   </BaseDrawer>
   <BaseDialog
     :open="confirmDelete"
-    title="删除引用？"
-    description="引用记录及其附件关联将被删除，来源和附件本身会保留。"
-    close-label="保留引用"
+    :title="t('删除引用？')"
+    :description="t('引用记录及其附件关联将被删除，来源和附件本身会保留。')"
+    :close-label="t('保留引用')"
     @close="confirmDelete = false"
   >
     <div class="citation-editor__actions">
-      <BaseButton variant="secondary" @click="confirmDelete = false">保留引用</BaseButton>
-      <BaseButton name="确认删除引用" variant="danger" :loading="saving" @click="removeCitation">确认删除</BaseButton>
+      <BaseButton variant="secondary" @click="confirmDelete = false">{{ t('保留引用') }}</BaseButton>
+      <BaseButton :name="t('确认删除引用')" variant="danger" :loading="saving" @click="removeCitation">{{ t('确认删除') }}</BaseButton>
     </div>
   </BaseDialog>
-  <BaseDialog :open="confirmClose" title="放弃未保存的引用？" close-label="继续编辑" @close="confirmClose = false">
+  <BaseDialog :open="confirmClose" :title="t('放弃未保存的引用？')" :close-label="t('继续编辑')" @close="confirmClose = false">
     <div class="citation-editor__actions">
-      <BaseButton name="继续编辑引用" variant="secondary" @click="confirmClose = false">继续编辑</BaseButton>
-      <BaseButton name="放弃引用修改" variant="danger" @click="discard">放弃修改</BaseButton>
+      <BaseButton :name="t('继续编辑引用')" variant="secondary" @click="confirmClose = false">{{ t('继续编辑') }}</BaseButton>
+      <BaseButton :name="t('放弃引用修改')" variant="danger" @click="discard">{{ t('放弃修改') }}</BaseButton>
     </div>
   </BaseDialog>
 </template>

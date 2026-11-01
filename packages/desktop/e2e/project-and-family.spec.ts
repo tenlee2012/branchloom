@@ -46,11 +46,11 @@ test('new project builds a center family with parents, partner and child, then o
 
   await page.getByRole('link', { name: '人物', exact: true }).click()
   await page.getByRole('button', { name: '新建人物' }).click()
-  const personDrawer = page.getByRole('dialog', { name: '新建人物' })
-  await personDrawer.getByRole('textbox', { name: '主姓名', exact: true }).fill('测试中心人物')
-  await personDrawer.getByLabel('生存状态').selectOption('living')
-  await personDrawer.getByRole('button', { name: '保存', exact: true }).click()
-  await page.getByRole('link', { name: '打开人物详情：测试中心人物' }).click()
+  const personEditor = page.getByRole('region', { name: '新建人物', exact: true })
+  await personEditor.getByRole('textbox', { name: '主姓名', exact: true }).fill('测试中心人物')
+  await personEditor.getByLabel('生存状态').selectOption('living')
+  await personEditor.getByRole('button', { name: '保存', exact: true }).click()
+  await expect(page.getByRole('heading', { name: '测试中心人物', exact: true })).toBeVisible()
 
   await quickAddRelative(page, { name: '测试父亲' })
   await quickAddRelative(page, { name: '测试母亲' })
@@ -62,6 +62,7 @@ test('new project builds a center family with parents, partner and child, then o
 
   await page.getByRole('link', { name: '人物', exact: true }).click()
   await page.getByRole('button', { name: '设为中心人物：测试中心人物' }).click()
+  await expect(page.getByRole('button', { name: '取消中心人物：测试中心人物' })).toBeVisible()
   await page.getByRole('link', { name: '家谱树', exact: true }).click()
   await expect(page.getByText('中心人物：测试中心人物')).toBeVisible()
   await expect(page.getByTestId('family-graph')).toBeVisible()

@@ -157,6 +157,56 @@ function calculatorTerm(source: Person, path: Step[]): string | undefined {
   return labels.length ? [...new Set(labels)].join(' / ') : undefined
 }
 
+function englishDirectTerm({ person, direction, relationship }: Step): string {
+  if (relationship.category === 'partner') {
+    const terms = {
+      married: gendered(person, 'husband', 'wife', 'spouse'),
+      divorced: gendered(person, 'ex-husband', 'ex-wife', 'former spouse'),
+      separated: gendered(person, 'husband (separated)', 'wife (separated)', 'spouse (separated)'),
+      engaged: gendered(person, 'fiancé', 'fiancée', 'engaged partner'),
+      partner: 'partner',
+    }
+    return terms[relationship.type] + (relationship.end && relationship.type !== 'divorced' ? ' (ended)' : '')
+  }
+  if (relationship.type === 'guardian') return direction === 'parent' ? 'guardian' : 'ward'
+  const term = direction === 'parent'
+    ? gendered(person, 'father', 'mother', 'parent')
+    : gendered(person, 'son', 'daughter', 'child')
+  if (relationship.type === 'adoptive') return `${direction === 'parent' ? 'adoptive' : 'adopted'} ${term}`
+  if (relationship.type === 'step') return `step${term}`
+  return term
+}
+
+function englishPathTerm(source: Person, path: Step[]): string {
+  if (path.length === 1) return englishDirectTerm(path[0]!)
+  const target = path.at(-1)!.person
+  const pattern = path.map(({ direction }) => ({ parent: 'U', child: 'D', partner: 'S' })[direction]).join('')
+  if (path.every(({ relationship }) => relationship.type === 'biological')) {
+    if (/^U{2,}$/.test(pattern)) {
+      if (path.length >= 4) return `ancestor (${path.length} generations up)`
+      return `${path.length === 3 ? 'great-' : ''}${gendered(target, 'grandfather', 'grandmother', 'grandparent')}`
+    }
+    if (/^D{2,}$/.test(pattern)) {
+      if (path.length >= 4) return `descendant (${path.length} generations down)`
+      return `${path.length === 3 ? 'great-' : ''}${gendered(target, 'grandson', 'granddaughter', 'grandchild')}`
+    }
+    if (pattern === 'UD') {
+      const age = seniority(source, target)
+      return `${age ? `${age} ` : ''}${gendered(target, 'brother', 'sister', 'sibling')}`
+    }
+    if (pattern === 'UUD') return gendered(target, 'uncle', 'aunt', "parent's sibling")
+    if (pattern === 'UDD') return gendered(target, 'nephew', 'niece', "sibling's child")
+    if (pattern === 'UUDD') return 'cousin'
+  }
+  if (path.every(({ relationship }) => relationship.type === 'biological'
+    || (relationship.type === 'married' && !relationship.end))) {
+    if (pattern === 'SU') return gendered(target, 'father-in-law', 'mother-in-law', 'parent-in-law')
+    if (pattern === 'DS') return gendered(target, 'son-in-law', 'daughter-in-law', 'child-in-law')
+  }
+  // Preserve each recorded step for complex, non-biological or former relationships.
+  return path.map(englishDirectTerm).join("'s ")
+}
+
 /** Derive display-only terms from recorded shortest paths in the loaded family.
  * Equal-length paths are retained, with a per-person cap to bound dense graphs.
  * Missing records, project boundaries and cycles never imply new relationships.
@@ -165,6 +215,7 @@ export function buildKinshipDescriptions(
   people: readonly Person[],
   relationships: readonly Relationship[],
   sourcePersonId: string,
+  language: 'zh-CN' | 'en' = 'zh-CN',
 ): Map<string, KinshipDescription> {
   const result = new Map<string, KinshipDescription>()
   const source = people.find(({ id, deletedAt }) => id === sourcePersonId && !deletedAt)
@@ -207,13 +258,15 @@ export function buildKinshipDescriptions(
     }
   }
 
-  result.set(source.id, { label: '本人', paths: [getPrimaryName(source)] })
+  result.set(source.id, { label: language === 'en' ? 'Self' : '本人', paths: [getPrimaryName(source)] })
   for (const [personId, paths] of pathsById) {
     if (personId === source.id) continue
-    const labels = [...new Set(paths.map((path) => pathTerm(source, path)))].sort((a, b) => a.localeCompare(b, 'zh-CN'))
+    const labels = [...new Set(paths.map((path) => language === 'en' ? englishPathTerm(source, path) : pathTerm(source, path)))].sort((a, b) => a.localeCompare(b, language))
     result.set(personId, {
-      label: labels.join(' / ') + (morePaths.has(personId) ? ' 等' : ''),
-      paths: [...new Set(paths.map((path) => [getPrimaryName(source), ...path.map((step) => `${directTerm(step)}：${getPrimaryName(step.person)}`)].join(' → ')))],
+      label: labels.join(' / ') + (morePaths.has(personId) ? language === 'en' ? ' and others' : ' 等' : ''),
+      paths: [...new Set(paths.map((path) => [getPrimaryName(source), ...path.map((step) => language === 'en'
+        ? `${englishDirectTerm(step)}: ${getPrimaryName(step.person)}`
+        : `${directTerm(step)}：${getPrimaryName(step.person)}`)].join(' → ')))],
     })
   }
   return result

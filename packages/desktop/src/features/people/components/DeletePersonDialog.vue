@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '../../../shared/i18n'
 import BaseButton from '../../../design-system/BaseButton.vue'
 import BaseDialog from '../../../design-system/BaseDialog.vue'
 
@@ -17,32 +18,32 @@ const emit = defineEmits<{ close: []; confirm: [] }>()
 <template>
   <BaseDialog
     :open="open"
-    :title="`删除${personName}？`"
-    description="人物会被移入已删除记录，相关资料不会自动删除。"
-    close-label="取消删除人物"
+    :title="t('删除{0}？', [personName])"
+    :description="t('人物将被永久删除。请先核对下方列出的关联资料影响，此操作无法撤销。')"
+    :close-label="t('取消删除人物')"
     @close="emit('close')"
   >
     <div class="delete-person-dialog">
-      <p v-if="loading" role="status">正在统计受影响的资料…</p>
+      <p v-if="loading" role="status">{{ t('正在统计受影响的资料…') }}</p>
       <template v-else-if="impact">
-        <p>删除前请确认以下关联资料：</p>
-        <ul aria-label="删除影响统计">
-          <li>关系 {{ impact.relationships }} 条</li>
-          <li>事件 {{ impact.events }} 条</li>
-          <li>引用 {{ impact.citations }} 条</li>
+        <p>{{ t('删除前请确认以下关联资料：') }}</p>
+        <ul :aria-label="t('删除影响统计')">
+          <li>{{ t('关系 {0} 条', [impact.relationships]) }}</li>
+          <li>{{ t('事件 {0} 条', [impact.events]) }}</li>
+          <li>{{ t('引用 {0} 条', [impact.citations]) }}</li>
         </ul>
       </template>
-      <p v-else role="alert">暂时无法确认删除影响，请取消后重试。</p>
-      <p v-if="error" class="delete-person-dialog__error" role="alert">删除失败：{{ error }}</p>
+      <p v-else role="alert">{{ t('暂时无法确认删除影响，请取消后重试。') }}</p>
+      <p v-if="error" class="delete-person-dialog__error" role="alert">{{ t('删除失败：{0}', [error]) }}</p>
       <div class="delete-person-dialog__actions">
-        <BaseButton variant="secondary" :disabled="deleting" @click="emit('close')">取消</BaseButton>
+        <BaseButton variant="secondary" :disabled="deleting" @click="emit('close')">{{ t('取消') }}</BaseButton>
         <BaseButton
-          name="确认删除"
+          :name="t('确认删除')"
           variant="danger"
           :disabled="loading || !impact"
           :loading="deleting"
           @click="emit('confirm')"
-        >确认删除</BaseButton>
+        >{{ t('确认删除') }}</BaseButton>
       </div>
     </div>
   </BaseDialog>

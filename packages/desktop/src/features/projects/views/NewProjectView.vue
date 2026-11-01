@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localizeSystemMessage, t } from '../../../shared/i18n'
 import { IconBrandGithub, IconChevronRight } from '@tabler/icons-vue'
 import { computed, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
@@ -18,7 +19,7 @@ const isProjectTask = computed(() => Boolean(currentProjectId.value))
 
 function errorMessage(error: unknown, fallback: string): string {
   if (!(error instanceof Error)) return fallback
-  return error.message.trim() || fallback
+  return localizeSystemMessage(error.message).trim() || fallback
 }
 
 async function createProject(input: { name: string; description: string }) {
@@ -34,7 +35,7 @@ async function createProject(input: { name: string; description: string }) {
     }
     await router.push({ name: 'project-tree', params: { projectId: project.id } })
   } catch (error) {
-    submitError.value = errorMessage(error, '项目未能建立，请重试。')
+    submitError.value = errorMessage(error, t('项目未能建立，请重试。'))
   } finally {
     saving.value = false
   }
@@ -47,43 +48,39 @@ async function createProject(input: { name: string; description: string }) {
     aria-labelledby="new-project-title"
   >
     <div class="new-project-view__intro">
-      <p class="new-project-view__eyebrow">建立一份新的家族档案</p>
-      <h1 id="new-project-title">从一个名字开始</h1>
-      <p>
-        不需要一次准备齐全。项目建立后，你可以从家谱树添加第一位家人，再慢慢补充关系、日期和资料来源。
-      </p>
-      <ul aria-label="新项目说明">
-        <li><span aria-hidden="true">01</span> 项目资料保存在本机</li>
-        <li><span aria-hidden="true">02</span> 项目名称和简介之后都可以修改</li>
-        <li><span aria-hidden="true">03</span> 初建时可以暂不设置中心人物与封面</li>
+      <p class="new-project-view__eyebrow">{{ t('建立一份新的家族档案') }}</p>
+      <h1 id="new-project-title">{{ t('从一个名字开始') }}</h1>
+      <p> {{ t('不需要一次准备齐全。项目建立后，你可以从家谱树添加第一位家人，再慢慢补充关系、日期和资料来源。') }} </p>
+      <ul :aria-label="t('新项目说明')">
+        <li><span aria-hidden="true">01</span> {{ t('项目资料保存在本机') }}</li>
+        <li><span aria-hidden="true">02</span> {{ t('项目名称和简介之后都可以修改') }}</li>
+        <li><span aria-hidden="true">03</span> {{ t('初建时可以暂不设置中心人物与封面') }}</li>
       </ul>
     </div>
     <div class="new-project-view__panel">
       <div class="new-project-view__panel-heading">
         <img :src="appIcon" alt="" aria-hidden="true" />
         <div>
-          <p>新项目</p>
-          <h2>家族档案信息</h2>
+          <p>{{ t('新项目') }}</p>
+          <h2>{{ t('家族档案信息') }}</h2>
         </div>
       </div>
       <RouterLink
         class="new-project-view__github-import"
         :to="{ name: 'github-import' }"
-        aria-label="从 GitHub 导入已有项目"
+        :aria-label="t('从 GitHub 导入已有项目')"
       >
         <span class="new-project-view__github-icon" aria-hidden="true">
           <IconBrandGithub :size="20" />
         </span>
         <span class="new-project-view__github-copy">
-          <strong>从 GitHub 导入已有项目</strong>
-          <small>与桌面端使用同一套预览、确认和同步流程</small>
+          <strong>{{ t('从 GitHub 导入已有项目') }}</strong>
+          <small>{{ t('与桌面端使用同一套预览、确认和同步流程') }}</small>
         </span>
         <IconChevronRight :size="19" aria-hidden="true" />
       </RouterLink>
       <NewProjectForm :saving="saving" :submit-error="submitError" @submit="createProject" />
-      <RouterLink v-if="!isProjectTask" class="new-project-view__cancel" :to="{ name: 'home' }">
-        返回最近项目
-      </RouterLink>
+      <RouterLink v-if="!isProjectTask" class="new-project-view__cancel" :to="{ name: 'home' }"> {{ t('返回最近项目') }} </RouterLink>
     </div>
   </section>
 </template>

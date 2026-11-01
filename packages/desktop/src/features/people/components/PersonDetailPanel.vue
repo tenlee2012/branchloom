@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '../../../shared/i18n'
 import {
   IconCalendarEvent,
   IconPhoto,
@@ -72,16 +73,16 @@ const emit = defineEmits<{
 }>()
 
 const statusLabels: Record<Person['status'], string> = {
-  living: '在世',
-  deceased: '已故',
-  unknown: '状态未知',
+  living: t('在世'),
+  deceased: t('已故'),
+  unknown: t('状态未知'),
 }
 
 const sexLabels: Record<Person['sex'], string> = {
-  female: '女性',
-  male: '男性',
-  nonbinary: '非二元',
-  unknown: '未知',
+  female: t('女性'),
+  male: t('男性'),
+  nonbinary: t('非二元'),
+  unknown: t('未知'),
 }
 
 function primaryName(person: Person) {
@@ -89,7 +90,7 @@ function primaryName(person: Person) {
 }
 
 function avatarFallback(person: Person) {
-  return Array.from(primaryName(person).trim())[0] ?? '人'
+  return Array.from(primaryName(person).trim())[0] ?? t('人')
 }
 
 function otherPerson(relationship: Relationship) {
@@ -154,20 +155,20 @@ const derivedRelationshipGroups = computed(() => {
     people: [...ids].map((id) => personById.value.get(id)).filter(Boolean) as Person[],
   })
   return [
-    group('兄弟姐妹', siblingIds),
-    group('祖父母', grandparentIds),
-    group('孙辈', grandchildIds),
+    group(t('兄弟姐妹'), siblingIds),
+    group(t('祖父母'), grandparentIds),
+    group(t('孙辈'), grandchildIds),
   ].filter(({ people }) => people.length)
 })
 
 const careerCategoryLabels: Record<CareerRecord['category'], string> = {
-  employment: '企业任职',
-  civil_office: '文官',
-  military_office: '武职',
-  academic: '学术／教育',
-  religious_office: '宗教职务',
-  self_employed: '自由职业',
-  other: '其他',
+  employment: t('企业任职'),
+  civil_office: t('文官'),
+  military_office: t('武职'),
+  academic: t('学术／教育'),
+  religious_office: t('宗教职务'),
+  self_employed: t('自由职业'),
+  other: t('其他'),
 }
 
 function organizationName(career: CareerRecord) {
@@ -179,13 +180,13 @@ function placeName(career: CareerRecord) {
 }
 
 function personPlaceName(placeId: string | undefined) {
-  return props.places.find(({ id }) => id === placeId)?.name ?? '未记录'
+  return props.places.find(({ id }) => id === placeId)?.name ?? t('未记录')
 }
 
 function careerPeriod(career: CareerRecord) {
   const start = career.start?.display
-  const end = career.status === 'current' ? '至今' : career.end?.display
-  return [start, end].filter(Boolean).join(' — ') || '时间未详'
+  const end = career.status === 'current' ? t('至今') : career.end?.display
+  return [start, end].filter(Boolean).join(' — ') || t('时间未详')
 }
 
 function eventPlace(event: FamilyEvent) {
@@ -193,7 +194,7 @@ function eventPlace(event: FamilyEvent) {
 }
 
 function citationSource(citation: Citation) {
-  return sourceById.value.get(citation.sourceId)?.title ?? '未知来源'
+  return sourceById.value.get(citation.sourceId)?.title ?? t('未知来源')
 }
 </script>
 
@@ -205,25 +206,25 @@ function citationSource(citation: Citation) {
           v-if="person.avatarUrl"
           class="person-detail-panel__avatar"
           :src="person.avatarUrl"
-          :alt="`${primaryName(person)}的头像`"
+          :alt="t('{0}的头像', [primaryName(person)])"
         />
         <div
           v-else
           class="person-detail-panel__avatar person-detail-panel__avatar--fallback"
           role="img"
-          :aria-label="`${primaryName(person)}暂无头像`"
+          :aria-label="t('{0}暂无头像', [primaryName(person)])"
         >
           {{ avatarFallback(person) }}
         </div>
         <div>
-          <p>人物档案</p>
+          <p>{{ t('人物档案') }}</p>
           <h1>{{ primaryName(person) }}</h1>
           <div class="person-detail-panel__names">
             <span
               v-for="name in person.names.filter((name) => !isPrimaryName(person, name))"
               :key="`${name.value}-${name.type}`"
             >
-              <b>{{ name.type === 'custom' ? name.customTypeLabel || '自定义' : personNameTypeLabels[name.type] }}</b>
+              <b>{{ name.type === 'custom' ? name.customTypeLabel || t('自定义') : personNameTypeLabels[name.type] }}</b>
               {{ name.value }}
             </span>
           </div>
@@ -233,33 +234,33 @@ function citationSource(citation: Citation) {
         <StatusBadge :tone="person.status === 'living' ? 'success' : 'neutral'">
           {{ statusLabels[person.status] }}
         </StatusBadge>
-        <div class="person-detail-panel__commands" aria-label="人物操作">
+        <div class="person-detail-panel__commands" :aria-label="t('人物操作')">
           <button
             class="person-detail-panel__action person-detail-panel__action--edit"
             type="button"
-            name="编辑人物"
-            aria-label="编辑人物"
+            :name="t('编辑人物')"
+            :aria-label="t('编辑人物')"
             @click="emit('edit')"
           >
             <IconPencil :size="18" :stroke-width="1.8" aria-hidden="true" />
-            <span>编辑</span>
+            <span>{{ t('编辑') }}</span>
           </button>
           <span class="person-detail-panel__action-divider" aria-hidden="true" />
           <button
             class="person-detail-panel__action person-detail-panel__action--delete"
             type="button"
-            name="删除人物"
-            aria-label="删除人物"
+            :name="t('删除人物')"
+            :aria-label="t('删除人物')"
             @click="emit('delete')"
           >
             <IconTrash :size="18" :stroke-width="1.8" aria-hidden="true" />
-            <span>删除</span>
+            <span>{{ t('删除') }}</span>
           </button>
         </div>
       </div>
     </header>
 
-    <nav class="person-detail-panel__module-nav" aria-label="人物档案模块" role="tablist">
+    <nav class="person-detail-panel__module-nav" :aria-label="t('人物档案模块')" role="tablist">
       <button
         id="person-detail-tab-overview"
         :class="['person-detail-panel__module-link', { 'person-detail-panel__module-link--active': activeDetailModule === 'overview' }]"
@@ -270,8 +271,7 @@ function citationSource(citation: Citation) {
         aria-controls="person-overview"
         @click="activeDetailModule = 'overview'"
       >
-        <IconUserCircle :size="18" aria-hidden="true" />人物概览
-      </button>
+        <IconUserCircle :size="18" aria-hidden="true" />{{ t('人物概览') }} </button>
       <button
         id="person-detail-tab-life"
         :class="['person-detail-panel__module-link', { 'person-detail-panel__module-link--active': activeDetailModule === 'life' }]"
@@ -282,8 +282,7 @@ function citationSource(citation: Citation) {
         aria-controls="person-life-track"
         @click="activeDetailModule = 'life'"
       >
-        <IconTimeline :size="18" aria-hidden="true" />生平轨迹
-      </button>
+        <IconTimeline :size="18" aria-hidden="true" />{{ t('生平轨迹') }} </button>
       <button
         id="person-detail-tab-materials"
         :class="['person-detail-panel__module-link', { 'person-detail-panel__module-link--active': activeDetailModule === 'materials' }]"
@@ -294,8 +293,7 @@ function citationSource(citation: Citation) {
         aria-controls="person-materials"
         @click="activeDetailModule = 'materials'"
       >
-        <IconPhoto :size="18" aria-hidden="true" />资料与相册
-      </button>
+        <IconPhoto :size="18" aria-hidden="true" />{{ t('资料与相册') }} </button>
       <button
         id="person-detail-tab-events"
         :class="['person-detail-panel__module-link', { 'person-detail-panel__module-link--active': activeDetailModule === 'events' }]"
@@ -306,8 +304,7 @@ function citationSource(citation: Citation) {
         aria-controls="person-events"
         @click="activeDetailModule = 'events'"
       >
-        <IconCalendarEvent :size="18" aria-hidden="true" />事件
-      </button>
+        <IconCalendarEvent :size="18" aria-hidden="true" />{{ t('事件') }} </button>
     </nav>
 
     <div class="person-detail-panel__workspace">
@@ -319,16 +316,16 @@ function citationSource(citation: Citation) {
         role="tabpanel"
       >
         <div class="person-detail-panel__module-heading">
-          <h2 id="person-facts-heading">基本资料</h2>
+          <h2 id="person-facts-heading">{{ t('基本资料') }}</h2>
         </div>
         <dl class="person-detail-panel__facts">
-          <div><dt>生存状态</dt><dd>{{ statusLabels[person.status] }}</dd></div>
-          <div data-person-sex><dt>性别</dt><dd>{{ sexLabels[person.sex] }}</dd></div>
-          <div><dt>出生</dt><dd>{{ person.birth?.display ?? '未记录' }}</dd></div>
-          <div><dt>出生地</dt><dd>{{ personPlaceName(person.birthPlaceId) }}</dd></div>
-          <div><dt>死亡</dt><dd>{{ person.death?.display ?? '未记录' }}</dd></div>
-          <div><dt>死亡地</dt><dd>{{ personPlaceName(person.deathPlaceId) }}</dd></div>
-          <div><dt>来源</dt><dd>{{ sourceCount }} 项</dd></div>
+          <div><dt>{{ t('生存状态') }}</dt><dd>{{ statusLabels[person.status] }}</dd></div>
+          <div data-person-sex><dt>{{ t('性别') }}</dt><dd>{{ sexLabels[person.sex] }}</dd></div>
+          <div><dt>{{ t('出生') }}</dt><dd>{{ person.birth?.display ?? t('未记录') }}</dd></div>
+          <div><dt>{{ t('出生地') }}</dt><dd>{{ personPlaceName(person.birthPlaceId) }}</dd></div>
+          <div><dt>{{ t('死亡') }}</dt><dd>{{ person.death?.display ?? t('未记录') }}</dd></div>
+          <div><dt>{{ t('死亡地') }}</dt><dd>{{ personPlaceName(person.deathPlaceId) }}</dd></div>
+          <div><dt>{{ t('来源') }}</dt><dd>{{ t('{0} 项', [sourceCount]) }}</dd></div>
         </dl>
       </section>
 
@@ -342,13 +339,13 @@ function citationSource(citation: Citation) {
       role="tabpanel"
     >
       <div class="person-detail-panel__module-heading">
-        <h2 id="person-biography-heading">生平与地点</h2>
+        <h2 id="person-biography-heading">{{ t('生平与地点') }}</h2>
       </div>
-      <p>{{ person.biography || '还没有生平摘要。' }}</p>
+      <p>{{ person.biography || t('还没有生平摘要。') }}</p>
       <dl class="person-detail-panel__place-summary">
-        <div><dt>出生地</dt><dd>{{ personPlaceName(person.birthPlaceId) }}</dd></div>
-        <div><dt>死亡地</dt><dd>{{ personPlaceName(person.deathPlaceId) }}</dd></div>
-        <div><dt>主要活动</dt><dd>{{ events.map(eventPlace).filter(Boolean).slice(0, 2).join('、') || '未记录' }}</dd></div>
+        <div><dt>{{ t('出生地') }}</dt><dd>{{ personPlaceName(person.birthPlaceId) }}</dd></div>
+        <div><dt>{{ t('死亡地') }}</dt><dd>{{ personPlaceName(person.deathPlaceId) }}</dd></div>
+        <div><dt>{{ t('主要活动') }}</dt><dd>{{ events.map(eventPlace).filter(Boolean).slice(0, 2).join('、') || t('未记录') }}</dd></div>
       </dl>
     </section>
 
@@ -369,10 +366,10 @@ function citationSource(citation: Citation) {
     <section v-show="activeDetailModule === 'life'" class="person-detail-panel__module person-detail-panel__careers" data-person-careers aria-labelledby="person-careers-heading">
       <div class="person-detail-panel__section-heading">
         <div>
-          <h2 id="person-careers-heading">人物履历</h2>
-          <p>公司职位与古代官职按时间统一整理。</p>
+          <h2 id="person-careers-heading">{{ t('人物履历') }}</h2>
+          <p>{{ t('公司职位与古代官职按时间统一整理。') }}</p>
         </div>
-        <BaseButton name="添加履历" variant="secondary" @click="emit('addCareer')">添加履历</BaseButton>
+        <BaseButton :name="t('添加履历')" variant="secondary" @click="emit('addCareer')">{{ t('添加履历') }}</BaseButton>
       </div>
       <ol v-if="sortedCareers.length">
         <li v-for="career in sortedCareers" :key="career.id" :data-career-id="career.id">
@@ -383,10 +380,10 @@ function citationSource(citation: Citation) {
                 <span>{{ careerCategoryLabels[career.category] }}</span>
                 <h3>{{ career.positionTitle }}</h3>
               </div>
-              <StatusBadge v-if="career.status === 'current'" tone="success">当前</StatusBadge>
+              <StatusBadge v-if="career.status === 'current'" tone="success">{{ t('当前') }}</StatusBadge>
             </div>
             <p class="person-detail-panel__career-org">
-              {{ organizationName(career) || career.department || '机构未记录' }}
+              {{ organizationName(career) || career.department || t('机构未记录') }}
               <small v-if="organizationName(career) && career.department">· {{ career.department }}</small>
             </p>
             <p class="person-detail-panel__career-period">{{ careerPeriod(career) }}</p>
@@ -394,17 +391,17 @@ function citationSource(citation: Citation) {
               {{ [career.regime, career.rankOrGrade, career.appointmentType, placeName(career)].filter(Boolean).join(' · ') }}
             </p>
             <p v-if="career.description">{{ career.description }}</p>
-            <small>{{ career.sourceIds.length ? `${career.sourceIds.length} 项来源` : '尚无来源' }}</small>
+            <small>{{ career.sourceIds.length ? t('{0} 项来源', [career.sourceIds.length]) : t('尚无来源') }}</small>
           </div>
           <BaseButton
             variant="ghost"
             size="sm"
-            :aria-label="`编辑履历：${career.positionTitle}`"
+            :aria-label="t('编辑履历：{0}', [career.positionTitle])"
             @click="emit('editCareer', career)"
-          >编辑</BaseButton>
+          >{{ t('编辑') }}</BaseButton>
         </li>
       </ol>
-      <p v-else class="person-detail-panel__empty">还没有记录人物履历。</p>
+      <p v-else class="person-detail-panel__empty">{{ t('还没有记录人物履历。') }}</p>
     </section>
 
     <section
@@ -416,17 +413,17 @@ function citationSource(citation: Citation) {
     >
       <div class="person-detail-panel__section-heading">
         <div>
-          <h2 id="person-album-heading">人物相册</h2>
-          <p>{{ albumAttachments.length }} 张照片</p>
+          <h2 id="person-album-heading">{{ t('人物相册') }}</h2>
+          <p>{{ t('{0} 张照片', [albumAttachments.length]) }}</p>
         </div>
-        <button class="person-detail-panel__text-action" type="button" @click="emit('edit')">管理相册</button>
+        <button class="person-detail-panel__text-action" type="button" @click="emit('edit')">{{ t('管理相册') }}</button>
       </div>
       <div v-if="albumAttachments.length" class="person-detail-panel__album-grid">
         <figure v-for="attachment in albumAttachments" :key="attachment.id">
           <button
             type="button"
             :disabled="!attachment.previewUrl"
-            :aria-label="attachment.previewUrl ? `预览照片：${attachment.name}` : `${attachment.name}暂无预览`"
+            :aria-label="attachment.previewUrl ? t('预览照片：{0}', [attachment.name]) : t('{0}暂无预览', [attachment.name])"
             @click="previewAttachment = attachment"
           >
             <img v-if="attachment.previewUrl" :src="attachment.previewUrl" :alt="attachment.name" />
@@ -437,20 +434,20 @@ function citationSource(citation: Citation) {
       </div>
       <div v-else class="person-detail-panel__album-empty">
         <IconPhoto :size="28" aria-hidden="true" />
-        <span>还没有人物照片</span>
+        <span>{{ t('还没有人物照片') }}</span>
       </div>
     </section>
       </main>
 
-      <aside class="person-detail-panel__secondary" aria-label="人物结构化资料">
+      <aside class="person-detail-panel__secondary" :aria-label="t('人物结构化资料')">
     <section v-show="activeDetailModule === 'overview'" class="person-detail-panel__module person-detail-panel__name-module" aria-labelledby="person-name-module-heading">
       <div class="person-detail-panel__module-heading">
-        <h2 id="person-name-module-heading">姓名与称谓</h2>
-        <button class="person-detail-panel__text-action" type="button" @click="emit('edit')">编辑</button>
+        <h2 id="person-name-module-heading">{{ t('姓名与称谓') }}</h2>
+        <button class="person-detail-panel__text-action" type="button" @click="emit('edit')">{{ t('编辑') }}</button>
       </div>
       <dl>
         <div v-for="name in person.names" :key="`${name.value}-${name.type}`">
-          <dt>{{ name.type === 'custom' ? name.customTypeLabel || '自定义' : personNameTypeLabels[name.type] }}</dt>
+          <dt>{{ name.type === 'custom' ? name.customTypeLabel || t('自定义') : personNameTypeLabels[name.type] }}</dt>
           <dd>{{ name.value }}</dd>
         </div>
       </dl>
@@ -459,43 +456,36 @@ function citationSource(citation: Citation) {
     <section v-show="activeDetailModule === 'overview'" class="person-detail-panel__module person-detail-panel__relationships" data-person-relationships aria-labelledby="person-relationships-heading">
       <div class="person-detail-panel__section-heading">
         <div>
-          <h2 id="person-relationships-heading">家庭关系</h2>
-          <p>兄弟姐妹与祖孙关系会从这些直接关系推导。</p>
+          <h2 id="person-relationships-heading">{{ t('家庭关系') }}</h2>
+          <p>{{ t('兄弟姐妹与祖孙关系会从这些直接关系推导。') }}</p>
         </div>
         <div class="person-detail-panel__relationship-actions">
-          <BaseButton name="查称呼" variant="secondary" @click="emit('queryKinship')">
-            <IconUsersGroup :size="18" aria-hidden="true" />查称呼
-          </BaseButton>
-          <BaseButton name="添加已有关系" variant="secondary" @click="emit('addRelationship')">
-            添加已有关系
-          </BaseButton>
-          <BaseButton name="添加人物" @click="emit('quickAddRelative')">
-            添加人物
-          </BaseButton>
+          <BaseButton :name="t('查称呼')" variant="secondary" @click="emit('queryKinship')">
+            <IconUsersGroup :size="18" aria-hidden="true" />{{ t('查称呼') }} </BaseButton>
+          <BaseButton :name="t('添加已有关系')" variant="secondary" @click="emit('addRelationship')"> {{ t('添加已有关系') }} </BaseButton>
+          <BaseButton :name="t('添加人物')" @click="emit('quickAddRelative')"> {{ t('添加人物') }} </BaseButton>
         </div>
       </div>
       <ul v-if="relationships.length">
         <li v-for="relationship in relationships" :key="relationship.id" :data-relationship-id="relationship.id">
           <div>
             <strong>{{ relationshipDisplayLabel(relationship, person.id, otherPerson(relationship)) }}</strong>
-            <span>{{ otherPerson(relationship) ? primaryName(otherPerson(relationship)!) : '人物资料待读取' }}</span>
+            <span>{{ otherPerson(relationship) ? primaryName(otherPerson(relationship)!) : t('人物资料待读取') }}</span>
             <small>{{ relationship.type }}</small>
           </div>
           <BaseButton
             variant="ghost"
             size="sm"
-            :aria-label="`编辑关系：${relationshipDisplayLabel(relationship, person.id, otherPerson(relationship))} ${otherPerson(relationship) ? primaryName(otherPerson(relationship)!) : '未知人物'}`"
+            :aria-label="t('编辑关系：{0} {1}', [relationshipDisplayLabel(relationship, person.id, otherPerson(relationship)), otherPerson(relationship) ? primaryName(otherPerson(relationship)!) : t('未知人物')])"
             @click="emit('editRelationship', relationship)"
-          >
-            编辑
-          </BaseButton>
+          > {{ t('编辑') }} </BaseButton>
         </li>
       </ul>
-      <p v-else class="person-detail-panel__empty">还没有记录家庭关系。</p>
+      <p v-else class="person-detail-panel__empty">{{ t('还没有记录家庭关系。') }}</p>
       <div
         v-if="derivedRelationshipGroups.length"
         class="person-detail-panel__derived"
-        aria-label="推导关系摘要"
+        :aria-label="t('推导关系摘要')"
       >
         <div v-for="group in derivedRelationshipGroups" :key="group.label">
           <strong>{{ group.label }}</strong>
@@ -507,45 +497,43 @@ function citationSource(citation: Citation) {
             >{{ primaryName(relative) }}</a>
           </span>
         </div>
-        <small>以上关系由已记录的亲生或收养亲子关系即时推导，不另存为关系记录。</small>
+        <small>{{ t('以上关系由已记录的亲生或收养亲子关系即时推导，不另存为关系记录。') }}</small>
       </div>
     </section>
 
     <section v-show="activeDetailModule === 'materials'" class="person-detail-panel__module person-detail-panel__evidence" data-person-evidence aria-labelledby="person-evidence-heading">
       <div class="person-detail-panel__section-heading">
         <div>
-          <h2 id="person-evidence-heading">来源与附件</h2>
-          <p>{{ sources.length }} 项来源、{{ citations.length }} 条引用、{{ linkedAttachments.length }} 个附件。</p>
+          <h2 id="person-evidence-heading">{{ t('来源与附件') }}</h2>
+          <p>{{ t('{0} 项来源、{1} 条引用、{2} 个附件。', [sources.length, citations.length, linkedAttachments.length]) }}</p>
         </div>
         <a
           :href="`/project/${person.projectId}/sources`"
-          aria-label="管理人物证据"
-        >管理资料来源</a>
+          :aria-label="t('管理人物证据')"
+        >{{ t('管理资料来源') }}</a>
       </div>
       <ul v-if="citations.length" class="person-detail-panel__citations">
         <li v-for="citation in citations" :key="citation.id">
           <strong>{{ citationSource(citation) }}</strong>
-          <span>{{ citation.locator || citation.excerpt || '已关联到人物资料' }}</span>
+          <span>{{ citation.locator || citation.excerpt || t('已关联到人物资料') }}</span>
         </li>
       </ul>
       <ul v-if="linkedAttachments.length" class="person-detail-panel__attachments">
         <li v-for="attachment in linkedAttachments" :key="attachment.id">
           <span>{{ attachment.name }}</span>
           <StatusBadge :tone="attachment.missing ? 'warning' : 'success'">
-            {{ attachment.missing ? '文件缺失' : '文件可用' }}
+            {{ attachment.missing ? t('文件缺失') : t('文件可用') }}
           </StatusBadge>
         </li>
       </ul>
-      <p v-if="citations.length === 0 && linkedAttachments.length === 0" class="person-detail-panel__empty">
-        还没有与此人物关联的引用或附件。
-      </p>
+      <p v-if="citations.length === 0 && linkedAttachments.length === 0" class="person-detail-panel__empty"> {{ t('还没有与此人物关联的引用或附件。') }} </p>
     </section>
 
     <section v-show="activeDetailModule === 'life'" class="person-detail-panel__module person-detail-panel__notes" data-person-notes aria-labelledby="person-notes-heading">
       <div class="person-detail-panel__module-heading">
-        <h2 id="person-notes-heading">整理笔记</h2>
+        <h2 id="person-notes-heading">{{ t('整理笔记') }}</h2>
       </div>
-      <p>{{ person.notes || '还没有整理备注。' }}</p>
+      <p>{{ person.notes || t('还没有整理备注。') }}</p>
     </section>
       </aside>
     </div>
@@ -553,8 +541,8 @@ function citationSource(citation: Citation) {
   </article>
   <BaseDialog
     :open="Boolean(previewAttachment?.previewUrl)"
-    :title="previewAttachment?.name ?? '照片预览'"
-    close-label="关闭照片预览"
+    :title="previewAttachment?.name ?? t('照片预览')"
+    :close-label="t('关闭照片预览')"
     @close="previewAttachment = undefined"
   >
     <img

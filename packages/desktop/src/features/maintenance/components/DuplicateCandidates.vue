@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '../../../shared/i18n'
 import { computed, ref, watch } from 'vue'
 import { getPrimaryName } from '../../../shared/domain/personNames'
 import type { DuplicateCandidate, Person, UUID } from '../../../shared/domain/types'
@@ -46,44 +47,38 @@ function defer(left: UUID, right: UUID) {
   <section class="duplicate-candidates" aria-labelledby="duplicate-candidates-title">
     <header>
       <div>
-        <h2 id="duplicate-candidates-title">重复人物候选</h2>
-        <p>候选仅供人工核对，不会自动合并。</p>
+        <h2 id="duplicate-candidates-title">{{ t('重复人物候选') }}</h2>
+        <p>{{ t('候选仅供人工核对，不会自动合并。') }}</p>
       </div>
-      <span>{{ candidates.length }} 组</span>
+      <span>{{ t('{0} 组', [candidates.length]) }}</span>
     </header>
 
-    <p v-if="candidates.length === 0" class="empty">暂无重复候选</p>
+    <p v-if="candidates.length === 0" class="empty">{{ t('暂无重复候选') }}</p>
     <article v-for="candidate in candidates" :key="pairKey(candidate.leftPersonId, candidate.rightPersonId)">
       <div class="candidate-heading">
         <strong>{{ name(candidate.leftPersonId) }}</strong>
         <span aria-hidden="true">⇄</span>
         <strong>{{ name(candidate.rightPersonId) }}</strong>
-        <b>{{ candidate.score }} 分</b>
+        <b>{{ t('{0} 分', [candidate.score]) }}</b>
       </div>
       <p>{{ candidate.reasons.join(' · ') }}</p>
-      <p v-if="candidate.conflicts.length" class="conflicts">冲突：{{ candidate.conflicts.join(' · ') }}</p>
+      <p v-if="candidate.conflicts.length" class="conflicts">{{ t('冲突：{0}', [candidate.conflicts.join(' · ')]) }}</p>
       <div class="actions">
         <button
           type="button"
-          :name="`合并候选人 ${candidate.leftPersonId} ${candidate.rightPersonId}`"
+          :name="t('合并候选人 {0} {1}', [candidate.leftPersonId, candidate.rightPersonId])"
           @click="emit('merge', candidate.leftPersonId, candidate.rightPersonId)"
-        >
-          进入合并
-        </button>
+        > {{ t('进入合并') }} </button>
         <button
           type="button"
-          :name="`标记非重复 ${candidate.leftPersonId} ${candidate.rightPersonId}`"
+          :name="t('标记非重复 {0} {1}', [candidate.leftPersonId, candidate.rightPersonId])"
           @click="dismiss(candidate.leftPersonId, candidate.rightPersonId)"
-        >
-          不是重复人物
-        </button>
+        > {{ t('不是重复人物') }} </button>
         <button
           type="button"
-          :name="`稍后处理 ${candidate.leftPersonId} ${candidate.rightPersonId}`"
+          :name="t('稍后处理 {0} {1}', [candidate.leftPersonId, candidate.rightPersonId])"
           @click="defer(candidate.leftPersonId, candidate.rightPersonId)"
-        >
-          稍后处理
-        </button>
+        > {{ t('稍后处理') }} </button>
       </div>
     </article>
   </section>

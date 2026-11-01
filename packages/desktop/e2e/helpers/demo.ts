@@ -4,7 +4,7 @@ export const DEMO_PROJECT_ID = 'project-demo-family'
 export const DEMO_PROJECT_PATH = `/project/${DEMO_PROJECT_ID}`
 
 /** Restores the deterministic fixture in the isolated E2E data directory. */
-export async function resetDemo(page: Page): Promise<void> {
+export async function resetDemo(page: Page, locale: 'zh-CN' | 'en' = 'zh-CN'): Promise<void> {
   await page.goto('/')
   const resetOk = await page.evaluate(async ({ fixturePath, snapshotsPath }) => {
     const fixture = await import(/* @vite-ignore */ fixturePath) as { createDemoState(): unknown }
@@ -29,8 +29,8 @@ export async function resetDemo(page: Page): Promise<void> {
   expect(resetOk).toBe(true)
   await page.goto(`${DEMO_PROJECT_PATH}/tree`)
   await expect(page).toHaveURL(`${DEMO_PROJECT_PATH}/tree`)
-  await expect(page.getByRole('navigation', { name: '项目导航' })).toBeVisible()
-  await expect(page.getByText('中心人物：林海')).toBeVisible()
+  await expect(page.getByRole('navigation', { name: locale === 'en' ? 'Project navigation' : '项目导航' })).toBeVisible()
+  await expect(page.getByText(locale === 'en' ? 'Focus person:林海' : '中心人物：林海')).toBeVisible()
 }
 
 export async function openDemo(page: Page, suffix = '/tree'): Promise<void> {

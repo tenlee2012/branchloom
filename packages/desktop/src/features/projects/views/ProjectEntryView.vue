@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localizeSystemMessage, t } from '../../../shared/i18n'
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import BaseButton from '../../../design-system/BaseButton.vue'
@@ -35,9 +36,9 @@ async function enterWorkspace() {
     })
   } catch (error) {
     if (currentRequest !== request) return
-    errorMessage.value = error instanceof Error && error.message.trim()
-      ? error.message
-      : '本地项目暂时无法读取'
+    errorMessage.value = error instanceof Error && localizeSystemMessage(error.message).trim()
+      ? localizeSystemMessage(error.message)
+      : t('本地项目暂时无法读取')
     state.value = 'error'
   }
 }
@@ -49,13 +50,13 @@ onMounted(enterWorkspace)
   <section class="project-entry" :aria-busy="state === 'loading'">
     <template v-if="state === 'loading'">
       <img class="project-entry__seal" :src="appIcon" alt="" aria-hidden="true" />
-      <p role="status">正在打开最近使用的家谱…</p>
+      <p role="status">{{ t('正在打开最近使用的家谱…') }}</p>
     </template>
     <template v-else>
-      <p class="project-entry__eyebrow">项目入口暂时不可用</p>
-      <h1>无法打开本地家谱</h1>
+      <p class="project-entry__eyebrow">{{ t('项目入口暂时不可用') }}</p>
+      <h1>{{ t('无法打开本地家谱') }}</h1>
       <p role="alert">{{ errorMessage }}</p>
-      <BaseButton variant="secondary" @click="enterWorkspace">重新读取</BaseButton>
+      <BaseButton variant="secondary" @click="enterWorkspace">{{ t('重新读取') }}</BaseButton>
     </template>
   </section>
 </template>

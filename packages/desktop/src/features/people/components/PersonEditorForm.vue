@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localizeSystemMessage, t } from '../../../shared/i18n'
 import {
   IconCalendarEvent,
   IconCamera,
@@ -71,8 +72,8 @@ function createId(prefix: string) {
   return `${prefix}-${Date.now()}-${fallbackId}`
 }
 
-const editingName = computed(() => props.person ? getPrimaryName(props.person) : '新人物')
-const pageTitle = computed(() => props.person ? `编辑${editingName.value}` : '新建人物')
+const editingName = computed(() => props.person ? getPrimaryName(props.person) : t('新人物'))
+const pageTitle = computed(() => props.person ? t('编辑{0}', [editingName.value]) : t('新建人物'))
 const avatarSource = computed(() => avatarPreview.value || props.person?.avatarUrl || personPlaceholder)
 const busy = computed(() => editor.saving.value || avatarBusy.value)
 
@@ -80,7 +81,7 @@ async function fileDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.addEventListener('load', () => resolve(String(reader.result ?? '')))
-    reader.addEventListener('error', () => reject(reader.error ?? new Error('图片无法读取')))
+    reader.addEventListener('error', () => reject(reader.error ?? new Error(t('图片无法读取'))))
     reader.readAsDataURL(file)
   })
 }
@@ -91,7 +92,7 @@ async function loadPlaces() {
     places.value = await repository.listPlaces(props.projectId)
   } catch (error) {
     places.value = []
-    placesFailure.value = error instanceof Error ? error.message : '地点资料无法读取'
+    placesFailure.value = error instanceof Error ? localizeSystemMessage(error.message) : t('地点资料无法读取')
   }
 }
 
@@ -114,7 +115,7 @@ async function loadAlbum() {
       .filter((item): item is { attachment: Attachment; link: AttachmentLink } =>
         Boolean(item.attachment?.mimeType.startsWith('image/')))
   } catch (error) {
-    mediaFailure.value = error instanceof Error ? error.message : '人物相册无法读取'
+    mediaFailure.value = error instanceof Error ? localizeSystemMessage(error.message) : t('人物相册无法读取')
   }
 }
 
@@ -162,7 +163,7 @@ async function selectAvatar(event: Event) {
   try {
     avatarPreview.value = await fileDataUrl(file)
   } catch (error) {
-    avatarFailure.value = error instanceof Error ? error.message : '头像图片无法预览'
+    avatarFailure.value = error instanceof Error ? localizeSystemMessage(error.message) : t('头像图片无法预览')
   }
 }
 
@@ -180,7 +181,7 @@ async function selectAlbumPhotos(event: Event) {
     })))
     stagedAlbum.value = [...stagedAlbum.value, ...next]
   } catch (error) {
-    mediaFailure.value = error instanceof Error ? error.message : '相册照片无法预览'
+    mediaFailure.value = error instanceof Error ? localizeSystemMessage(error.message) : t('相册照片无法预览')
   }
 }
 
@@ -254,9 +255,9 @@ async function submit() {
     if (managedLocalStorage && stagedAlbum.value.length) await refreshNativeRepository(repository, true)
     if (stagedAlbum.value.length) await session.refreshHistory(repository)
   } catch (error) {
-    const message = error instanceof Error && error.message.trim()
-      ? error.message
-      : '本地图片暂时无法保存'
+    const message = error instanceof Error && localizeSystemMessage(error.message).trim()
+      ? localizeSystemMessage(error.message)
+      : t('本地图片暂时无法保存')
     if (filePhase === 'avatar') avatarFailure.value = message
     else mediaFailure.value = message
     return
@@ -282,7 +283,7 @@ defineExpose({ requestClose, submit })
   >
     <header v-if="layout === 'page'" class="person-editor__page-heading">
       <label class="person-editor__avatar-picker" for="person-page-avatar">
-        <img :src="avatarSource" :alt="`${editingName}的头像预览`" />
+        <img :src="avatarSource" :alt="t('{0}的头像预览', [editingName])" />
         <span class="person-editor__avatar-action" aria-hidden="true"><IconCamera :size="17" /></span>
         <input
           id="person-page-avatar"
@@ -290,22 +291,22 @@ defineExpose({ requestClose, submit })
           name="avatarFile"
           type="file"
           accept="image/*"
-          aria-label="点击头像更换照片"
+          :aria-label="t('点击头像更换照片')"
           @change="selectAvatar"
         />
       </label>
       <div class="person-editor__title-block">
-        <p>人物档案</p>
+        <p>{{ t('人物档案') }}</p>
         <h1 id="person-edit-title">{{ pageTitle }}</h1>
-        <span>点击头像即可选择新的照片，保存后生效。</span>
+        <span>{{ t('点击头像即可选择新的照片，保存后生效。') }}</span>
       </div>
       <div class="person-editor__page-actions">
-        <BaseButton name="取消" variant="secondary" :disabled="busy" @click="requestClose">取消</BaseButton>
-        <BaseButton name="保存" type="submit" :loading="busy">保存</BaseButton>
+        <BaseButton :name="t('取消')" variant="secondary" :disabled="busy" @click="requestClose">{{ t('取消') }}</BaseButton>
+        <BaseButton :name="t('保存')" type="submit" :loading="busy">{{ t('保存') }}</BaseButton>
       </div>
     </header>
 
-    <nav v-if="layout === 'page'" class="person-editor__module-nav" aria-label="人物编辑模块" role="tablist">
+    <nav v-if="layout === 'page'" class="person-editor__module-nav" :aria-label="t('人物编辑模块')" role="tablist">
       <button
         id="person-edit-tab-overview"
         :class="['person-editor__module-link', { 'person-editor__module-link--active': activePageModule === 'overview' }]"
@@ -316,8 +317,7 @@ defineExpose({ requestClose, submit })
         aria-controls="person-edit-panel-overview"
         @click="activePageModule = 'overview'"
       >
-        <IconUserCircle :size="18" aria-hidden="true" />人物概览
-      </button>
+        <IconUserCircle :size="18" aria-hidden="true" />{{ t('人物概览') }} </button>
       <button
         id="person-edit-tab-life"
         :class="['person-editor__module-link', { 'person-editor__module-link--active': activePageModule === 'life' }]"
@@ -328,8 +328,7 @@ defineExpose({ requestClose, submit })
         aria-controls="person-edit-life"
         @click="activePageModule = 'life'"
       >
-        <IconTimeline :size="18" aria-hidden="true" />生平轨迹
-      </button>
+        <IconTimeline :size="18" aria-hidden="true" />{{ t('生平轨迹') }} </button>
       <button
         v-if="person"
         id="person-edit-tab-materials"
@@ -341,8 +340,7 @@ defineExpose({ requestClose, submit })
         aria-controls="person-edit-materials"
         @click="activePageModule = 'materials'"
       >
-        <IconPhoto :size="18" aria-hidden="true" />资料与相册
-      </button>
+        <IconPhoto :size="18" aria-hidden="true" />{{ t('资料与相册') }} </button>
       <button
         v-if="person"
         id="person-edit-tab-events"
@@ -354,8 +352,7 @@ defineExpose({ requestClose, submit })
         aria-controls="person-edit-events"
         @click="activePageModule = 'events'"
       >
-        <IconCalendarEvent :size="18" aria-hidden="true" />事件
-      </button>
+        <IconCalendarEvent :size="18" aria-hidden="true" />{{ t('事件') }} </button>
     </nav>
 
     <div class="person-editor__body">
@@ -363,11 +360,11 @@ defineExpose({ requestClose, submit })
         id="person-edit-panel-overview"
         v-show="layout !== 'page' || activePageModule === 'overview'"
         class="person-editor__secondary"
-        aria-label="人物结构化编辑"
+        :aria-label="t('人物结构化编辑')"
         :role="layout === 'page' ? 'tabpanel' : undefined"
         :aria-labelledby="layout === 'page' ? 'person-edit-tab-overview' : undefined"
       >
-      <section class="person-editor__module person-editor__names-module" aria-label="姓名与称谓模块">
+      <section class="person-editor__module person-editor__names-module" :aria-label="t('姓名与称谓模块')">
       <PersonNameFields
         :names="editor.draft.value.names"
         @update:names="editor.draft.value.names = $event"
@@ -377,31 +374,31 @@ defineExpose({ requestClose, submit })
       <section id="person-edit-overview" class="person-editor__module person-editor__basics-module" aria-labelledby="person-edit-basics-heading">
         <header class="person-editor__module-heading">
           <div>
-            <h2 id="person-edit-basics-heading">基本资料</h2>
-            <p>维护人物状态、时间与地点。</p>
+            <h2 id="person-edit-basics-heading">{{ t('基本资料') }}</h2>
+            <p>{{ t('维护人物状态、时间与地点。') }}</p>
           </div>
         </header>
       <div class="person-editor__grid">
-        <BaseField id="person-status" label="生存状态">
+        <BaseField id="person-status" :label="t('生存状态')">
           <BaseSelectControl>
             <select id="person-status" v-model="editor.draft.value.status" name="status">
-              <option value="unknown">未知</option>
-              <option value="living">在世</option>
-              <option value="deceased">已故</option>
+              <option value="unknown">{{ t('未知') }}</option>
+              <option value="living">{{ t('在世') }}</option>
+              <option value="deceased">{{ t('已故') }}</option>
             </select>
           </BaseSelectControl>
         </BaseField>
-        <BaseField id="person-sex" label="性别">
+        <BaseField id="person-sex" :label="t('性别')">
           <BaseSelectControl>
             <select id="person-sex" v-model="editor.draft.value.sex" name="sex">
-              <option value="unknown">未知</option>
-              <option value="female">女性</option>
-              <option value="male">男性</option>
-              <option value="nonbinary">非二元</option>
+              <option value="unknown">{{ t('未知') }}</option>
+              <option value="female">{{ t('女性') }}</option>
+              <option value="male">{{ t('男性') }}</option>
+              <option value="nonbinary">{{ t('非二元') }}</option>
             </select>
           </BaseSelectControl>
         </BaseField>
-        <BaseField id="person-birth" label="出生日期" hint="支持 YYYY、YYYY-MM 或 YYYY-MM-DD">
+        <BaseField id="person-birth" :label="t('出生日期')" :hint="t('支持 YYYY、YYYY-MM 或 YYYY-MM-DD')">
           <template #default="field">
             <input
               id="person-birth"
@@ -412,7 +409,7 @@ defineExpose({ requestClose, submit })
             />
           </template>
         </BaseField>
-        <BaseField id="person-death" label="死亡日期" hint="不确定时也可以保留原始文字">
+        <BaseField id="person-death" :label="t('死亡日期')" :hint="t('不确定时也可以保留原始文字')">
           <template #default="field">
             <input
               id="person-death"
@@ -423,18 +420,18 @@ defineExpose({ requestClose, submit })
             />
           </template>
         </BaseField>
-        <BaseField id="person-birth-place" label="出生地">
+        <BaseField id="person-birth-place" :label="t('出生地')">
           <BaseSelectControl>
             <select id="person-birth-place" v-model="editor.draft.value.birthPlaceId" name="birthPlaceId">
-              <option :value="undefined">未设置出生地</option>
+              <option :value="undefined">{{ t('未设置出生地') }}</option>
               <option v-for="place in places" :key="place.id" :value="place.id">{{ place.name }}</option>
             </select>
           </BaseSelectControl>
         </BaseField>
-        <BaseField id="person-death-place" label="死亡地">
+        <BaseField id="person-death-place" :label="t('死亡地')">
           <BaseSelectControl>
             <select id="person-death-place" v-model="editor.draft.value.deathPlaceId" name="deathPlaceId">
-              <option :value="undefined">未设置死亡地</option>
+              <option :value="undefined">{{ t('未设置死亡地') }}</option>
               <option v-for="place in places" :key="place.id" :value="place.id">{{ place.name }}</option>
             </select>
           </BaseSelectControl>
@@ -442,8 +439,8 @@ defineExpose({ requestClose, submit })
       </div>
       <div class="person-editor__place-tools">
         <p v-if="placesFailure" role="alert">{{ placesFailure }}</p>
-        <span v-else>出生地与死亡地共用项目地点资料。</span>
-        <BaseButton name="管理地点" size="sm" variant="secondary" @click="placeManagerOpen = true">管理地点</BaseButton>
+        <span v-else>{{ t('出生地与死亡地共用项目地点资料。') }}</span>
+        <BaseButton :name="t('管理地点')" size="sm" variant="secondary" @click="placeManagerOpen = true">{{ t('管理地点') }}</BaseButton>
       </div>
 
       <div
@@ -467,11 +464,11 @@ defineExpose({ requestClose, submit })
       >
         <header class="person-editor__module-heading">
           <div>
-            <h2 id="person-edit-life-heading">生平与地点</h2>
-            <p>记录人物经历的概要；时间与地点在右侧基本资料中维护。</p>
+            <h2 id="person-edit-life-heading">{{ t('生平与地点') }}</h2>
+            <p>{{ t('记录人物经历的概要；时间与地点在右侧基本资料中维护。') }}</p>
           </div>
         </header>
-      <BaseField id="person-biography" label="生平摘要">
+      <BaseField id="person-biography" :label="t('生平摘要')">
         <textarea id="person-biography" v-model="editor.draft.value.biography" name="biography" rows="5" />
       </BaseField>
       </section>
@@ -501,12 +498,11 @@ defineExpose({ requestClose, submit })
       >
         <header>
           <div>
-            <h2 id="person-album-title">人物相册</h2>
-            <p>集中保存人物照片；新选择的照片会在保存人物资料时加入相册。</p>
+            <h2 id="person-album-title">{{ t('人物相册') }}</h2>
+            <p>{{ t('集中保存人物照片；新选择的照片会在保存人物资料时加入相册。') }}</p>
           </div>
-          <BaseButton name="添加照片" size="sm" variant="secondary" @click="albumInput?.click()">
-            <IconPhotoPlus :size="18" aria-hidden="true" />添加照片
-          </BaseButton>
+          <BaseButton :name="t('添加照片')" size="sm" variant="secondary" @click="albumInput?.click()">
+            <IconPhotoPlus :size="18" aria-hidden="true" />{{ t('添加照片') }} </BaseButton>
           <input ref="albumInput" name="albumFiles" type="file" accept="image/*" multiple @change="selectAlbumPhotos" />
         </header>
         <div v-if="existingAlbum.length || stagedAlbum.length" class="person-editor__album-grid">
@@ -516,27 +512,27 @@ defineExpose({ requestClose, submit })
             <figcaption>{{ item.attachment.name }}</figcaption>
           </figure>
           <figure v-for="photo in stagedAlbum" :key="photo.id" class="person-editor__photo--staged">
-            <img :src="photo.previewUrl" :alt="`${photo.file.name}（待保存）`" />
-            <figcaption>{{ photo.file.name }} · 待保存</figcaption>
-            <button type="button" :aria-label="`移除待保存照片：${photo.file.name}`" @click="removeStagedPhoto(photo.id)">
+            <img :src="photo.previewUrl" :alt="t('{0}（待保存）', [photo.file.name])" />
+            <figcaption>{{ t('{0} · 待保存', [photo.file.name]) }}</figcaption>
+            <button type="button" :aria-label="t('移除待保存照片：{0}', [photo.file.name])" @click="removeStagedPhoto(photo.id)">
               <IconX :size="16" aria-hidden="true" />
             </button>
           </figure>
         </div>
         <div v-else class="person-editor__album-empty">
           <IconPhoto :size="30" aria-hidden="true" />
-          <span>尚未添加照片</span>
+          <span>{{ t('尚未添加照片') }}</span>
         </div>
       </section>
 
       <BaseField
         v-else-if="layout !== 'page'"
         id="person-avatar"
-        label="人物头像"
-        hint="从本机选择图片；保存后会复制到有谱的本地资料目录。"
+        :label="t('人物头像')"
+        :hint="t('从本机选择图片；保存后会复制到有谱的本地资料目录。')"
       >
         <input id="person-avatar" ref="avatarInput" name="avatarFile" type="file" accept="image/*" @change="selectAvatar" />
-        <small v-if="avatarFile">已选择：{{ avatarFile.name }}</small>
+        <small v-if="avatarFile">{{ t('已选择：{0}', [avatarFile.name]) }}</small>
       </BaseField>
       </main>
 
@@ -547,11 +543,11 @@ defineExpose({ requestClose, submit })
       >
         <header class="person-editor__module-heading">
           <div>
-            <h2 id="person-edit-notes-heading">整理笔记</h2>
-            <p>仅用于资料整理过程。</p>
+            <h2 id="person-edit-notes-heading">{{ t('整理笔记') }}</h2>
+            <p>{{ t('仅用于资料整理过程。') }}</p>
           </div>
         </header>
-        <BaseField id="person-notes" label="内部整理笔记">
+        <BaseField id="person-notes" :label="t('内部整理笔记')">
           <textarea id="person-notes" v-model="editor.draft.value.notes" name="notes" rows="5" />
         </BaseField>
       </section>
@@ -560,24 +556,24 @@ defineExpose({ requestClose, submit })
         {{ editor.validationError.value }}
       </p>
       <div v-if="editor.saveFailure.value" class="person-editor__error" role="alert">
-        <strong>保存失败，人物资料尚未写入。</strong>
+        <strong>{{ t('保存失败，人物资料尚未写入。') }}</strong>
         <details open>
-          <summary>错误详情</summary>
+          <summary>{{ t('错误详情') }}</summary>
           <p>{{ editor.saveFailure.value }}</p>
         </details>
       </div>
       <div v-if="avatarFailure" class="person-editor__error" role="alert">
-        <strong>人物资料已保存，但头像文件尚未写入。</strong>
+        <strong>{{ t('人物资料已保存，但头像文件尚未写入。') }}</strong>
         <p>{{ avatarFailure }}</p>
       </div>
       <div v-if="mediaFailure" class="person-editor__error" role="alert">
-        <strong>相册照片暂时无法处理。</strong>
+        <strong>{{ t('相册照片暂时无法处理。') }}</strong>
         <p>{{ mediaFailure }}</p>
       </div>
 
       <footer v-if="layout !== 'page'" class="person-editor__actions">
-        <BaseButton name="取消" variant="secondary" :disabled="busy" @click="requestClose">取消</BaseButton>
-        <BaseButton name="保存" type="submit" :loading="busy">保存</BaseButton>
+        <BaseButton :name="t('取消')" variant="secondary" :disabled="busy" @click="requestClose">{{ t('取消') }}</BaseButton>
+        <BaseButton :name="t('保存')" type="submit" :loading="busy">{{ t('保存') }}</BaseButton>
       </footer>
     </div>
   </form>
@@ -592,14 +588,14 @@ defineExpose({ requestClose, submit })
 
   <BaseDialog
     :open="confirmClose"
-    title="放弃未保存的修改？"
-    description="关闭后，这次填写的内容不会保留。"
-    close-label="继续编辑"
+    :title="t('放弃未保存的修改？')"
+    :description="t('关闭后，这次填写的内容不会保留。')"
+    :close-label="t('继续编辑')"
     @close="confirmClose = false"
   >
     <div class="person-editor__confirm-actions">
-      <BaseButton name="继续编辑" variant="secondary" @click="confirmClose = false">继续编辑</BaseButton>
-      <BaseButton name="放弃修改" variant="danger" @click="discardAndClose">放弃修改</BaseButton>
+      <BaseButton :name="t('继续编辑')" variant="secondary" @click="confirmClose = false">{{ t('继续编辑') }}</BaseButton>
+      <BaseButton :name="t('放弃修改')" variant="danger" @click="discardAndClose">{{ t('放弃修改') }}</BaseButton>
     </div>
   </BaseDialog>
 </template>

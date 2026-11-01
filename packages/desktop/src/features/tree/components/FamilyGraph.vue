@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localizeSystemMessage, t } from '../../../shared/i18n'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { cytoscapeGraphAdapter, type GraphCreateOptions } from '../composables/useFamilyGraph'
 import type { VisibleGraph } from '../model/buildVisibleGraph'
@@ -69,7 +70,7 @@ let disposed = false
 let pendingLocation = ''
 
 function message(error: unknown) {
-  return error instanceof Error ? error.message : '图形引擎无法更新'
+  return error instanceof Error ? localizeSystemMessage(error.message) : t('图形引擎无法更新')
 }
 
 function updateRuntime(graph: VisibleGraph, density: GraphDensity) {
@@ -148,7 +149,7 @@ defineExpose({
 <template>
   <div class="family-graph">
     <div v-if="loadError" class="family-graph__error" role="alert">
-      <strong>家谱图形未能载入</strong>
+      <strong>{{ t('家谱图形未能载入') }}</strong>
       <span>{{ loadError }}</span>
     </div>
     <div
@@ -156,9 +157,9 @@ defineExpose({
       class="family-graph__canvas"
       data-testid="family-graph"
       role="application"
-      aria-label="可缩放和平移的家谱图"
+      :aria-label="t('可缩放和平移的家谱图')"
     />
-    <p v-if="selectedName" class="visually-hidden" role="status">{{ selectedName }}对其他人物的称呼</p>
+    <p v-if="selectedName" class="visually-hidden" role="status">{{ t('{0}对其他人物的称呼', [selectedName]) }}</p>
   </div>
 </template>
 

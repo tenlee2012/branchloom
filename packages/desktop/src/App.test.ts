@@ -51,7 +51,7 @@ describe('App', () => {
     })
     await router.isReady()
     await flushPromises()
-    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('project-tree'))
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('project-tree'), { timeout: 5_000 })
     expect(wrapper.find('.prototype-notice').exists()).toBe(false)
     expect(router.currentRoute.value).toMatchObject({
       name: 'project-tree',

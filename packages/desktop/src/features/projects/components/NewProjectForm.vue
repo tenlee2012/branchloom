@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '../../../shared/i18n'
 import { computed, ref } from 'vue'
 import BaseButton from '../../../design-system/BaseButton.vue'
 import BaseField from '../../../design-system/BaseField.vue'
@@ -19,7 +20,7 @@ const name = ref('')
 const description = ref('')
 const attempted = ref(false)
 const nameError = computed(() =>
-  attempted.value && !name.value.trim() ? '请输入项目名称。' : '',
+  attempted.value && !name.value.trim() ? t('请输入项目名称。') : '',
 )
 
 function submit() {
@@ -36,8 +37,8 @@ function submit() {
   <form class="new-project-form" novalidate @submit.prevent="submit">
     <BaseField
       id="new-project-name"
-      label="项目名称"
-      hint="例如：林氏家庭档案、外婆家的故事"
+      :label="t('项目名称')"
+      :hint="t('例如：林氏家庭档案、外婆家的故事')"
       :error="nameError"
       required
     >
@@ -59,8 +60,8 @@ function submit() {
 
     <BaseField
       id="new-project-description"
-      label="项目简介（可选）"
-      hint="写下一句整理目标，之后可以在项目设置中修改。"
+      :label="t('项目简介（可选）')"
+      :hint="t('写下一句整理目标，之后可以在项目设置中修改。')"
     >
       <template #default="{ describedBy }">
         <textarea
@@ -80,7 +81,7 @@ function submit() {
 
     <div class="new-project-form__actions">
       <BaseButton type="submit" size="lg" :loading="saving">
-        {{ saving ? '正在建立…' : '建立家谱' }}
+        {{ saving ? t('正在建立…') : t('建立家谱') }}
       </BaseButton>
     </div>
   </form>

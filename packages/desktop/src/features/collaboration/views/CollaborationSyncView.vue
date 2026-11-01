@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localizeSystemMessage, t } from '../../../shared/i18n'
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useBranchloomRepository } from '../../../shared/repository/injection'
@@ -25,9 +26,9 @@ async function openAdoptedProject(nextProjectId: string, replacedProjectId?: str
       params: { projectId: nextProjectId },
     })
   } catch (error) {
-    adoptionError.value = error instanceof Error && error.message.trim()
-      ? error.message
-      : 'GitHub 项目已经导入，但页面暂时无法切换。请返回首页后重新打开。'
+    adoptionError.value = error instanceof Error && localizeSystemMessage(error.message).trim()
+      ? localizeSystemMessage(error.message)
+      : t('GitHub 项目已经导入，但页面暂时无法切换。请返回首页后重新打开。')
   }
 }
 </script>

@@ -1,9 +1,10 @@
+import { t } from '../i18n'
 import { compareGenealogyDates, normalizeIsoDate, validateLifeDates } from '../domain/date'
 import type { PublicationRequest } from '../domain/publication'
 import { findDuplicateNameEvidence } from '../domain/duplicateInspection'
 import { eventTypeLabel } from '../domain/eventTypes'
 import { isPlaceCoordinates } from '../domain/placeCoordinates'
-import { getNameSearchRank, getPrimaryName, personNameTypeLabels } from '../domain/personNames'
+import { getNameSearchRank, getPrimaryName, getPrimaryNameRecord, personNameTypeLabels } from '../domain/personNames'
 import { hasAncestorCycle, validateRelationship } from '../domain/relationships'
 import { createPersonMergePreview } from '../domain/personMerge'
 import { traverseFamilyGraph } from '../domain/familyGraph'
@@ -120,7 +121,7 @@ function restoreScoped<T extends { projectId: UUID }>(
 }
 
 function primaryName(person: Person): string {
-  return (getPrimaryName(person) === '未命名人物' ? '' : getPrimaryName(person))
+  return (getPrimaryNameRecord(person)?.value ?? '')
     .trim()
     .toLocaleLowerCase()
 }
@@ -205,11 +206,11 @@ export class BrowserPrototypeRepository implements BranchloomRepository {
       const people = await this.listPeople(input.projectId, { page: 1, pageSize: 100_000, sort: 'name' })
       return { revision: 0, project, people: people.items, attachments: await this.listAttachments(input.projectId) } as T
     }
-    throw new RepositoryError('storage', '编印需要本地资料服务，请通过有谱应用或 Web 开发启动命令打开')
+    throw new RepositoryError('storage', t('编印需要本地资料服务，请通过有谱应用或 Web 开发启动命令打开'))
   }
 
   async savePublicationPdf(): Promise<boolean> {
-    throw new RepositoryError('storage', '保存 PDF 需要本地资料服务')
+    throw new RepositoryError('storage', t('保存 PDF 需要本地资料服务'))
   }
   private readonly storage: PrototypeStorage
   private readonly clock: () => Date | string
@@ -1164,7 +1165,7 @@ export class BrowserPrototypeRepository implements BranchloomRepository {
       const issue = validateRelationship(relationship, preview.relationships)
       if (issue?.severity === 'error') this.validation(issue.message)
     }
-    if (hasAncestorCycle(preview.relationships)) this.validation('人物关系图存在祖先循环。')
+    if (hasAncestorCycle(preview.relationships)) this.validation(t('人物关系图存在祖先循环。'))
 
     const transactionTimestamp = this.now()
     const retainedPerson = { ...cloneValue(preview.retainedPerson), updatedAt: transactionTimestamp }
@@ -1174,7 +1175,7 @@ export class BrowserPrototypeRepository implements BranchloomRepository {
       projectId,
       createdAt: transactionTimestamp,
       reason: 'merge',
-      note: `合并人物：${remove.names[0]?.value ?? remove.id} → ${keep.names[0]?.value ?? keep.id}`,
+      note: t('合并人物：{0} → {1}', [remove.names[0]?.value ?? remove.id, keep.names[0]?.value ?? keep.id]),
       summary: {
         people: this.state.people.filter((item) => item.projectId === projectId && !item.deletedAt).length,
         relationships: this.state.relationships.filter((item) => item.projectId === projectId).length,
@@ -1248,23 +1249,23 @@ export class BrowserPrototypeRepository implements BranchloomRepository {
     for (const person of this.state.people) {
       if (person.projectId !== projectId || person.deletedAt) continue
       issues.push(...validateLifeDates(person))
-      for (const [label, date] of [['出生', person.birth], ['死亡', person.death]] as const) {
+      for (const [field, label, date] of [['birth', t('出生'), person.birth], ['death', t('死亡'), person.death]] as const) {
         if (dateLooksIncomplete(date)) {
           issues.push(issueFactory(
             'warning',
             'incomplete-date',
-            `${primaryName(person) || '人物'}的${label}日期无法解析或不完整，请核对原始记录。`,
+            t('{0}的{1}日期无法解析或不完整，请核对原始记录。', [primaryName(person) || t('人物'), label]),
             'person',
             person.id,
-            label === '出生' ? 'incomplete-birth-date' : 'incomplete-death-date',
+            field === 'birth' ? 'incomplete-birth-date' : 'incomplete-death-date',
           ))
         }
       }
-      for (const [label, placeId] of [['出生', person.birthPlaceId], ['死亡', person.deathPlaceId]] as const) {
+      for (const [field, label, placeId] of [['birth', t('出生'), person.birthPlaceId], ['death', t('死亡'), person.deathPlaceId]] as const) {
         if (placeId && !this.state.places.some(({ id, projectId: idProject }) => id === placeId && idProject === projectId)) {
           issues.push(issueFactory(
-            'warning', 'missing-place', `${primaryName(person) || '人物'}的${label}地点记录不完整。`,
-            'person', person.id, label === '出生' ? 'missing-birth-place' : 'missing-death-place',
+            'warning', 'missing-place', t('{0}的{1}地点记录不完整。', [primaryName(person) || t('人物'), label]),
+            'person', person.id, field === 'birth' ? 'missing-birth-place' : 'missing-death-place',
           ))
         }
       }
@@ -1274,10 +1275,10 @@ export class BrowserPrototypeRepository implements BranchloomRepository {
       const issue = validateRelationship(relationship, relationships)
       if (issue) issues.push(issue)
       if (dateLooksIncomplete(relationship.start) || dateLooksIncomplete(relationship.end)) {
-        issues.push(issueFactory('warning', 'incomplete-date', '关系日期无法解析或不完整，请核对原始记录。', 'relationship', relationship.id))
+        issues.push(issueFactory('warning', 'incomplete-date', t('关系日期无法解析或不完整，请核对原始记录。'), 'relationship', relationship.id))
       }
       if (relationship.placeId && !this.state.places.some(({ id }) => id === relationship.placeId)) {
-        issues.push(issueFactory('warning', 'missing-place', '关系地点记录不完整。', 'relationship', relationship.id))
+        issues.push(issueFactory('warning', 'missing-place', t('关系地点记录不完整。'), 'relationship', relationship.id))
       }
     }
     if (hasAncestorCycle(relationships) && !issues.some(({ code }) => code === 'ancestor-cycle')) {
@@ -1286,7 +1287,7 @@ export class BrowserPrototypeRepository implements BranchloomRepository {
         (relationship.type === 'biological' || relationship.type === 'adoptive'))
       if (cycleTarget) {
         issues.push(issueFactory(
-          'error', 'ancestor-cycle', '父母关系形成明显的祖先环路，必须先修正结构。',
+          'error', 'ancestor-cycle', t('父母关系形成明显的祖先环路，必须先修正结构。'),
           'relationship', cycleTarget.id,
         ))
       }
@@ -1296,10 +1297,10 @@ export class BrowserPrototypeRepository implements BranchloomRepository {
       .map((person) => [person.id, person]))
     for (const event of this.state.events.filter(({ projectId: id }) => id === projectId)) {
       if (dateLooksIncomplete(event.date)) {
-        issues.push(issueFactory('warning', 'incomplete-date', `事件“${event.title}”的日期无法解析或不完整。`, 'event', event.id))
+        issues.push(issueFactory('warning', 'incomplete-date', t('事件“{0}”的日期无法解析或不完整。', [event.title]), 'event', event.id))
       }
       if (event.placeId && !this.state.places.some(({ id }) => id === event.placeId)) {
-        issues.push(issueFactory('warning', 'missing-place', `事件“${event.title}”的地点记录不完整。`, 'event', event.id))
+        issues.push(issueFactory('warning', 'missing-place', t('事件“{0}”的地点记录不完整。', [event.title]), 'event', event.id))
       }
       const eventStart = dateStart(event.date)
       const eventEnd = dateEnd(event.date)
@@ -1312,7 +1313,7 @@ export class BrowserPrototypeRepository implements BranchloomRepository {
           issues.push(issueFactory(
             'warning',
             'event-outside-lifespan',
-            `事件“${event.title}”发生在${primaryName(participant) || '参与人物'}的生平范围之外，请核对日期。`,
+            t('事件“{0}”发生在{1}的生平范围之外，请核对日期。', [event.title, primaryName(participant) || t('参与人物')]),
             'event',
             event.id,
           ))
@@ -1326,14 +1327,14 @@ export class BrowserPrototypeRepository implements BranchloomRepository {
           id: `issue-${attachment.id}-missing-attachment`,
           severity: 'warning',
           code: 'missing-attachment',
-          message: `附件“${attachment.name}”缺失。`,
+          message: t('附件“{0}”缺失。', [attachment.name]),
           targetType: 'attachment',
           targetId: attachment.id,
           origin: 'derived',
         })
       } else if (attachment.projectId === projectId && !attachment.contentHash.trim()) {
         issues.push(issueFactory(
-          'warning', 'damaged-attachment', `附件“${attachment.name}”完整性校验失败，记录和引用已保留。`,
+          'warning', 'damaged-attachment', t('附件“{0}”完整性校验失败，记录和引用已保留。', [attachment.name]),
           'attachment', attachment.id,
         ))
       }
@@ -1345,21 +1346,21 @@ export class BrowserPrototypeRepository implements BranchloomRepository {
           id: `issue-${source.id}-unused-source`,
           severity: 'info',
           code: 'unused-source',
-          message: `来源“${source.title}”尚未被引用。`,
+          message: t('来源“{0}”尚未被引用。', [source.title]),
           targetType: 'source',
           targetId: source.id,
           origin: 'derived',
         })
       }
       if (source.projectId === projectId && dateLooksIncomplete(source.date)) {
-        issues.push(issueFactory('warning', 'incomplete-date', `来源“${source.title}”的日期无法解析或不完整。`, 'source', source.id))
+        issues.push(issueFactory('warning', 'incomplete-date', t('来源“{0}”的日期无法解析或不完整。', [source.title]), 'source', source.id))
       }
     }
 
     for (const duplicate of findDuplicateNameEvidence([...activePeople.values()])) {
       issues.push(issueFactory(
         'warning', 'possible-duplicate',
-        `人物“${duplicate.displayName}”与同名桶中的其他 ${duplicate.bucketSize - 1} 条记录可能重复，请比较日期与家庭关系。`,
+        t('人物“{0}”与同名桶中的其他 {1} 条记录可能重复，请比较日期与家庭关系。', [duplicate.displayName, duplicate.bucketSize - 1]),
         'person', duplicate.personId,
       ))
     }
@@ -1412,7 +1413,7 @@ export class BrowserPrototypeRepository implements BranchloomRepository {
       projectId,
       createdAt: timestamp,
       reason: 'cleanup',
-      note: `清理前自动快照：附件 ${safeInput.removeUnusedAttachments ? impact.unusedAttachmentIds.length : 0} 个，来源 ${safeInput.removeSourceIds.length} 个`,
+      note: t('清理前自动快照：附件 {0} 个，来源 {1} 个', [safeInput.removeUnusedAttachments ? impact.unusedAttachmentIds.length : 0, safeInput.removeSourceIds.length]),
       summary: this.snapshotSummary(projectId),
     }
     const preCleanupState = cloneValue(this.state)
@@ -1467,7 +1468,7 @@ export class BrowserPrototypeRepository implements BranchloomRepository {
       projectId: snapshot.projectId,
       createdAt: timestamp,
       reason: 'restore',
-      note: `恢复前当前状态：准备恢复“${snapshot.note || snapshot.createdAt}”`,
+      note: t('恢复前当前状态：准备恢复“{0}”', [snapshot.note || snapshot.createdAt]),
       summary: this.snapshotSummary(snapshot.projectId),
     }
     const preRestoreState = cloneValue(this.state)

@@ -34,6 +34,32 @@ function label(family: ReturnType<typeof chain>) {
 }
 
 describe('kinship descriptions from recorded family paths', () => {
+  it.each<[Parameters<typeof chain>[0], string]>([
+    [[['up', 'male']], 'father'],
+    [[['up', 'female'], ['up', 'male']], 'grandfather'],
+    [[['up', 'male'], ['down', 'female', '1970']], 'older sister'],
+    [[['up', 'male'], ['up', 'female'], ['down', 'female']], 'aunt'],
+    [[['up', 'male'], ['down', 'female'], ['down', 'male']], 'nephew'],
+    [[['spouse', 'female'], ['up', 'female']], 'mother-in-law'],
+  ])('provides English kinship for %j without translating names', (steps, expected) => {
+    const family = chain(steps)
+    family.source.names[0]!.value = '本人原名'
+    const result = buildKinshipDescriptions(family.people, family.relationships, family.source.id, 'en')
+    expect(result.get(family.target.id)?.label).toBe(expected)
+    expect(result.get(family.target.id)?.paths[0]).toContain('本人原名 → ')
+    expect(result.get(family.source.id)?.label).toBe('Self')
+  })
+
+  it('keeps non-biological and ended relationships explicit in English', () => {
+    const family = chain([['up', 'female'], ['up', 'male']])
+    family.relationships[0]!.type = 'adoptive'
+    expect(buildKinshipDescriptions(family.people, family.relationships, family.source.id, 'en').get(family.target.id)?.label)
+      .toBe("adoptive mother's father")
+    const former = chain([['spouse', 'female']])
+    former.relationships[0]!.end = parseGenealogyDate('2000')
+    expect(buildKinshipDescriptions(former.people, former.relationships, former.source.id, 'en').get(former.target.id)?.label)
+      .toBe('wife (ended)')
+  })
   it.each<[string, Parameters<typeof chain>[0], string]>([
     ['father', [['up', 'male']], '爸爸'],
     ['mother', [['up', 'female']], '妈妈'],

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '../shared/i18n'
 import { IconX } from '@tabler/icons-vue'
 import { ref, toRef, useId } from 'vue'
 import { useModalOverlay } from './useModalOverlay'
@@ -11,7 +12,7 @@ const props = withDefaults(
     closeLabel?: string
     showClose?: boolean
   }>(),
-  { closeLabel: '关闭', showClose: true },
+  { closeLabel: t('关闭'), showClose: true },
 )
 
 const emit = defineEmits<{ close: [] }>()

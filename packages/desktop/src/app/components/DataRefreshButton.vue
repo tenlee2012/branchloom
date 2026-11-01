@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localizeSystemMessage, t } from '../../shared/i18n'
 import { computed, ref } from 'vue'
 import { IconRefresh } from '@tabler/icons-vue'
 import BaseButton from '../../design-system/BaseButton.vue'
@@ -10,7 +11,7 @@ defineProps<{ compactOnMobile?: boolean }>()
 const repository = useBranchloomRepository()
 const refreshing = ref(false)
 const refreshError = ref('')
-const refreshLabel = computed(() => refreshing.value ? '刷新中…' : '刷新资料')
+const refreshLabel = computed(() => refreshing.value ? t('刷新中…') : t('刷新资料'))
 
 async function refreshData() {
   if (refreshing.value) return
@@ -19,9 +20,9 @@ async function refreshData() {
   try {
     await requestNativeRepositoryRefresh(repository)
   } catch (error) {
-    refreshError.value = error instanceof Error && error.message.trim()
-      ? error.message
-      : '资料刷新失败'
+    refreshError.value = error instanceof Error && localizeSystemMessage(error.message).trim()
+      ? localizeSystemMessage(error.message)
+      : t('资料刷新失败')
   } finally {
     refreshing.value = false
   }
@@ -35,7 +36,7 @@ async function refreshData() {
     </small>
     <BaseButton
       class="data-refresh__button"
-      name="刷新资料"
+      :name="t('刷新资料')"
       size="sm"
       variant="secondary"
       :aria-label="refreshLabel"

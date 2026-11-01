@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localizeSystemMessage, t } from '../../../shared/i18n'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useSessionStore } from '../../../app/stores/session'
 import BaseButton from '../../../design-system/BaseButton.vue'
@@ -62,14 +63,14 @@ const personName = computed(() => getPrimaryName(props.person))
 const addingChild = computed(() => category.value === 'parent' && direction.value === 'current-is-parent')
 const additionalParent = computed(() => parentCandidates.value.find(({ person }) => person.id === additionalParentId.value)?.person)
 const dialogTitle = computed(() => {
-  if (props.preset === 'parent') return `为${personName.value}添加父母`
-  if (props.preset === 'partner') return `为${personName.value}添加伴侣`
-  if (props.preset === 'child') return `为${personName.value}添加子女`
-  return '添加人物与关系'
+  if (props.preset === 'parent') return t('为{0}添加父母', [personName.value])
+  if (props.preset === 'partner') return t('为{0}添加伴侣', [personName.value])
+  if (props.preset === 'child') return t('为{0}添加子女', [personName.value])
+  return t('添加人物与关系')
 })
 const dialogDescription = computed(() => props.preset === 'custom'
-  ? '创建一个新人物，并设置其与当前人物的关系。'
-  : '快捷项已带入关系方向，请补充姓名并确认关系性质。')
+  ? t('创建一个新人物，并设置其与当前人物的关系。')
+  : t('快捷项已带入关系方向，请补充姓名并确认关系性质。'))
 
 watch(() => [props.open, props.person.id, props.projectId, props.preset] as const, ([open]) => {
   if (open) reset()
@@ -123,7 +124,7 @@ async function loadParentCandidates() {
         || left.person.id.localeCompare(right.person.id))
   } catch (error) {
     if (request !== parentRequest) return
-    parentLoadFailure.value = error instanceof Error ? error.message : '另一位家长的候选资料无法读取'
+    parentLoadFailure.value = error instanceof Error ? localizeSystemMessage(error.message) : t('另一位家长的候选资料无法读取')
   } finally {
     if (request === parentRequest) loadingParents.value = false
   }
@@ -184,7 +185,7 @@ function createDrafts(name: string): { person: Person; relationship: Relationshi
   }
   const relationshipId = createRelationshipId('relationship')
   if (category.value === 'partner') {
-    if (!partnerType.value) throw new Error('请选择关系性质。')
+    if (!partnerType.value) throw new Error(t('请选择关系性质。'))
     return {
       person,
       relationship: {
@@ -199,7 +200,7 @@ function createDrafts(name: string): { person: Person; relationship: Relationshi
       },
     }
   }
-  if (!parentType.value) throw new Error('请选择关系性质。')
+  if (!parentType.value) throw new Error(t('请选择关系性质。'))
   return {
     person,
     relationship: {
@@ -223,17 +224,17 @@ async function submit() {
   additionalParentError.value = ''
   additionalParentTypeError.value = ''
   if (!name) {
-    validationError.value = '请填写人物姓名。'
+    validationError.value = t('请填写人物姓名。')
   }
   if (!(category.value === 'parent' ? parentType.value : partnerType.value)) {
-    relationshipTypeError.value = '请选择关系性质。'
+    relationshipTypeError.value = t('请选择关系性质。')
   }
   if (addingChild.value && parentCandidates.value.length) {
     if (!additionalParentId.value) {
-      additionalParentError.value = '请选择另一位家长，或选择仅关联当前家长。'
+      additionalParentError.value = t('请选择另一位家长，或选择仅关联当前家长。')
     } else if (additionalParentId.value !== currentParentOnly) {
-      if (!additionalParent.value) additionalParentError.value = '所选家长无法读取，请重新选择。'
-      if (!additionalParentType.value) additionalParentTypeError.value = '请选择另一位家长与孩子的关系。'
+      if (!additionalParent.value) additionalParentError.value = t('所选家长无法读取，请重新选择。')
+      if (!additionalParentType.value) additionalParentTypeError.value = t('请选择另一位家长与孩子的关系。')
     }
   }
   if (validationError.value || relationshipTypeError.value || additionalParentError.value || additionalParentTypeError.value) return
@@ -264,7 +265,7 @@ async function submit() {
     else emit('saved', saved.person, saved.relationship)
     emit('close')
   } catch (error) {
-    const details = error instanceof Error ? error.message : '本地资料暂时无法写入'
+    const details = error instanceof Error ? localizeSystemMessage(error.message) : t('本地资料暂时无法写入')
     saveFailure.value = details
     session.saveStatus = 'failed'
     session.saveError = details
@@ -279,11 +280,11 @@ async function submit() {
     :open="open"
     :title="dialogTitle"
     :description="dialogDescription"
-    close-label="关闭添加人物与关系"
+    :close-label="t('关闭添加人物与关系')"
     @close="requestClose"
   >
     <form class="quick-relative" novalidate @submit.prevent="submit">
-      <BaseField id="quick-relative-name" label="姓名" required :error="validationError">
+      <BaseField id="quick-relative-name" :label="t('姓名')" required :error="validationError">
         <input
           id="quick-relative-name"
           v-model="relativeName"
@@ -294,16 +295,16 @@ async function submit() {
       </BaseField>
 
       <div class="quick-relative__grid">
-        <BaseField id="quick-relative-category" label="关系大类">
+        <BaseField id="quick-relative-category" :label="t('关系大类')">
           <BaseSelectControl><select id="quick-relative-category" v-model="category" name="category">
-              <option value="parent">亲子与照护</option>
-              <option value="partner">伴侣</option>
+              <option value="parent">{{ t('亲子与照护') }}</option>
+              <option value="partner">{{ t('伴侣') }}</option>
             </select></BaseSelectControl>
         </BaseField>
         <BaseField
           id="quick-relative-type"
           v-slot="{ describedBy, invalid }"
-          label="关系性质"
+          :label="t('关系性质')"
           required
           :error="relationshipTypeError"
         >
@@ -317,7 +318,7 @@ async function submit() {
               :aria-describedby="describedBy"
               :aria-invalid="invalid || undefined"
             >
-              <option value="" disabled>请选择关系性质</option>
+              <option value="" disabled>{{ t('请选择关系性质') }}</option>
               <option v-for="option in typeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
             </select>
             <select
@@ -329,32 +330,32 @@ async function submit() {
               :aria-describedby="describedBy"
               :aria-invalid="invalid || undefined"
             >
-              <option value="" disabled>请选择关系性质</option>
+              <option value="" disabled>{{ t('请选择关系性质') }}</option>
               <option v-for="option in typeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
             </select>
           </BaseSelectControl>
         </BaseField>
       </div>
 
-      <BaseField v-if="category === 'parent'" id="quick-relative-direction" label="关系方向">
+      <BaseField v-if="category === 'parent'" id="quick-relative-direction" :label="t('关系方向')">
         <BaseSelectControl><select id="quick-relative-direction" v-model="direction" name="direction">
-            <option value="relative-is-parent">新人物是当前人物的父母或监护人</option>
-            <option value="current-is-parent">当前人物是新人物的父母或监护人</option>
+            <option value="relative-is-parent">{{ t('新人物是当前人物的父母或监护人') }}</option>
+            <option value="current-is-parent">{{ t('当前人物是新人物的父母或监护人') }}</option>
           </select></BaseSelectControl>
       </BaseField>
 
-      <section v-if="addingChild" class="quick-relative__parents" aria-label="子女的家长关联">
-        <p v-if="loadingParents" role="status">正在读取另一位家长的候选资料…</p>
+      <section v-if="addingChild" class="quick-relative__parents" :aria-label="t('子女的家长关联')">
+        <p v-if="loadingParents" role="status">{{ t('正在读取另一位家长的候选资料…') }}</p>
         <div v-else-if="parentLoadFailure" class="quick-relative__error" role="alert">
-          <p>另一位家长的候选资料读取失败：{{ parentLoadFailure }}</p>
-          <BaseButton name="重新读取家长候选" variant="secondary" @click="loadParentCandidates">重新读取</BaseButton>
+          <p>{{ t('另一位家长的候选资料读取失败：{0}', [parentLoadFailure]) }}</p>
+          <BaseButton :name="t('重新读取家长候选')" variant="secondary" @click="loadParentCandidates">{{ t('重新读取') }}</BaseButton>
         </div>
         <template v-else-if="parentCandidates.length">
           <BaseField
             id="quick-relative-additional-parent"
             v-slot="{ describedBy, invalid }"
-            label="另一位家长"
-            hint="请确认是否同时关联另一位家长；也可以只关联当前家长。"
+            :label="t('另一位家长')"
+            :hint="t('请确认是否同时关联另一位家长；也可以只关联当前家长。')"
             required
             :error="additionalParentError"
           >
@@ -368,8 +369,8 @@ async function submit() {
                 :aria-describedby="describedBy"
                 :aria-invalid="invalid || undefined"
               >
-                <option value="" disabled>请选择另一位家长或仅关联当前家长</option>
-                <option :value="currentParentOnly">仅关联当前家长</option>
+                <option value="" disabled>{{ t('请选择另一位家长或仅关联当前家长') }}</option>
+                <option :value="currentParentOnly">{{ t('仅关联当前家长') }}</option>
                 <option v-for="candidate in parentCandidates" :key="candidate.person.id" :value="candidate.person.id">{{ candidate.label }}</option>
               </select>
             </BaseSelectControl>
@@ -378,7 +379,7 @@ async function submit() {
             v-if="additionalParent"
             id="quick-relative-additional-parent-type"
             v-slot="{ describedBy, invalid }"
-            label="另一位家长与孩子的关系"
+            :label="t('另一位家长与孩子的关系')"
             required
             :error="additionalParentTypeError"
           >
@@ -392,38 +393,38 @@ async function submit() {
                 :aria-describedby="describedBy"
                 :aria-invalid="invalid || undefined"
               >
-                <option value="" disabled>请选择关系性质</option>
+                <option value="" disabled>{{ t('请选择关系性质') }}</option>
                 <option v-for="option in parentRelationshipOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
               </select>
             </BaseSelectControl>
           </BaseField>
-          <p v-if="additionalParent" class="quick-relative__parent-summary" role="status">{{ personName }}和{{ getPrimaryName(additionalParent) }}都将与新子女关联。</p>
+          <p v-if="additionalParent" class="quick-relative__parent-summary" role="status">{{ t('{0}和{1}都将与新子女关联。', [personName, getPrimaryName(additionalParent)]) }}</p>
         </template>
-        <p v-else class="quick-relative__parent-summary">尚无伴侣记录，将只关联当前家长。另一位家长可在孩子档案的“家庭关系”中添加。</p>
+        <p v-else class="quick-relative__parent-summary">{{ t('尚无伴侣记录，将只关联当前家长。另一位家长可在孩子档案的“家庭关系”中添加。') }}</p>
       </section>
 
       <div v-if="saveFailure" class="quick-relative__error" role="alert">
-        <strong>添加失败，人物和关系均未写入。</strong>
+        <strong>{{ t('添加失败，人物和关系均未写入。') }}</strong>
         <p>{{ saveFailure }}</p>
       </div>
 
       <footer class="quick-relative__actions">
-        <BaseButton name="取消" variant="secondary" :disabled="saving" @click="requestClose">取消</BaseButton>
-        <BaseButton name="添加并关联" type="submit" :loading="saving" :disabled="addingChild && (loadingParents || Boolean(parentLoadFailure))">添加并关联</BaseButton>
+        <BaseButton :name="t('取消')" variant="secondary" :disabled="saving" @click="requestClose">{{ t('取消') }}</BaseButton>
+        <BaseButton :name="t('添加并关联')" type="submit" :loading="saving" :disabled="addingChild && (loadingParents || Boolean(parentLoadFailure))">{{ t('添加并关联') }}</BaseButton>
       </footer>
     </form>
   </BaseDialog>
 
   <BaseDialog
     :open="confirmClose"
-    title="放弃未保存的人物与关系？"
-    description="关闭后，姓名和关系选择不会保留。"
-    close-label="继续添加人物"
+    :title="t('放弃未保存的人物与关系？')"
+    :description="t('关闭后，姓名和关系选择不会保留。')"
+    :close-label="t('继续添加人物')"
     @close="confirmClose = false"
   >
     <div class="quick-relative__actions">
-      <BaseButton variant="secondary" @click="confirmClose = false">继续填写</BaseButton>
-      <BaseButton variant="danger" @click="discardAndClose">放弃修改</BaseButton>
+      <BaseButton variant="secondary" @click="confirmClose = false">{{ t('继续填写') }}</BaseButton>
+      <BaseButton variant="danger" @click="discardAndClose">{{ t('放弃修改') }}</BaseButton>
     </div>
   </BaseDialog>
 </template>

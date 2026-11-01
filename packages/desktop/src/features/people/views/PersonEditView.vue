@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localizeSystemMessage, t } from '../../../shared/i18n'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import BaseButton from '../../../design-system/BaseButton.vue'
@@ -50,7 +51,7 @@ async function loadPerson(expectedProjectId = projectId.value, expectedPersonId 
     if (personResult.status === 'rejected') throw personResult.reason
     const loaded = personResult.value
     if (request !== requestId || expectedProjectId !== projectId.value || expectedPersonId !== personId.value) return
-    if (loaded.projectId !== expectedProjectId || loaded.deletedAt) throw new Error('人物不属于当前项目或已被删除')
+    if (loaded.projectId !== expectedProjectId || loaded.deletedAt) throw new Error(t('人物不属于当前项目或已被删除'))
     person.value = loaded
     people.value = peopleResult.status === 'fulfilled' ? peopleResult.value.items : [loaded]
     places.value = placesResult.status === 'fulfilled' ? placesResult.value : []
@@ -62,7 +63,7 @@ async function loadPerson(expectedProjectId = projectId.value, expectedPersonId 
   } catch (error) {
     if (request !== requestId) return
     loadState.value = 'error'
-    loadError.value = error instanceof Error ? error.message : '人物资料无法读取'
+    loadError.value = error instanceof Error ? localizeSystemMessage(error.message) : t('人物资料无法读取')
   }
 }
 
@@ -108,11 +109,11 @@ onBeforeUnmount(() => { requestId += 1 })
 
 <template>
   <section class="person-edit-view" aria-labelledby="person-edit-title">
-    <div v-if="loadState === 'loading'" class="person-edit-view__state" role="status">正在读取人物档案…</div>
+    <div v-if="loadState === 'loading'" class="person-edit-view__state" role="status">{{ t('正在读取人物档案…') }}</div>
     <div v-else-if="loadState === 'error'" class="person-edit-view__state" role="alert">
-      <strong>人物档案未能打开</strong>
+      <strong>{{ t('人物档案未能打开') }}</strong>
       <span>{{ loadError }}</span>
-      <BaseButton variant="secondary" @click="loadPerson()">重新读取</BaseButton>
+      <BaseButton variant="secondary" @click="loadPerson()">{{ t('重新读取') }}</BaseButton>
     </div>
     <PersonEditorForm
       v-else-if="isNew || person"

@@ -1,8 +1,8 @@
-const PRODUCT_NAME = '有谱'
+import { t } from '../shared/i18n'
 
 export function formatWindowTitle(pageTitle: unknown): string {
   const title = typeof pageTitle === 'string' ? pageTitle.trim() : ''
-  return title ? `${title} · ${PRODUCT_NAME}` : PRODUCT_NAME
+  return title ? `${t(title)} · ${t('有谱')}` : t('有谱')
 }
 
 export function updateWindowTitle(pageTitle: unknown): void {

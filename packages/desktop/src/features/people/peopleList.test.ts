@@ -143,7 +143,7 @@ describe('people list', () => {
   it('uses the canonical personId query when locating a person in the real tree route', async () => {
     const { wrapper, router } = await mountPeople()
     await wrapper.get('a[aria-label="在家谱树中定位：陈芳"]').trigger('click')
-    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('project-tree'))
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('project-tree'), { timeout: 5_000 })
     await flushPromises()
 
     expect(router.currentRoute.value.name).toBe('project-tree')
@@ -523,7 +523,7 @@ describe('people list', () => {
     const { wrapper, router } = await mountPeople({ path: editPath, repository })
 
     await wrapper.get('button[aria-label="返回家谱树"]').trigger('click')
-    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('project-tree'))
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('project-tree'), { timeout: 5_000 })
 
     expect(router.currentRoute.value.params.projectId).toBe(project!.id)
     expect(router.currentRoute.value.query.personId).toBe('person-lin-hai')

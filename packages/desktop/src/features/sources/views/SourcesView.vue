@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localizeSystemMessage, t } from '../../../shared/i18n'
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useSessionStore } from '../../../app/stores/session'
@@ -83,7 +84,7 @@ async function listAllPeople(scopedProjectId: string) {
     if (!Number.isInteger(result.page) || result.page <= 0
       || !Number.isInteger(result.pageSize) || result.pageSize <= 0
       || !Number.isFinite(result.total) || result.total < 0) {
-      throw new Error('人物分页信息无效，无法安全读取全部来源关联。')
+      throw new Error(t('人物分页信息无效，无法安全读取全部来源关联。'))
     }
     maxPages ??= Math.max(1, Math.ceil(result.total / result.pageSize))
     const previousSize = byId.size
@@ -144,9 +145,9 @@ async function loadSources() {
     locateRouteTarget()
   } catch (error) {
     if (request !== loadRequest) return
-    loadError.value = error instanceof Error && error.message.trim()
-      ? error.message
-      : '无法读取来源与引用资料'
+    loadError.value = error instanceof Error && localizeSystemMessage(error.message).trim()
+      ? localizeSystemMessage(error.message)
+      : t('无法读取来源与引用资料')
     loadState.value = 'error'
   }
 }
@@ -176,7 +177,7 @@ function createSource() {
 function locateRouteTarget() {
   if (loadState.value !== 'ready') return
   if (sourceEditorOpen.value || citationEditorOpen.value) {
-    pendingLocationMessage.value = '当前编辑尚未保存，已保留草稿；关闭编辑器后再定位目标。'
+    pendingLocationMessage.value = t('当前编辑尚未保存，已保留草稿；关闭编辑器后再定位目标。')
     return
   }
   pendingLocationMessage.value = ''
@@ -252,9 +253,9 @@ async function requestDelete(source: Source) {
     deletionImpactState.value = 'ready'
   } catch (error) {
     if (request !== deletionImpactRequest || deletingSource.value?.id !== source.id) return
-    deleteFailure.value = error instanceof Error && error.message.trim()
-      ? error.message
-      : '无法读取删除影响'
+    deleteFailure.value = error instanceof Error && localizeSystemMessage(error.message).trim()
+      ? localizeSystemMessage(error.message)
+      : t('无法读取删除影响')
     deletionImpactState.value = 'error'
   }
 }
@@ -281,9 +282,9 @@ async function confirmDelete() {
     closeDelete()
     await loadSources()
   } catch (error) {
-    const details = error instanceof Error && error.message.trim()
-      ? error.message
-      : '来源暂时无法删除'
+    const details = error instanceof Error && localizeSystemMessage(error.message).trim()
+      ? localizeSystemMessage(error.message)
+      : t('来源暂时无法删除')
     deleteFailure.value = details
     session.saveStatus = 'failed'
     session.saveError = details
@@ -296,27 +297,27 @@ async function confirmDelete() {
 <template>
   <section class="sources-view" aria-labelledby="sources-title">
     <header class="sources-view__heading">
-      <div><p>证据、引用与附件</p><h1 id="sources-title">资料来源</h1></div>
+      <div><p>{{ t('证据、引用与附件') }}</p><h1 id="sources-title">{{ t('资料来源') }}</h1></div>
       <div class="sources-view__heading-actions">
-        <BaseButton name="新建引用" variant="secondary" @click="createCitation">新建引用</BaseButton>
-        <BaseButton name="新建来源" @click="createSource">新建来源</BaseButton>
+        <BaseButton :name="t('新建引用')" variant="secondary" @click="createCitation">{{ t('新建引用') }}</BaseButton>
+        <BaseButton :name="t('新建来源')" @click="createSource">{{ t('新建来源') }}</BaseButton>
       </div>
     </header>
     <p v-if="pendingLocationMessage" class="sources-view__located" role="status">{{ pendingLocationMessage }}</p>
-    <p v-if="locatedSourceId && selectedSource" class="sources-view__located" role="status" :data-located-source-id="selectedSource.id">已定位并打开来源 <code>{{ selectedSource.id }}</code>：{{ selectedSource.title }}</p>
-    <p v-if="locatedAttachmentId && attachments.some(({ id }) => id === locatedAttachmentId)" class="sources-view__located" role="status" :data-located-attachment-id="locatedAttachmentId">已定位附件 <code>{{ locatedAttachmentId }}</code>，对应记录已高亮。</p>
-    <form class="sources-view__filters" aria-label="来源搜索与筛选" @submit.prevent>
-      <label><span>搜索来源</span><input v-model="search" name="sourceSearch" type="search" placeholder="标题、作者、机构或档案编号" /></label>
-      <label><span>来源类型</span><BaseSelectControl><select v-model="typeFilter" name="sourceTypeFilter">
-          <option value="">全部类型</option><option value="book">书籍</option><option value="web">网页</option>
-          <option value="archive">档案</option><option value="interview">访谈</option><option value="other">其他</option>
+    <p v-if="locatedSourceId && selectedSource" class="sources-view__located" role="status" :data-located-source-id="selectedSource.id">{{ t('已定位并打开来源') }} <code>{{ selectedSource.id }}</code>：{{ selectedSource.title }}</p>
+    <p v-if="locatedAttachmentId && attachments.some(({ id }) => id === locatedAttachmentId)" class="sources-view__located" role="status" :data-located-attachment-id="locatedAttachmentId">{{ t('已定位附件') }} <code>{{ locatedAttachmentId }}</code>{{ t('，对应记录已高亮。') }}</p>
+    <form class="sources-view__filters" :aria-label="t('来源搜索与筛选')" @submit.prevent>
+      <label><span>{{ t('搜索来源') }}</span><input v-model="search" name="sourceSearch" type="search" :placeholder="t('标题、作者、机构或档案编号')" /></label>
+      <label><span>{{ t('来源类型') }}</span><BaseSelectControl><select v-model="typeFilter" name="sourceTypeFilter">
+          <option value="">{{ t('全部类型') }}</option><option value="book">{{ t('书籍') }}</option><option value="web">{{ t('网页') }}</option>
+          <option value="archive">{{ t('档案') }}</option><option value="interview">{{ t('访谈') }}</option><option value="other">{{ t('其他') }}</option>
         </select></BaseSelectControl></label>
-      <span aria-live="polite">显示 {{ filteredSources.length }} / {{ sources.length }} 条来源</span>
+      <span aria-live="polite">{{ t('显示 {0} / {1} 条来源', [filteredSources.length, sources.length]) }}</span>
     </form>
-    <div v-if="loadState === 'loading'" class="sources-view__state" role="status">正在整理来源、引用与附件…</div>
+    <div v-if="loadState === 'loading'" class="sources-view__state" role="status">{{ t('正在整理来源、引用与附件…') }}</div>
     <div v-else-if="loadState === 'error'" class="sources-view__state sources-view__state--error" role="alert">
-      <strong>资料来源暂时无法读取</strong><span>{{ loadError }}</span>
-      <BaseButton size="sm" variant="secondary" @click="loadSources">重新读取</BaseButton>
+      <strong>{{ t('资料来源暂时无法读取') }}</strong><span>{{ loadError }}</span>
+      <BaseButton size="sm" variant="secondary" @click="loadSources">{{ t('重新读取') }}</BaseButton>
     </div>
     <template v-else>
       <SourceList
@@ -366,44 +367,44 @@ async function confirmDelete() {
     />
     <BaseDialog
       :open="Boolean(deletingSource)"
-      title="删除资料来源？"
-      :description="deletingSource ? `删除“${deletingSource.title}”会同时清理相关引用和直接关联。` : ''"
-      close-label="保留来源"
+      :title="t('删除资料来源？')"
+      :description="deletingSource ? t('删除“{0}”会同时清理相关引用和直接关联。', [deletingSource.title]) : ''"
+      :close-label="t('保留来源')"
       @close="closeDelete"
     >
       <div v-if="deletionImpact" class="sources-view__impact">
-        <strong>删除影响</strong>
+        <strong>{{ t('删除影响') }}</strong>
         <ul>
-          <li>{{ deletionImpact.citations }} 条引用</li>
-          <li>{{ deletionImpact.people }} 位人物的直接来源关联</li>
-          <li>{{ deletionImpact.organizations }} 个机构的直接来源关联</li>
-          <li>{{ deletionImpact.careers }} 条履历的直接来源关联</li>
-          <li>{{ deletionImpact.personTitles }} 条身份称号的直接来源关联</li>
-          <li>{{ deletionImpact.relationships }} 段关系的直接来源关联</li>
-          <li>{{ deletionImpact.events }} 件事件的直接来源关联</li>
-          <li>{{ deletionImpact.attachmentLinks }} 处引用附件关联</li>
+          <li>{{ t('{0} 条引用', [deletionImpact.citations]) }}</li>
+          <li>{{ t('{0} 位人物的直接来源关联', [deletionImpact.people]) }}</li>
+          <li>{{ t('{0} 个机构的直接来源关联', [deletionImpact.organizations]) }}</li>
+          <li>{{ t('{0} 条履历的直接来源关联', [deletionImpact.careers]) }}</li>
+          <li>{{ t('{0} 条身份称号的直接来源关联', [deletionImpact.personTitles]) }}</li>
+          <li>{{ t('{0} 段关系的直接来源关联', [deletionImpact.relationships]) }}</li>
+          <li>{{ t('{0} 件事件的直接来源关联', [deletionImpact.events]) }}</li>
+          <li>{{ t('{0} 处引用附件关联', [deletionImpact.attachmentLinks]) }}</li>
         </ul>
       </div>
-      <p v-if="deletionImpactState === 'loading'" role="status">正在计算完整删除影响…</p>
+      <p v-if="deletionImpactState === 'loading'" role="status">{{ t('正在计算完整删除影响…') }}</p>
       <div v-if="deleteFailure" class="sources-view__error" role="alert">
         <span>{{ deleteFailure }}</span>
         <BaseButton
           v-if="deletionImpactState === 'error' && deletingSource"
-          name="重新计算删除影响"
+          :name="t('重新计算删除影响')"
           size="sm"
           variant="secondary"
           @click="requestDelete(deletingSource)"
-        >重新计算影响</BaseButton>
+        >{{ t('重新计算影响') }}</BaseButton>
       </div>
       <div class="sources-view__dialog-actions">
-        <BaseButton name="保留来源" variant="secondary" :disabled="deleting" @click="closeDelete">保留来源</BaseButton>
+        <BaseButton :name="t('保留来源')" variant="secondary" :disabled="deleting" @click="closeDelete">{{ t('保留来源') }}</BaseButton>
         <BaseButton
-          name="确认删除来源"
+          :name="t('确认删除来源')"
           variant="danger"
           :loading="deleting"
           :disabled="deletionImpactState !== 'ready' || deleting"
           @click="confirmDelete"
-        >确认删除来源</BaseButton>
+        >{{ t('确认删除来源') }}</BaseButton>
       </div>
     </BaseDialog>
   </section>

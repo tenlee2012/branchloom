@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localizeSystemMessage, t } from '../../../shared/i18n'
 import { computed, ref, watch } from 'vue'
 import BaseButton from '../../../design-system/BaseButton.vue'
 import BaseDialog from '../../../design-system/BaseDialog.vue'
@@ -37,7 +38,7 @@ function linkCount(attachmentId: string) {
 }
 
 const removalDescription = computed(() => removing.value
-  ? `将移除“${removing.value.name}”的附件记录和 ${linkCount(removing.value.id)} 处关联。`
+  ? t('将移除“{0}”的附件记录和 {1} 处关联。', [removing.value.name, linkCount(removing.value.id)])
   : '')
 
 function formatSize(size: number) {
@@ -56,9 +57,9 @@ async function run(id: string, operation: () => Promise<Attachment | void>) {
     if (result) emit('changed', result)
     else emit('changed')
   } catch (error) {
-    failure.value = error instanceof Error && error.message.trim()
-      ? error.message
-      : '附件元数据暂时无法更新'
+    failure.value = error instanceof Error && localizeSystemMessage(error.message).trim()
+      ? localizeSystemMessage(error.message)
+      : t('附件元数据暂时无法更新')
   } finally {
     busyId.value = ''
   }
@@ -87,12 +88,12 @@ async function importSelected(event: Event) {
         size: imported.size,
         missing: false,
       })
-      importMessage.value = `“${repairTarget.name}”已重新定位并通过内容校验。`
+      importMessage.value = t('“{0}”已重新定位并通过内容校验。', [repairTarget.name])
       return repaired
     }
     const existing = props.attachments.find(({ contentHash }) => contentHash === imported.contentHash)
     if (existing) {
-      importMessage.value = `“${file.name}”与已有附件内容相同，未重复保存。`
+      importMessage.value = t('“{0}”与已有附件内容相同，未重复保存。', [file.name])
       return existing
     }
     const attachment: Attachment = {
@@ -105,8 +106,8 @@ async function importSelected(event: Event) {
       missing: false,
     }
     importMessage.value = imported.alreadyStored
-      ? `“${file.name}”已连接到项目中已有的文件内容。`
-      : `“${file.name}”已复制到项目管理区域。`
+      ? t('“{0}”已连接到项目中已有的文件内容。', [file.name])
+      : t('“{0}”已复制到项目管理区域。', [file.name])
     return repository.saveAttachment(attachment)
   })
 }
@@ -131,7 +132,7 @@ async function verifyNativeAttachments() {
     if (changed) emit('changed')
   } catch (error) {
     if (!failure.value) {
-      failure.value = error instanceof Error ? error.message : '附件完整性暂时无法检查'
+      failure.value = error instanceof Error ? localizeSystemMessage(error.message) : t('附件完整性暂时无法检查')
     }
   } finally {
     verifying.value = false
@@ -156,57 +157,53 @@ async function confirmRemove() {
   <section class="attachment-panel" aria-labelledby="attachment-panel-title">
     <header class="attachment-panel__header">
       <div>
-        <h2 id="attachment-panel-title">本地附件</h2>
-        <p>从本机导入照片、扫描件与文档。</p>
+        <h2 id="attachment-panel-title">{{ t('本地附件') }}</h2>
+        <p>{{ t('从本机导入照片、扫描件与文档。') }}</p>
       </div>
-      <StatusBadge tone="success">本地文件</StatusBadge>
+      <StatusBadge tone="success">{{ t('本地文件') }}</StatusBadge>
     </header>
-    <div class="attachment-panel__notice attachment-panel__notice--native" role="note">
-      选择的文件会复制进有谱的本地项目管理区域，并使用 SHA-256 内容哈希避免重复保存。
-    </div>
+    <div class="attachment-panel__notice attachment-panel__notice--native" role="note"> {{ t('选择的文件会复制进有谱的本地项目管理区域，并使用 SHA-256 内容哈希避免重复保存。') }} </div>
     <input ref="fileInput" class="attachment-panel__file-input" type="file" @change="importSelected" />
-    <BaseButton name="选择附件" variant="secondary" :loading="busyId.startsWith('attachment-')" @click="selectAttachment">
-      选择附件
-    </BaseButton>
+    <BaseButton :name="t('选择附件')" variant="secondary" :loading="busyId.startsWith('attachment-')" @click="selectAttachment"> {{ t('选择附件') }} </BaseButton>
     <p v-if="importMessage" class="attachment-panel__success" role="status">{{ importMessage }}</p>
     <ul class="attachment-panel__list">
       <li v-for="attachment in attachments" :key="attachment.id" :data-attachment-id="attachment.id" :aria-current="attachment.id === highlightedAttachmentId ? 'true' : undefined" :class="{ 'attachment-panel__item--highlighted': attachment.id === highlightedAttachmentId }">
         <div>
           <strong>{{ attachment.name }}</strong>
-          <span>{{ attachment.mimeType }} · {{ formatSize(attachment.size) }} · {{ linkCount(attachment.id) }} 处关联</span>
-          <span v-if="attachment.missing" class="attachment-panel__missing" role="status">附件缺失，元数据和关联已保留</span>
+          <span>{{ t('{0} · {1} · {2} 处关联', [attachment.mimeType, formatSize(attachment.size), linkCount(attachment.id)]) }}</span>
+          <span v-if="attachment.missing" class="attachment-panel__missing" role="status">{{ t('附件缺失，元数据和关联已保留') }}</span>
         </div>
         <div class="attachment-panel__actions">
           <BaseButton
             v-if="attachment.missing"
-            :name="`重新选择附件：${attachment.name}`"
+            :name="t('重新选择附件：{0}', [attachment.name])"
             size="sm"
             variant="secondary"
             :loading="busyId === attachment.id"
             @click="locate(attachment)"
-          >重新选择</BaseButton>
+          >{{ t('重新选择') }}</BaseButton>
           <BaseButton
-            :name="`移除附件：${attachment.name}`"
+            :name="t('移除附件：{0}', [attachment.name])"
             size="sm"
             variant="ghost"
             :disabled="Boolean(busyId)"
             @click="removing = attachment"
-          >移除</BaseButton>
+          >{{ t('移除') }}</BaseButton>
         </div>
       </li>
     </ul>
-    <p v-if="failure" class="attachment-panel__error" role="alert">更新失败：{{ failure }}</p>
+    <p v-if="failure" class="attachment-panel__error" role="alert">{{ t('更新失败：{0}', [failure]) }}</p>
   </section>
   <BaseDialog
     :open="Boolean(removing)"
-    title="移除附件记录？"
+    :title="t('移除附件记录？')"
     :description="removalDescription"
-    close-label="保留附件"
+    :close-label="t('保留附件')"
     @close="removing = undefined"
   >
     <div class="attachment-panel__dialog-actions">
-      <BaseButton name="保留附件" variant="secondary" @click="removing = undefined">保留</BaseButton>
-      <BaseButton name="确认移除附件" variant="danger" :loading="Boolean(busyId)" @click="confirmRemove">确认移除附件</BaseButton>
+      <BaseButton :name="t('保留附件')" variant="secondary" @click="removing = undefined">{{ t('保留') }}</BaseButton>
+      <BaseButton :name="t('确认移除附件')" variant="danger" :loading="Boolean(busyId)" @click="confirmRemove">{{ t('确认移除附件') }}</BaseButton>
     </div>
   </BaseDialog>
 </template>

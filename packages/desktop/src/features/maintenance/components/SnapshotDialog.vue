@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localizeSystemMessage, t } from '../../../shared/i18n'
 import { ref, watch } from 'vue'
 import BaseButton from '../../../design-system/BaseButton.vue'
 import BaseDialog from '../../../design-system/BaseDialog.vue'
@@ -18,7 +19,7 @@ watch(() => props.open, (open) => { if (open) { note.value = ''; noteError.value
 
 async function create() {
   if (busy.value) return
-  if (!note.value.trim()) { noteError.value = '请填写快照名称或备注'; return }
+  if (!note.value.trim()) { noteError.value = t('请填写快照名称或备注'); return }
   noteError.value = ''
   busy.value = true; errorMessage.value = ''
   try {
@@ -26,19 +27,19 @@ async function create() {
     emit('created', snapshot)
     emit('close')
   } catch (error) {
-    errorMessage.value = error instanceof Error && error.message ? error.message : '手动快照创建失败'
+    errorMessage.value = error instanceof Error && localizeSystemMessage(error.message) ? localizeSystemMessage(error.message) : t('手动快照创建失败')
   } finally { busy.value = false }
 }
 </script>
 
 <template>
-  <BaseDialog :open="open" title="创建手动快照" description="保存当前项目状态，方便之后恢复。" @close="!busy && emit('close')">
+  <BaseDialog :open="open" :title="t('创建手动快照')" :description="t('保存当前项目状态，方便之后恢复。')" @close="!busy && emit('close')">
     <form class="snapshot-dialog" novalidate @submit.prevent="create">
-      <BaseField id="snapshot-note" label="名称或备注" hint="可记录研究节点、资料来源或操作目的。" :error="noteError" required>
+      <BaseField id="snapshot-note" :label="t('名称或备注')" :hint="t('可记录研究节点、资料来源或操作目的。')" :error="noteError" required>
         <template #default="field"><textarea id="snapshot-note" v-model="note" rows="4" v-bind="field" /></template>
       </BaseField>
       <p v-if="errorMessage" role="alert">{{ errorMessage }}</p>
-      <footer><BaseButton variant="secondary" :disabled="busy" @click="emit('close')">取消</BaseButton><BaseButton name="创建手动快照" type="submit" :loading="busy">创建手动快照</BaseButton></footer>
+      <footer><BaseButton variant="secondary" :disabled="busy" @click="emit('close')">{{ t('取消') }}</BaseButton><BaseButton :name="t('创建手动快照')" type="submit" :loading="busy">{{ t('创建手动快照') }}</BaseButton></footer>
     </form>
   </BaseDialog>
 </template>

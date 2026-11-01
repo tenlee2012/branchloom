@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '../../../shared/i18n'
 import { computed, ref, watch } from 'vue'
 import { useSessionStore } from '../../../app/stores/session'
 import BaseButton from '../../../design-system/BaseButton.vue'
@@ -114,23 +115,23 @@ const deleteImpact = computed(() => {
 })
 
 const categoryLabels: Record<CareerCategory, string> = {
-  employment: '企业任职',
-  civil_office: '古代文官',
-  military_office: '古代武职',
-  academic: '学术／教育任职',
-  religious_office: '宗教职务',
-  self_employed: '自由职业／自营',
-  other: '其他',
+  employment: t('企业任职'),
+  civil_office: t('古代文官'),
+  military_office: t('古代武职'),
+  academic: t('学术／教育任职'),
+  religious_office: t('宗教职务'),
+  self_employed: t('自由职业／自营'),
+  other: t('其他'),
 }
 const organizationTypeLabels: Record<OrganizationType, string> = {
-  company: '公司',
-  government: '政府机构',
-  imperial_court: '朝廷／政权',
-  military: '军队',
-  education: '教育机构',
-  religious: '宗教机构',
-  clan: '宗族组织',
-  other: '其他',
+  company: t('公司'),
+  government: t('政府机构'),
+  imperial_court: t('朝廷／政权'),
+  military: t('军队'),
+  education: t('教育机构'),
+  religious: t('宗教机构'),
+  clan: t('宗族组织'),
+  other: t('其他'),
 }
 
 function reset() {
@@ -179,7 +180,7 @@ async function loadOptions() {
     attachmentLinks.value = attachmentLinkResult
     evidenceReady.value = true
   } catch (reason) {
-    error.value = reason instanceof Error ? reason.message : '履历选项无法读取'
+    error.value = reason instanceof Error ? reason.message : t('履历选项无法读取')
   } finally {
     loadingOptions.value = false
   }
@@ -236,7 +237,7 @@ function requestClose() {
 async function submit() {
   if (saving.value) return
   if (!draft.value.positionTitle.trim()) {
-    error.value = '请填写职位或官职。'
+    error.value = t('请填写职位或官职。')
     return
   }
   if (draft.value.status === 'current') delete draft.value.end
@@ -280,7 +281,7 @@ async function submit() {
     emit('saved', saved)
     emit('close')
   } catch (reason) {
-    error.value = reason instanceof Error ? reason.message : '履历保存失败'
+    error.value = reason instanceof Error ? reason.message : t('履历保存失败')
     session.saveStatus = 'failed'
     session.saveError = error.value
   } finally {
@@ -300,7 +301,7 @@ async function remove() {
     emit('deleted', props.career.id)
     emit('close')
   } catch (reason) {
-    error.value = reason instanceof Error ? reason.message : '履历删除失败'
+    error.value = reason instanceof Error ? reason.message : t('履历删除失败')
     session.saveStatus = 'failed'
     session.saveError = error.value
   } finally {
@@ -313,26 +314,26 @@ async function remove() {
 <template>
   <BaseDrawer
     :open="open"
-    :title="career ? '编辑人物履历' : '添加人物履历'"
-    description="现代公司职位和古代官职使用同一套履历资料。"
-    close-label="关闭履历编辑器"
+    :title="career ? t('编辑人物履历') : t('添加人物履历')"
+    :description="t('现代公司职位和古代官职使用同一套履历资料。')"
+    :close-label="t('关闭履历编辑器')"
     @close="requestClose"
   >
     <form class="career-editor" novalidate @submit.prevent="submit">
       <div class="career-editor__grid">
-        <BaseField id="career-category" label="履历类型" required>
+        <BaseField id="career-category" :label="t('履历类型')" required>
           <BaseSelectControl>
             <select id="career-category" v-model="draft.category" name="careerCategory">
               <option v-for="(label, value) in categoryLabels" :key="value" :value="value">{{ label }}</option>
             </select>
           </BaseSelectControl>
         </BaseField>
-        <BaseField id="career-status" label="任职状态">
+        <BaseField id="career-status" :label="t('任职状态')">
           <BaseSelectControl>
             <select id="career-status" v-model="draft.status" name="careerStatus">
-              <option value="unknown">未知</option>
-              <option value="current">当前在任</option>
-              <option value="former">已结束</option>
+              <option value="unknown">{{ t('未知') }}</option>
+              <option value="current">{{ t('当前在任') }}</option>
+              <option value="former">{{ t('已结束') }}</option>
             </select>
           </BaseSelectControl>
         </BaseField>
@@ -340,11 +341,11 @@ async function remove() {
 
       <section v-if="newOrganizationName.trim()" class="career-editor__new-organization" aria-labelledby="career-new-organization-heading">
         <div>
-          <h3 id="career-new-organization-heading">新机构资料</h3>
-          <p>新机构会和履历作为同一个操作保存，失败时不会留下半成品。</p>
+          <h3 id="career-new-organization-heading">{{ t('新机构资料') }}</h3>
+          <p>{{ t('新机构会和履历作为同一个操作保存，失败时不会留下半成品。') }}</p>
         </div>
         <div class="career-editor__grid">
-          <BaseField id="career-new-organization-type" label="机构类型">
+          <BaseField id="career-new-organization-type" :label="t('机构类型')">
             <BaseSelectControl>
               <select id="career-new-organization-type" v-model="newOrganizationType">
                 <option v-for="(label, value) in organizationTypeLabels" :key="value" :value="value">
@@ -353,39 +354,39 @@ async function remove() {
               </select>
             </BaseSelectControl>
           </BaseField>
-          <BaseField id="career-new-organization-aliases" label="别名／历史名称" hint="用逗号或顿号分隔">
+          <BaseField id="career-new-organization-aliases" :label="t('别名／历史名称')" :hint="t('用逗号或顿号分隔')">
             <input id="career-new-organization-aliases" v-model="newOrganizationAliases" />
           </BaseField>
-          <BaseField id="career-new-organization-parent" label="上级机构">
+          <BaseField id="career-new-organization-parent" :label="t('上级机构')">
             <BaseSelectControl>
               <select id="career-new-organization-parent" v-model="newOrganizationParentId">
-                <option value="">无上级机构</option>
+                <option value="">{{ t('无上级机构') }}</option>
                 <option v-for="organization in organizations" :key="organization.id" :value="organization.id">
                   {{ organization.name }}
                 </option>
               </select>
             </BaseSelectControl>
           </BaseField>
-          <BaseField id="career-new-organization-place" label="机构所在地">
+          <BaseField id="career-new-organization-place" :label="t('机构所在地')">
             <BaseSelectControl>
               <select id="career-new-organization-place" v-model="newOrganizationPlaceId">
-                <option value="">未记录</option>
+                <option value="">{{ t('未记录') }}</option>
                 <option v-for="place in places" :key="place.id" :value="place.id">{{ place.name }}</option>
               </select>
             </BaseSelectControl>
           </BaseField>
-          <BaseField id="career-new-organization-from" label="有效开始时间">
+          <BaseField id="career-new-organization-from" :label="t('有效开始时间')">
             <input id="career-new-organization-from" v-model="newOrganizationValidFrom" />
           </BaseField>
-          <BaseField id="career-new-organization-to" label="有效结束时间">
+          <BaseField id="career-new-organization-to" :label="t('有效结束时间')">
             <input id="career-new-organization-to" v-model="newOrganizationValidTo" />
           </BaseField>
         </div>
-        <BaseField id="career-new-organization-notes" label="机构备注">
+        <BaseField id="career-new-organization-notes" :label="t('机构备注')">
           <textarea id="career-new-organization-notes" v-model="newOrganizationNotes" rows="2" />
         </BaseField>
         <fieldset v-if="sources.length" class="career-editor__sources">
-          <legend>机构来源</legend>
+          <legend>{{ t('机构来源') }}</legend>
           <label v-for="source in sources" :key="source.id">
             <input
               type="checkbox"
@@ -398,7 +399,7 @@ async function remove() {
       </section>
 
       <div class="career-editor__organization">
-        <BaseField id="career-organization" :label="isAncientOffice ? '官署／机构' : '公司／机构'">
+        <BaseField id="career-organization" :label="isAncientOffice ? t('官署／机构') : t('公司／机构')">
           <BaseSelectControl>
             <select
               id="career-organization"
@@ -406,29 +407,29 @@ async function remove() {
               name="careerOrganization"
               :disabled="Boolean(newOrganizationName)"
             >
-              <option :value="undefined">暂不关联机构</option>
+              <option :value="undefined">{{ t('暂不关联机构') }}</option>
               <option v-for="organization in organizations" :key="organization.id" :value="organization.id">
                 {{ organization.name }}
               </option>
             </select>
           </BaseSelectControl>
         </BaseField>
-        <BaseField id="career-new-organization" label="或新建机构" hint="保存履历时一并创建。">
+        <BaseField id="career-new-organization" :label="t('或新建机构')" :hint="t('保存履历时一并创建。')">
           <input
             id="career-new-organization"
             v-model="newOrganizationName"
             name="newOrganizationName"
-            :placeholder="isAncientOffice ? '例如：杭州州府' : '例如：字节跳动'"
+            :placeholder="isAncientOffice ? t('例如：杭州州府') : t('例如：字节跳动')"
             :disabled="Boolean(draft.organizationId)"
           />
         </BaseField>
       </div>
 
       <div class="career-editor__grid">
-        <BaseField id="career-position" :label="isAncientOffice ? '官职原文' : '职位'" required>
+        <BaseField id="career-position" :label="isAncientOffice ? t('官职原文') : t('职位')" required>
           <input id="career-position" v-model="draft.positionTitle" name="careerPosition" required />
         </BaseField>
-        <BaseField id="career-department" :label="isAncientOffice ? '下属机构' : '部门'">
+        <BaseField id="career-department" :label="isAncientOffice ? t('下属机构') : t('部门')">
           <input
             id="career-department"
             :value="draft.department ?? ''"
@@ -436,16 +437,16 @@ async function remove() {
             @input="setOptional('department', ($event.target as HTMLInputElement).value)"
           />
         </BaseField>
-        <BaseField id="career-start" label="开始时间" hint="可保留原始纪年文字">
+        <BaseField id="career-start" :label="t('开始时间')" :hint="t('可保留原始纪年文字')">
           <input
             id="career-start"
             :value="draft.start?.display ?? ''"
             name="careerStart"
-            placeholder="例如：2020 或 熙宁四年"
+            :placeholder="t('例如：2020 或 熙宁四年')"
             @input="setDate('start', ($event.target as HTMLInputElement).value)"
           />
         </BaseField>
-        <BaseField id="career-end" label="结束时间">
+        <BaseField id="career-end" :label="t('结束时间')">
           <input
             id="career-end"
             :value="draft.end?.display ?? ''"
@@ -454,10 +455,10 @@ async function remove() {
             @input="setDate('end', ($event.target as HTMLInputElement).value)"
           />
         </BaseField>
-        <BaseField id="career-place" label="任职地点">
+        <BaseField id="career-place" :label="t('任职地点')">
           <BaseSelectControl>
             <select id="career-place" v-model="draft.jurisdictionPlaceId" name="careerPlace">
-              <option :value="undefined">未记录</option>
+              <option :value="undefined">{{ t('未记录') }}</option>
               <option v-for="place in places" :key="place.id" :value="place.id">{{ place.name }}</option>
             </select>
           </BaseSelectControl>
@@ -466,23 +467,23 @@ async function remove() {
 
       <section v-if="isAncientOffice" class="career-editor__advanced" aria-labelledby="career-ancient-heading">
         <div>
-          <h3 id="career-ancient-heading">古代官职资料</h3>
-          <p>原始纪年会与可计算日期一起保留；无法换算时不会伪造公历日期。</p>
+          <h3 id="career-ancient-heading">{{ t('古代官职资料') }}</h3>
+          <p>{{ t('原始纪年会与可计算日期一起保留；无法换算时不会伪造公历日期。') }}</p>
         </div>
         <div class="career-editor__grid">
-          <BaseField id="career-regime" label="朝代／政权">
+          <BaseField id="career-regime" :label="t('朝代／政权')">
             <input id="career-regime" :value="draft.regime ?? ''" name="careerRegime" @input="setOptional('regime', ($event.target as HTMLInputElement).value)" />
           </BaseField>
-          <BaseField id="career-rank" label="品秩／等级">
+          <BaseField id="career-rank" :label="t('品秩／等级')">
             <input id="career-rank" :value="draft.rankOrGrade ?? ''" name="careerRank" @input="setOptional('rankOrGrade', ($event.target as HTMLInputElement).value)" />
           </BaseField>
-          <BaseField id="career-appointment" label="任命性质">
-            <input id="career-appointment" :value="draft.appointmentType ?? ''" name="careerAppointment" placeholder="任职、兼任、署理、追赠…" @input="setOptional('appointmentType', ($event.target as HTMLInputElement).value)" />
+          <BaseField id="career-appointment" :label="t('任命性质')">
+            <input id="career-appointment" :value="draft.appointmentType ?? ''" name="careerAppointment" :placeholder="t('任职、兼任、署理、追赠…')" @input="setOptional('appointmentType', ($event.target as HTMLInputElement).value)" />
           </BaseField>
-          <BaseField id="career-appointed-by" label="授予者／任命者">
+          <BaseField id="career-appointed-by" :label="t('授予者／任命者')">
             <BaseSelectControl>
               <select id="career-appointed-by" v-model="draft.appointedByPersonId" name="careerAppointedBy">
-                <option :value="undefined">未记录</option>
+                <option :value="undefined">{{ t('未记录') }}</option>
                 <option v-for="candidate in people" :key="candidate.id" :value="candidate.id">
                   {{ getPrimaryName(candidate) }}
                 </option>
@@ -492,15 +493,15 @@ async function remove() {
         </div>
       </section>
 
-      <BaseField id="career-description" label="职责与经历">
+      <BaseField id="career-description" :label="t('职责与经历')">
         <textarea id="career-description" v-model="draft.description" name="careerDescription" rows="3" />
       </BaseField>
-      <BaseField id="career-notes" label="整理笔记">
+      <BaseField id="career-notes" :label="t('整理笔记')">
         <textarea id="career-notes" v-model="draft.notes" name="careerNotes" rows="3" />
       </BaseField>
 
       <fieldset v-if="sources.length" class="career-editor__sources">
-        <legend>资料来源</legend>
+        <legend>{{ t('资料来源') }}</legend>
         <label v-for="source in sources" :key="source.id">
           <input
             type="checkbox"
@@ -511,53 +512,48 @@ async function remove() {
         </label>
       </fieldset>
 
-      <p v-if="loadingOptions" class="career-editor__hint" role="status">正在读取机构与来源…</p>
+      <p v-if="loadingOptions" class="career-editor__hint" role="status">{{ t('正在读取机构与来源…') }}</p>
       <p v-if="error" class="career-editor__error" role="alert">{{ error }}</p>
 
       <footer class="career-editor__actions">
-        <BaseButton v-if="career" name="删除履历" variant="danger" :disabled="saving" @click="confirmDelete = true">
-          删除履历
-        </BaseButton>
+        <BaseButton v-if="career" :name="t('删除履历')" variant="danger" :disabled="saving" @click="confirmDelete = true"> {{ t('删除履历') }} </BaseButton>
         <span />
-        <BaseButton name="取消" variant="secondary" :disabled="saving || deleting" @click="requestClose">取消</BaseButton>
-        <BaseButton name="保存履历" type="submit" :loading="saving">保存履历</BaseButton>
+        <BaseButton :name="t('取消')" variant="secondary" :disabled="saving || deleting" @click="requestClose">{{ t('取消') }}</BaseButton>
+        <BaseButton :name="t('保存履历')" type="submit" :loading="saving">{{ t('保存履历') }}</BaseButton>
       </footer>
     </form>
   </BaseDrawer>
 
   <BaseDialog
     :open="confirmClose"
-    title="放弃未保存的履历？"
-    description="关闭后，这次填写的内容不会保留。"
+    :title="t('放弃未保存的履历？')"
+    :description="t('关闭后，这次填写的内容不会保留。')"
     @close="confirmClose = false"
   >
     <div class="career-editor__dialog-actions">
-      <BaseButton variant="secondary" @click="confirmClose = false">继续编辑</BaseButton>
-      <BaseButton variant="danger" @click="emit('close')">放弃修改</BaseButton>
+      <BaseButton variant="secondary" @click="confirmClose = false">{{ t('继续编辑') }}</BaseButton>
+      <BaseButton variant="danger" @click="emit('close')">{{ t('放弃修改') }}</BaseButton>
     </div>
   </BaseDialog>
 
   <BaseDialog
     :open="confirmDelete"
-    title="删除这条履历？"
-    description="相关引用和附件关联会一并清理，来源与附件文件仍会保留。"
+    :title="t('删除这条履历？')"
+    :description="t('相关引用和附件关联会一并清理，来源与附件文件仍会保留。')"
     @close="confirmDelete = false"
   >
     <div class="career-editor__delete-dialog">
-      <p v-if="evidenceReady">
-        这条履历关联了 {{ deleteImpact.sources }} 项来源、{{ deleteImpact.citations }} 条引用和
-        {{ deleteImpact.attachments }} 个附件。
-      </p>
-      <p v-else role="alert">暂时无法读取履历的证据影响，当前不能安全删除。</p>
+      <p v-if="evidenceReady"> {{ t('这条履历关联了 {0} 项来源、{1} 条引用和 {2} 个附件。', [deleteImpact.sources, deleteImpact.citations, deleteImpact.attachments]) }} </p>
+      <p v-else role="alert">{{ t('暂时无法读取履历的证据影响，当前不能安全删除。') }}</p>
       <div class="career-editor__dialog-actions">
-        <BaseButton variant="secondary" @click="confirmDelete = false">取消</BaseButton>
+        <BaseButton variant="secondary" @click="confirmDelete = false">{{ t('取消') }}</BaseButton>
         <BaseButton
-          name="确认删除履历"
+          :name="t('确认删除履历')"
           variant="danger"
           :disabled="!evidenceReady"
           :loading="deleting"
           @click="remove"
-        >确认删除</BaseButton>
+        >{{ t('确认删除') }}</BaseButton>
       </div>
     </div>
   </BaseDialog>

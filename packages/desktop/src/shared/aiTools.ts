@@ -1,3 +1,4 @@
+import { localizeSystemMessage } from './i18n'
 import { invoke, isTauri } from '@tauri-apps/api/core'
 
 export type AiToolComponent = 'cli' | 'skill'
@@ -70,7 +71,7 @@ export const tauriAiToolsGateway: AiToolsGateway = {
 }
 
 export function aiToolsError(error: unknown, fallback: string): string {
-  if (typeof error === 'string' && error.trim()) return error.trim()
-  if (error instanceof Error && error.message.trim()) return error.message.trim()
+  if (typeof error === 'string' && error.trim()) return localizeSystemMessage(error.trim())
+  if (error instanceof Error && error.message.trim()) return localizeSystemMessage(error.message.trim())
   return fallback
 }

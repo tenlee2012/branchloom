@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localizeSystemMessage, t } from '../../../shared/i18n'
 import { computed, ref, toRef, watch } from 'vue'
 import { useSessionStore } from '../../../app/stores/session'
 import BaseButton from '../../../design-system/BaseButton.vue'
@@ -85,7 +86,7 @@ async function removeRelationship() {
     emit('deleted', relationship.id)
     emit('close')
   } catch (error) {
-    const details = error instanceof Error ? error.message : '本地关系暂时无法删除'
+    const details = error instanceof Error ? localizeSystemMessage(error.message) : t('本地关系暂时无法删除')
     deleteFailure.value = details
     session.saveStatus = 'failed'
     session.saveError = details
@@ -99,18 +100,17 @@ async function removeRelationship() {
 <template>
   <BaseDialog
     :open="open"
-    :title="relationship ? '编辑人物关系' : '添加人物关系'"
-    description="结构性错误会被阻止；重复关系只会提醒，仍可保存。"
-    close-label="关闭关系编辑器"
+    :title="relationship ? t('编辑人物关系') : t('添加人物关系')"
+    :description="t('结构性错误会被阻止；重复关系只会提醒，仍可保存。')"
+    :close-label="t('关闭关系编辑器')"
     @close="requestClose"
   >
     <form class="relationship-editor" novalidate @submit.prevent="submit">
-      <p v-if="editor.loading.value" role="status">正在读取项目人物…</p>
-      <p v-if="editor.loadFailure.value" class="relationship-editor__error" role="alert">
-        读取失败：{{ editor.loadFailure.value }}
+      <p v-if="editor.loading.value" role="status">{{ t('正在读取项目人物…') }}</p>
+      <p v-if="editor.loadFailure.value" class="relationship-editor__error" role="alert"> {{ t('读取失败：{0}', [editor.loadFailure.value]) }}
       </p>
 
-      <BaseField id="relationship-person" label="关联人物" required>
+      <BaseField id="relationship-person" :label="t('关联人物')" required>
         <BaseSelectControl>
           <select
             id="relationship-person"
@@ -118,13 +118,11 @@ async function removeRelationship() {
             name="relativePersonId"
             required
           >
-            <option value="">请选择人物</option>
+            <option value="">{{ t('请选择人物') }}</option>
             <option
               v-if="editor.relativePersonId.value && !editor.people.value.some(({ id }) => id === editor.relativePersonId.value)"
               :value="editor.relativePersonId.value"
-            >
-              正在读取已选人物…
-            </option>
+            > {{ t('正在读取已选人物…') }} </option>
             <option v-for="candidate in editor.people.value" :key="candidate.id" :value="candidate.id">
               {{ getPrimaryName(candidate) }}
             </option>
@@ -133,13 +131,13 @@ async function removeRelationship() {
       </BaseField>
 
       <div class="relationship-editor__grid">
-        <BaseField id="relationship-category" label="关系大类">
+        <BaseField id="relationship-category" :label="t('关系大类')">
           <BaseSelectControl><select id="relationship-category" v-model="editor.category.value" name="category">
-              <option value="parent">亲子与照护</option>
-              <option value="partner">伴侣</option>
+              <option value="parent">{{ t('亲子与照护') }}</option>
+              <option value="partner">{{ t('伴侣') }}</option>
             </select></BaseSelectControl>
         </BaseField>
-        <BaseField id="relationship-type" label="关系性质">
+        <BaseField id="relationship-type" :label="t('关系性质')">
           <BaseSelectControl>
             <select
               v-if="editor.category.value === 'parent'"
@@ -161,29 +159,29 @@ async function removeRelationship() {
         </BaseField>
       </div>
 
-      <BaseField v-if="editor.category.value === 'parent'" id="relationship-direction" label="关系方向">
+      <BaseField v-if="editor.category.value === 'parent'" id="relationship-direction" :label="t('关系方向')">
         <BaseSelectControl><select id="relationship-direction" v-model="editor.direction.value" name="direction">
-            <option value="relative-is-parent">对方是当前人物的父母或监护人</option>
-            <option value="current-is-parent">当前人物是对方的父母或监护人</option>
+            <option value="relative-is-parent">{{ t('对方是当前人物的父母或监护人') }}</option>
+            <option value="current-is-parent">{{ t('当前人物是对方的父母或监护人') }}</option>
           </select></BaseSelectControl>
       </BaseField>
 
       <div class="relationship-editor__grid">
-        <BaseField id="relationship-start" label="开始日期">
+        <BaseField id="relationship-start" :label="t('开始日期')">
           <input id="relationship-start" v-model="editor.start.value" name="startDate" />
         </BaseField>
-        <BaseField id="relationship-end" label="结束日期">
+        <BaseField id="relationship-end" :label="t('结束日期')">
           <input id="relationship-end" v-model="editor.end.value" name="endDate" />
         </BaseField>
       </div>
 
-      <BaseField id="relationship-place" label="地点">
+      <BaseField id="relationship-place" :label="t('地点')">
         <BaseSelectControl><select id="relationship-place" v-model="editor.placeId.value" name="placeId">
-            <option value="">未指定</option>
+            <option value="">{{ t('未指定') }}</option>
             <option v-for="place in editor.places.value" :key="place.id" :value="place.id">{{ place.name }}</option>
           </select></BaseSelectControl>
       </BaseField>
-      <BaseField id="relationship-notes" label="备注">
+      <BaseField id="relationship-notes" :label="t('备注')">
         <textarea id="relationship-notes" v-model="editor.notes.value" name="notes" rows="3" />
       </BaseField>
 
@@ -195,10 +193,10 @@ async function removeRelationship() {
         data-relationship-feedback
       >
         {{ editor.feedback.value.message }}
-        <span v-if="editor.feedback.value.severity === 'warning'">这是提醒，不会阻止保存。</span>
+        <span v-if="editor.feedback.value.severity === 'warning'">{{ t('这是提醒，不会阻止保存。') }}</span>
       </p>
       <div v-if="editor.saveFailure.value" class="relationship-editor__error" role="alert">
-        <strong>保存失败，关系尚未写入。</strong>
+        <strong>{{ t('保存失败，关系尚未写入。') }}</strong>
         <p>{{ editor.saveFailure.value }}</p>
       </div>
       <p v-if="deleteFailure" class="relationship-editor__error" role="alert">{{ deleteFailure }}</p>
@@ -206,48 +204,46 @@ async function removeRelationship() {
       <footer class="relationship-editor__actions">
         <BaseButton
           v-if="relationship"
-          name="删除关系"
+          :name="t('删除关系')"
           variant="danger"
           :disabled="editor.saving.value || deleting"
           @click="confirmDelete = true"
-        >删除关系</BaseButton>
+        >{{ t('删除关系') }}</BaseButton>
         <span class="relationship-editor__spacer" />
-        <BaseButton name="取消" variant="secondary" :disabled="editor.saving.value" @click="requestClose">取消</BaseButton>
+        <BaseButton :name="t('取消')" variant="secondary" :disabled="editor.saving.value" @click="requestClose">{{ t('取消') }}</BaseButton>
         <BaseButton
-          name="保存关系"
+          :name="t('保存关系')"
           type="submit"
           :loading="editor.saving.value"
           :disabled="!editor.candidate.value || editor.blocking.value || Boolean(editor.loadFailure.value)"
-        >
-          保存关系
-        </BaseButton>
+        > {{ t('保存关系') }} </BaseButton>
       </footer>
     </form>
   </BaseDialog>
 
   <BaseDialog
     :open="confirmDelete"
-    title="删除人物关系？"
-    description="删除后，依赖这段关系的引用关联也会一并清理。"
-    close-label="保留关系"
+    :title="t('删除人物关系？')"
+    :description="t('删除后，依赖这段关系的引用关联也会一并清理。')"
+    :close-label="t('保留关系')"
     @close="confirmDelete = false"
   >
     <div class="relationship-editor__actions">
-      <BaseButton variant="secondary" @click="confirmDelete = false">保留关系</BaseButton>
-      <BaseButton name="确认删除关系" variant="danger" :loading="deleting" @click="removeRelationship">确认删除</BaseButton>
+      <BaseButton variant="secondary" @click="confirmDelete = false">{{ t('保留关系') }}</BaseButton>
+      <BaseButton :name="t('确认删除关系')" variant="danger" :loading="deleting" @click="removeRelationship">{{ t('确认删除') }}</BaseButton>
     </div>
   </BaseDialog>
 
   <BaseDialog
     :open="confirmClose"
-    title="放弃未保存的关系？"
-    description="关闭后，这次填写的关系资料不会保留。"
-    close-label="继续编辑关系"
+    :title="t('放弃未保存的关系？')"
+    :description="t('关闭后，这次填写的关系资料不会保留。')"
+    :close-label="t('继续编辑关系')"
     @close="confirmClose = false"
   >
     <div class="relationship-editor__actions">
-      <BaseButton variant="secondary" @click="confirmClose = false">继续编辑</BaseButton>
-      <BaseButton variant="danger" @click="discardAndClose">放弃修改</BaseButton>
+      <BaseButton variant="secondary" @click="confirmClose = false">{{ t('继续编辑') }}</BaseButton>
+      <BaseButton variant="danger" @click="discardAndClose">{{ t('放弃修改') }}</BaseButton>
     </div>
   </BaseDialog>
 </template>

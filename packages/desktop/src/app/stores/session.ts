@@ -1,3 +1,4 @@
+import { localizeSystemMessage, t } from '../../shared/i18n'
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import type {
@@ -56,7 +57,7 @@ export const useSessionStore = defineStore('session', () => {
       saveStatus.value = 'saved'
     } catch (error) {
       saveStatus.value = 'failed'
-      saveError.value = error instanceof Error ? error.message : '无法更新历史记录'
+      saveError.value = error instanceof Error ? localizeSystemMessage(error.message) : t('无法更新历史记录')
     }
   }
 

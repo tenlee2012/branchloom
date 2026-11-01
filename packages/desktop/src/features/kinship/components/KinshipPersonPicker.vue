@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '../../../shared/i18n'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 import { IconChevronDown, IconSearch, IconX } from '@tabler/icons-vue'
 import { getNameSearchRank, getPrimaryName } from '../../../shared/domain/personNames'
@@ -82,13 +83,13 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside))
     <span :id="`${uid}-label`" class="kinship-picker__label">{{ label }}</span>
     <button
       :id="`${uid}-trigger`" ref="trigger" class="kinship-picker__trigger" type="button"
-      :aria-label="`${label}：${selected ? getPrimaryName(selected) : '选择人物'}`"
+      :aria-label="`${label}：${selected ? getPrimaryName(selected) : t('选择人物')}`"
       :aria-expanded="open" :aria-controls="open ? `${uid}-popover` : undefined" @click="toggle"
     >
       <img :src="selected?.avatarUrl || personPlaceholder" alt="" />
       <span class="kinship-picker__identity">
-        <strong>{{ selected ? getPrimaryName(selected) : '选择人物' }}</strong>
-        <small>{{ selected ? selected.birth?.display || '出生日期未记录' : '搜索姓名、字号或别名' }}</small>
+        <strong>{{ selected ? getPrimaryName(selected) : t('选择人物') }}</strong>
+        <small>{{ selected ? selected.birth?.display || t('出生日期未记录') : t('搜索姓名、字号或别名') }}</small>
       </span>
       <IconChevronDown :size="20" aria-hidden="true" />
     </button>
@@ -96,20 +97,20 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside))
     <div v-if="open" :id="`${uid}-popover`" class="kinship-picker__popover" role="region" :aria-labelledby="`${uid}-label`">
       <div class="kinship-picker__search">
         <IconSearch :size="18" aria-hidden="true" />
-        <input ref="searchInput" v-model="search" type="search" :aria-label="`${label}：搜索人物`" placeholder="输入姓名、字号或别名"
+        <input ref="searchInput" v-model="search" type="search" :aria-label="t('{0}：搜索人物', [label])" :placeholder="t('输入姓名、字号或别名')"
           @keydown.down.prevent="focusResult()" @keydown.enter.prevent="matches[0] && choose(matches[0].id)" />
       </div>
-      <p class="kinship-picker__count" role="status">{{ matches.length ? `找到 ${matches.length} 位人物` : '未找到匹配人物，试试其他姓名或别名。' }}</p>
+      <p class="kinship-picker__count" role="status">{{ matches.length ? t('找到 {0} 位人物', [matches.length]) : t('未找到匹配人物，试试其他姓名或别名。') }}</p>
       <ul ref="resultList" class="kinship-picker__results" @keydown="moveResult">
         <li v-for="person in matches.slice(0, limit)" :key="person.id">
           <button type="button" :aria-pressed="person.id === modelValue" @click="choose(person.id)">
             <img :src="person.avatarUrl || personPlaceholder" alt="" loading="lazy" />
-            <span><strong>{{ getPrimaryName(person) }}</strong><small>{{ person.birth?.display || '出生日期未记录' }}<template v-if="person.names.length > 1"> · {{ person.names.filter((name) => name.value !== getPrimaryName(person)).map((name) => name.value).join('、') }}</template></small></span>
+            <span><strong>{{ getPrimaryName(person) }}</strong><small>{{ person.birth?.display || t('出生日期未记录') }}<template v-if="person.names.length > 1"> · {{ person.names.filter((name) => name.value !== getPrimaryName(person)).map((name) => name.value).join('、') }}</template></small></span>
           </button>
         </li>
       </ul>
-      <button v-if="matches.length > limit" class="kinship-picker__text-button" type="button" @click="showMore">显示更多人物（还有 {{ matches.length - limit }} 位）</button>
-      <button v-if="modelValue" class="kinship-picker__text-button" type="button" @click="choose('')"><IconX :size="16" aria-hidden="true" />清除选择</button>
+      <button v-if="matches.length > limit" class="kinship-picker__text-button" type="button" @click="showMore">{{ t('显示更多人物（还有 {0} 位）', [matches.length - limit]) }}</button>
+      <button v-if="modelValue" class="kinship-picker__text-button" type="button" @click="choose('')"><IconX :size="16" aria-hidden="true" />{{ t('清除选择') }}</button>
     </div>
   </div>
 </template>

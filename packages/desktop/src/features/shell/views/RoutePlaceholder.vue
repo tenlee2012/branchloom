@@ -1,19 +1,18 @@
 <script setup lang="ts">
+import { t } from '../../../shared/i18n'
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 
 const route = useRoute()
-const title = computed(() => String(route.meta.title ?? 'Branchloom'))
-const eyebrow = computed(() => String(route.meta.eyebrow ?? '家族档案'))
+const title = computed(() => t(String(route.meta.title ?? 'Branchloom')))
+const eyebrow = computed(() => t(String(route.meta.eyebrow ?? '家族档案')))
 </script>
 
 <template>
   <section class="route-placeholder" :aria-labelledby="`page-${String(route.name)}`">
     <p class="route-placeholder__eyebrow">{{ eyebrow }}</p>
     <h1 :id="`page-${String(route.name)}`">{{ title }}</h1>
-    <p class="route-placeholder__copy">
-      这一页的核心工作区将在后续功能步骤中展开，应用导航与本地保存已经就绪。
-    </p>
+    <p class="route-placeholder__copy"> {{ t('这一页的核心工作区将在后续功能步骤中展开，应用导航与本地保存已经就绪。') }} </p>
     <div class="route-placeholder__rule" aria-hidden="true">
       <span />
       <i>✦</i>

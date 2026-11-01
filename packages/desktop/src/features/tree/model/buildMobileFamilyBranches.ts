@@ -1,3 +1,4 @@
+import { t } from '../../../shared/i18n'
 import type { BoundedFamilySlice, Person, Relationship } from '../../../shared/domain/types'
 
 export type MobileFamilyBranchKey = 'parents' | 'partners' | 'siblings' | 'children'
@@ -16,18 +17,18 @@ export interface MobileFamilyBranch {
 }
 
 const parentLabels = {
-  biological: '亲生',
-  adoptive: '收养',
-  step: '继亲',
-  guardian: '监护',
+  get biological() { return t('亲生') },
+  get adoptive() { return t('收养') },
+  get step() { return t('继亲') },
+  get guardian() { return t('监护') },
 } as const
 
 const partnerLabels = {
-  engaged: '订婚',
-  married: '婚姻',
-  partner: '伴侣',
-  separated: '分居',
-  divorced: '离异',
+  get engaged() { return t('订婚') },
+  get married() { return t('婚姻') },
+  get partner() { return t('伴侣') },
+  get separated() { return t('分居') },
+  get divorced() { return t('离异') },
 } as const
 
 function uniqueItems(items: MobileFamilyBranchItem[]): MobileFamilyBranchItem[] {
@@ -54,7 +55,7 @@ export function buildMobileFamilyBranches(
       if (person) parents.push({
         person,
         relationship,
-        relationLabel: `${parentLabels[relationship.type]}父母或监护人`,
+        relationLabel: t('{0}父母或监护人', [parentLabels[relationship.type]]),
       })
     }
     if (relationship.category === 'parent' && relationship.fromPersonId === centerPersonId) {
@@ -62,7 +63,7 @@ export function buildMobileFamilyBranches(
       if (person) children.push({
         person,
         relationship,
-        relationLabel: `${parentLabels[relationship.type]}子女或被监护人`,
+        relationLabel: t('{0}子女或被监护人', [parentLabels[relationship.type]]),
       })
     }
     if (relationship.category === 'partner'
@@ -86,33 +87,33 @@ export function buildMobileFamilyBranches(
       || relationship.toPersonId === centerPersonId) return []
     const person = resolvePerson(people, relationship.toPersonId)
     return person
-      ? [{ person, relationship, relationLabel: '共同父母或监护人' }]
+      ? [{ person, relationship, relationLabel: t('共同父母或监护人') }]
       : []
   })
 
   return [
     {
       key: 'parents',
-      label: '父母与监护',
-      hint: '向上一代',
+      label: t('父母与监护'),
+      hint: t('向上一代'),
       items: uniqueItems(parents),
     },
     {
       key: 'partners',
-      label: '伴侣',
-      hint: '共同生活',
+      label: t('伴侣'),
+      hint: t('共同生活'),
       items: uniqueItems(partners),
     },
     {
       key: 'siblings',
-      label: '兄弟姐妹',
-      hint: '同代旁支',
+      label: t('兄弟姐妹'),
+      hint: t('同代旁支'),
       items: uniqueItems(siblings),
     },
     {
       key: 'children',
-      label: '子女与被监护人',
-      hint: '向下一代',
+      label: t('子女与被监护人'),
+      hint: t('向下一代'),
       items: uniqueItems(children),
     },
   ]

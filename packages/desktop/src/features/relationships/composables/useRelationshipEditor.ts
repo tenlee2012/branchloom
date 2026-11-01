@@ -1,3 +1,4 @@
+import { localizeSystemMessage, t } from '../../../shared/i18n'
 import { computed, ref, type Ref } from 'vue'
 import type { Store } from 'pinia'
 import { parseGenealogyDate } from '../../../shared/domain/date'
@@ -20,18 +21,18 @@ interface SessionSaveState extends Store {
 }
 
 export const parentRelationshipOptions: ReadonlyArray<{ value: ParentRelation; label: string }> = [
-  { value: 'biological', label: '亲生' },
-  { value: 'adoptive', label: '收养' },
-  { value: 'step', label: '继亲' },
-  { value: 'guardian', label: '监护' },
+  { value: 'biological', get label() { return t('亲生') } },
+  { value: 'adoptive', get label() { return t('收养') } },
+  { value: 'step', get label() { return t('继亲') } },
+  { value: 'guardian', get label() { return t('监护') } },
 ]
 
 export const partnerRelationshipOptions: ReadonlyArray<{ value: PartnerRelation; label: string }> = [
-  { value: 'engaged', label: '订婚' },
-  { value: 'married', label: '婚姻' },
-  { value: 'partner', label: '事实伴侣' },
-  { value: 'separated', label: '分居' },
-  { value: 'divorced', label: '离异' },
+  { value: 'engaged', get label() { return t('订婚') } },
+  { value: 'married', get label() { return t('婚姻') } },
+  { value: 'partner', get label() { return t('事实伴侣') } },
+  { value: 'separated', get label() { return t('分居') } },
+  { value: 'divorced', get label() { return t('离异') } },
 ]
 
 const parentEndpointLabels: Record<ParentRelation, {
@@ -40,18 +41,18 @@ const parentEndpointLabels: Record<ParentRelation, {
   father?: string
   mother?: string
 }> = {
-  biological: { from: '亲生子女', to: '亲生父母', father: '亲生父亲', mother: '亲生母亲' },
-  adoptive: { from: '养子女', to: '养父母', father: '养父', mother: '养母' },
-  step: { from: '继子女', to: '继父母', father: '继父', mother: '继母' },
-  guardian: { from: '被监护人', to: '监护人' },
+  biological: { get from() { return t('亲生子女') }, get to() { return t('亲生父母') }, get father() { return t('亲生父亲') }, get mother() { return t('亲生母亲') } },
+  adoptive: { get from() { return t('养子女') }, get to() { return t('养父母') }, get father() { return t('养父') }, get mother() { return t('养母') } },
+  step: { get from() { return t('继子女') }, get to() { return t('继父母') }, get father() { return t('继父') }, get mother() { return t('继母') } },
+  guardian: { get from() { return t('被监护人') }, get to() { return t('监护人') } },
 }
 
 const partnerLabels: Record<PartnerRelation, string> = {
-  engaged: '订婚伴侣',
-  married: '配偶',
-  partner: '事实伴侣',
-  separated: '分居伴侣',
-  divorced: '前配偶',
+  get engaged() { return t('订婚伴侣') },
+  get married() { return t('配偶') },
+  get partner() { return t('事实伴侣') },
+  get separated() { return t('分居伴侣') },
+  get divorced() { return t('前配偶') },
 }
 
 export function relationshipDisplayLabel(
@@ -179,7 +180,7 @@ export function useRelationshipEditor(
       relationships.value = loadedRelationships
       places.value = loadedPlaces
     } catch (error) {
-      loadFailure.value = error instanceof Error ? error.message : '人物关系无法读取'
+      loadFailure.value = error instanceof Error ? localizeSystemMessage(error.message) : t('人物关系无法读取')
     } finally {
       loading.value = false
     }
@@ -233,7 +234,7 @@ export function useRelationshipEditor(
       session.saveStatus = 'saved'
       return saved
     } catch (error) {
-      const details = error instanceof Error ? error.message : '本地资料暂时无法写入'
+      const details = error instanceof Error ? localizeSystemMessage(error.message) : t('本地资料暂时无法写入')
       saveFailure.value = details
       session.saveStatus = 'failed'
       session.saveError = details

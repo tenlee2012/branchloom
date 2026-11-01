@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 import type { PrototypeState } from '../domain/types'
 import { isPlaceCoordinates } from '../domain/placeCoordinates'
 
@@ -103,9 +104,9 @@ function structuredDateDisplay(value: UnknownRecord): string {
   const start = isString(value.start) ? value.start : undefined
   const end = isString(value.end) ? value.end : undefined
   const span = start && end && start !== end ? `${start}—${end}` : start ?? end ?? ''
-  if (value.precision === 'about') return span ? `约 ${span}` : ''
-  if (value.precision === 'before') return span ? `${end ?? start} 以前` : ''
-  if (value.precision === 'after') return span ? `${start ?? end} 以后` : ''
+  if (value.precision === 'about') return span ? t('约 {0}', [span]) : ''
+  if (value.precision === 'before') return span ? t('{0} 以前', [end ?? start]) : ''
+  if (value.precision === 'after') return span ? t('{0} 以后', [start ?? end]) : ''
   return span
 }
 
@@ -363,7 +364,7 @@ export function parsePrototypeState(raw: string): PrototypeState {
     const parsed: unknown = JSON.parse(raw)
     normalizeKnownNullableOptionals(parsed)
     if (!isPrototypeState(parsed)) {
-      throw new RepositoryError('corrupt', '本地资料格式不受支持或内容无效')
+      throw new RepositoryError('corrupt', t('本地资料格式不受支持或内容无效'))
     }
     return hydrateGenealogyDateDisplays(parsed) as PrototypeState
   } catch (error) {

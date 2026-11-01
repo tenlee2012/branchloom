@@ -1,3 +1,4 @@
+import { t } from '../../shared/i18n'
 import { reactive } from 'vue'
 import { acceptHMRUpdate, defineStore } from 'pinia'
 import {
@@ -138,7 +139,7 @@ export const useGithubSyncStore = defineStore('github-sync', () => {
       state: current.enabled ? 'waiting' : 'idle',
       message: current.enabled
         ? current.message
-        : '手工同步已处理待办；自动同步仍保持关闭。',
+        : t('手工同步已处理待办；自动同步仍保持关闭。'),
       conflicts: [],
     })
   }
@@ -165,7 +166,7 @@ export const useGithubSyncStore = defineStore('github-sync', () => {
         setStatus(projectId, {
           enabled: false,
           state: 'conflict',
-          message: '自动同步已暂停，请在“协作同步”中解决冲突。',
+          message: t('自动同步已暂停，请在“协作同步”中解决冲突。'),
           conflicts: preview.conflicts,
         })
         return
@@ -186,7 +187,7 @@ export const useGithubSyncStore = defineStore('github-sync', () => {
       } : {
         state: 'success',
         lastSuccessAt: new Date().toISOString(),
-        message: '自动同步完成。',
+        message: t('自动同步完成。'),
         conflicts: [],
       })
     } catch (error) {
@@ -195,7 +196,7 @@ export const useGithubSyncStore = defineStore('github-sync', () => {
         setStatus(projectId, {
           enabled: false,
           state: 'initializationRequired',
-          message: '自动同步已暂停，请先在“协作同步”中选择首次同步版本。',
+          message: t('自动同步已暂停，请先在“协作同步”中选择首次同步版本。'),
           conflicts: [],
         })
         return
@@ -203,7 +204,7 @@ export const useGithubSyncStore = defineStore('github-sync', () => {
       if (isGithubConnectionFailure(error)) markConnectionError(projectId)
       setStatus(projectId, {
         state: 'failed',
-        message: githubError(error, '自动同步失败，将在下个周期重试。'),
+        message: githubError(error, t('自动同步失败，将在下个周期重试。')),
       })
     }
   }
@@ -224,7 +225,7 @@ export const useGithubSyncStore = defineStore('github-sync', () => {
     setStatus(projectId, {
       enabled: true,
       state: 'waiting',
-      message: `已开启每 ${intervalMinutes} 分钟自动同步。`,
+      message: t('已开启每 {0} 分钟自动同步。', [intervalMinutes]),
       conflicts: [],
     })
   }
@@ -236,7 +237,7 @@ export const useGithubSyncStore = defineStore('github-sync', () => {
     setStatus(projectId, {
       enabled: false,
       state: status(projectId).state === 'syncing' ? 'idle' : status(projectId).state,
-      message: '自动同步已关闭。',
+      message: t('自动同步已关闭。'),
     })
   }
 

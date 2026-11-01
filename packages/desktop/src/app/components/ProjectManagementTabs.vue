@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '../../shared/i18n'
 import { computed } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
@@ -7,27 +8,27 @@ const projectId = computed(() => String(route.params.projectId ?? ''))
 
 const destinations = computed(() => [
   {
-    label: '导入与导出',
+    label: t('导入与导出'),
     path: `/project/${projectId.value}/manage/exchange`,
     active: route.path.endsWith('/manage/exchange'),
   },
   {
-    label: '编印族谱',
+    label: t('编印族谱'),
     path: `/project/${projectId.value}/manage/publication`,
     active: route.path.endsWith('/manage/publication'),
   },
   {
-    label: '备份与历史',
+    label: t('备份与历史'),
     path: `/project/${projectId.value}/manage/history`,
     active: route.path.endsWith('/manage/history'),
   },
   {
-    label: '数据检查',
+    label: t('数据检查'),
     path: `/project/${projectId.value}/manage/checks`,
     active: route.path.endsWith('/manage/checks'),
   },
   {
-    label: '项目设置',
+    label: t('项目设置'),
     path: `/project/${projectId.value}/manage/settings`,
     active: route.path.endsWith('/manage/settings'),
   },
@@ -35,8 +36,8 @@ const destinations = computed(() => [
 </script>
 
 <template>
-  <nav class="project-management-tabs" aria-label="项目管理二级导航">
-    <span class="project-management-tabs__label">项目管理工具</span>
+  <nav class="project-management-tabs" :aria-label="t('项目管理二级导航')">
+    <span class="project-management-tabs__label">{{ t('项目管理工具') }}</span>
     <div class="project-management-tabs__links">
       <RouterLink
         v-for="destination in destinations"

@@ -1,3 +1,4 @@
+import { localizeSystemMessage, t } from '../../../shared/i18n'
 import {
   computed,
   inject,
@@ -80,8 +81,8 @@ function parsePage(value: unknown): number {
 }
 
 function errorMessage(error: unknown): string {
-  if (!(error instanceof Error)) return '人物资料暂时无法读取，请重试'
-  return error.message.trim() || '人物资料暂时无法读取，请重试'
+  if (!(error instanceof Error)) return t('人物资料暂时无法读取，请重试')
+  return localizeSystemMessage(error.message).trim() || t('人物资料暂时无法读取，请重试')
 }
 
 export function usePeopleQuery(

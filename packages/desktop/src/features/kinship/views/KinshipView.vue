@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { getLocale, t } from '../../../shared/i18n'
 import { computed, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { IconArrowsExchange, IconRoute, IconUsersGroup } from '@tabler/icons-vue'
@@ -21,8 +22,8 @@ const fromName = computed(() => from.value ? getPrimaryName(from.value) : '')
 const toName = computed(() => to.value ? getPrimaryName(to.value) : '')
 const invalidSelection = computed(() => state.value === 'ready' && ((fromId.value && !from.value) || (toId.value && !to.value)))
 const canDescribe = computed(() => state.value === 'ready' && !incomplete.value && from.value && to.value)
-const forward = computed(() => canDescribe.value ? buildKinshipDescriptions(people.value, relationships.value, fromId.value).get(toId.value) : undefined)
-const reverse = computed(() => canDescribe.value ? buildKinshipDescriptions(people.value, relationships.value, toId.value).get(fromId.value) : undefined)
+const forward = computed(() => canDescribe.value ? buildKinshipDescriptions(people.value, relationships.value, fromId.value, getLocale()).get(toId.value) : undefined)
+const reverse = computed(() => canDescribe.value ? buildKinshipDescriptions(people.value, relationships.value, toId.value, getLocale()).get(fromId.value) : undefined)
 const navigationError = ref('')
 let navigationQueue = Promise.resolve()
 
@@ -38,80 +39,80 @@ function updateSelection(patch: { from?: string; to?: string } | 'swap') {
     }
     navigationError.value = ''
     await router.replace({ name: 'project-kinship', params: { projectId: scope }, query })
-  }).catch(() => { navigationError.value = '选择未能更新，请重试。' })
+  }).catch(() => { navigationError.value = t('选择未能更新，请重试。') })
 }
 </script>
 
 <template>
   <section class="kinship-view" aria-labelledby="kinship-title">
     <header class="kinship-view__heading">
-      <h1 id="kinship-title">查称呼</h1>
-      <p>选两个人，看看彼此怎么称呼。</p>
+      <h1 id="kinship-title">{{ t('查称呼') }}</h1>
+      <p>{{ t('选两个人，看看彼此怎么称呼。') }}</p>
     </header>
 
     <div v-if="state === 'loading'" class="kinship-view__state" role="status" aria-busy="true">
       <IconUsersGroup :size="36" :stroke-width="1.4" aria-hidden="true" />
-      <strong>正在读取人物与家庭关系…</strong>
-      <span v-if="loadedCount">已读取 {{ loadedCount }} 位人物</span>
+      <strong>{{ t('正在读取人物与家庭关系…') }}</strong>
+      <span v-if="loadedCount">{{ t('已读取 {0} 位人物', [loadedCount]) }}</span>
     </div>
     <div v-else-if="state === 'error'" class="kinship-view__state" role="alert">
-      <strong>查询资料未能读取</strong><p>{{ error }}</p>
-      <BaseButton variant="secondary" @click="reload">重新读取</BaseButton>
+      <strong>{{ t('查询资料未能读取') }}</strong><p>{{ error }}</p>
+      <BaseButton variant="secondary" @click="reload">{{ t('重新读取') }}</BaseButton>
     </div>
     <div v-else-if="!people.length" class="kinship-view__state" role="status">
       <IconUsersGroup :size="36" :stroke-width="1.4" aria-hidden="true" />
-      <strong>这个家谱还没有人物</strong><p>先建立人物档案、记录家庭关系，就能在这里查询称呼。</p>
-      <RouterLink :to="{ name: 'project-people', params: { projectId } }">前往人物档案</RouterLink>
+      <strong>{{ t('这个家谱还没有人物') }}</strong><p>{{ t('先建立人物档案、记录家庭关系，就能在这里查询称呼。') }}</p>
+      <RouterLink :to="{ name: 'project-people', params: { projectId } }">{{ t('前往人物档案') }}</RouterLink>
     </div>
     <template v-else>
       <div class="kinship-view__selection">
-        <KinshipPersonPicker label="谁来称呼" :people="people" :model-value="fromId" @update:model-value="updateSelection({ from: $event })" />
-        <BaseButton class="kinship-view__swap" variant="secondary" :disabled="!from || !to" aria-label="交换两个人物" @click="updateSelection('swap')">
-          <IconArrowsExchange :size="22" aria-hidden="true" /><span>交换</span>
+        <KinshipPersonPicker :label="t('谁来称呼')" :people="people" :model-value="fromId" @update:model-value="updateSelection({ from: $event })" />
+        <BaseButton class="kinship-view__swap" variant="secondary" :disabled="!from || !to" :aria-label="t('交换两个人物')" @click="updateSelection('swap')">
+          <IconArrowsExchange :size="22" aria-hidden="true" /><span>{{ t('交换') }}</span>
         </BaseButton>
-        <KinshipPersonPicker label="称呼谁" :people="people" :model-value="toId" @update:model-value="updateSelection({ to: $event })" />
+        <KinshipPersonPicker :label="t('称呼谁')" :people="people" :model-value="toId" @update:model-value="updateSelection({ to: $event })" />
       </div>
       <p v-if="navigationError" class="kinship-view__notice" role="alert">{{ navigationError }}</p>
-      <p v-if="invalidSelection" class="kinship-view__notice" role="alert">所选人物已被移除或不属于当前项目，请重新选择。</p>
+      <p v-if="invalidSelection" class="kinship-view__notice" role="alert">{{ t('所选人物已被移除或不属于当前项目，请重新选择。') }}</p>
       <div v-if="incomplete" class="kinship-view__state" role="alert">
-        <strong>关系资料不完整，暂无法计算称呼</strong>
-        <p>部分关系关联的人物资料缺失，请刷新资料或检查家庭关系后重试。</p>
-        <BaseButton variant="secondary" @click="reload">重新读取</BaseButton>
+        <strong>{{ t('关系资料不完整，暂无法计算称呼') }}</strong>
+        <p>{{ t('部分关系关联的人物资料缺失，请刷新资料或检查家庭关系后重试。') }}</p>
+        <BaseButton variant="secondary" @click="reload">{{ t('重新读取') }}</BaseButton>
       </div>
       <div v-else-if="!from || !to" class="kinship-view__state" role="status">
         <IconUsersGroup :size="36" :stroke-width="1.4" aria-hidden="true" />
-        <strong>{{ from ? `选择另一位人物，看看${fromName}怎么称呼 TA` : '从两个人的名字开始' }}</strong>
-        <p>支持搜索当前家谱中的姓名、字号和别名。</p>
+        <strong>{{ from ? t('选择另一位人物，看看{0}怎么称呼 TA', [fromName]) : t('从两个人的名字开始') }}</strong>
+        <p>{{ t('支持搜索当前家谱中的姓名、字号和别名。') }}</p>
       </div>
       <div v-else-if="!forward || !reverse" class="kinship-view__state" role="status">
         <IconRoute :size="36" :stroke-width="1.4" aria-hidden="true" />
-        <strong>当前资料中未找到关系路径</strong>
-        <p>可能尚未记录连接{{ fromName }}与{{ toName }}的家庭关系。</p>
+        <strong>{{ t('当前资料中未找到关系路径') }}</strong>
+        <p>{{ t('可能尚未记录连接{0}与{1}的家庭关系。', [fromName, toName]) }}</p>
       </div>
       <template v-else>
-        <div class="kinship-view__answers" role="status" aria-label="双向称呼" aria-live="polite" aria-atomic="true">
+        <div class="kinship-view__answers" role="status" :aria-label="t('双向称呼')" aria-live="polite" aria-atomic="true">
           <div class="kinship-view__answer" data-kinship-direction="forward">
-            <p>{{ fromName }}叫{{ toName }}</p>
+            <p>{{ t('{0}叫{1}', [fromName, toName]) }}</p>
             <strong :class="{ 'kinship-view__term--long': forward.label.length > 8 }">{{ forward.label }}</strong>
           </div>
           <div class="kinship-view__answer" data-kinship-direction="reverse">
-            <p>{{ toName }}叫{{ fromName }}</p>
+            <p>{{ t('{0}叫{1}', [toName, fromName]) }}</p>
             <strong :class="{ 'kinship-view__term--long': reverse.label.length > 8 }">{{ reverse.label }}</strong>
           </div>
         </div>
         <section class="kinship-view__paths" aria-labelledby="kinship-path-title">
-          <div class="kinship-view__path-heading"><h2 id="kinship-path-title">关系路径</h2><span>从{{ fromName }}出发</span></div>
-          <p v-if="fromId === toId" class="kinship-view__path">选中的是同一位人物。</p>
+          <div class="kinship-view__path-heading"><h2 id="kinship-path-title">{{ t('关系路径') }}</h2><span>{{ t('从{0}出发', [fromName]) }}</span></div>
+          <p v-if="fromId === toId" class="kinship-view__path">{{ t('选中的是同一位人物。') }}</p>
           <p v-else class="kinship-view__path"><IconRoute :size="22" aria-hidden="true" /><span>{{ forward.paths[0] }}</span></p>
           <details v-if="forward.paths.length > 1">
-            <summary>查看其他 {{ forward.paths.length - 1 }} 条最短关系路径</summary>
+            <summary>{{ t('查看其他 {0} 条最短关系路径', [forward.paths.length - 1]) }}</summary>
             <ul><li v-for="path in forward.paths.slice(1)" :key="path">{{ path }}</li></ul>
           </details>
         </section>
       </template>
       <footer class="kinship-view__footer">
-        <p>根据已记录的最短关系路径推算；资料不全时，可能无法确定唯一称呼。</p>
-        <RouterLink v-if="from" :to="{ name: 'project-tree', params: { projectId }, query: { personId: from.id, previewPersonId: from.id } }">在家谱中查看</RouterLink>
+        <p>{{ t('根据已记录的最短关系路径推算；资料不全时，可能无法确定唯一称呼。') }}</p>
+        <RouterLink v-if="from" :to="{ name: 'project-tree', params: { projectId }, query: { personId: from.id, previewPersonId: from.id } }">{{ t('在家谱中查看') }}</RouterLink>
       </footer>
     </template>
   </section>

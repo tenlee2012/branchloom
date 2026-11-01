@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '../../../shared/i18n'
 import { IconCalendarEvent, IconPencil, IconPlus } from '@tabler/icons-vue'
 import { computed } from 'vue'
 import BaseButton from '../../../design-system/BaseButton.vue'
@@ -39,21 +40,20 @@ function eventMeta(event: FamilyEvent) {
   <section class="person-events-module" data-person-events aria-labelledby="person-events-heading">
     <header class="person-events-module__heading">
       <div>
-        <p class="person-events-module__eyebrow"><IconCalendarEvent :size="16" aria-hidden="true" />人物事件</p>
-        <h2 id="person-events-heading">事件记录</h2>
-        <p>展示这位人物参与的事件，可在此新建或修改。</p>
+        <p class="person-events-module__eyebrow"><IconCalendarEvent :size="16" aria-hidden="true" />{{ t('人物事件') }}</p>
+        <h2 id="person-events-heading">{{ t('事件记录') }}</h2>
+        <p>{{ t('展示这位人物参与的事件，可在此新建或修改。') }}</p>
       </div>
       <div class="person-events-module__actions">
-        <a :href="`/project/${projectId}/timeline`">完整时间线</a>
-        <BaseButton name="新建人物事件" size="sm" variant="secondary" @click="emit('create')">
-          <IconPlus :size="17" aria-hidden="true" />新建事件
-        </BaseButton>
+        <a :href="`/project/${projectId}/timeline`">{{ t('完整时间线') }}</a>
+        <BaseButton :name="t('新建人物事件')" size="sm" variant="secondary" @click="emit('create')">
+          <IconPlus :size="17" aria-hidden="true" />{{ t('新建事件') }} </BaseButton>
       </div>
     </header>
 
     <ol v-if="sortedEvents.length" class="person-events-module__list">
       <li v-for="event in sortedEvents" :key="event.id" :data-event-id="event.id">
-        <time>{{ event.date.display || '时间未详' }}</time>
+        <time>{{ event.date.display || t('时间未详') }}</time>
         <div>
           <a :href="`/project/${projectId}/timeline?eventId=${encodeURIComponent(event.id)}`">
             {{ event.title || eventTypeLabel(event.type) }}
@@ -64,23 +64,20 @@ function eventMeta(event: FamilyEvent) {
         <BaseButton
           variant="ghost"
           size="sm"
-          :aria-label="`编辑事件：${event.title || eventTypeLabel(event.type)}`"
+          :aria-label="t('编辑事件：{0}', [event.title || eventTypeLabel(event.type)])"
           @click="emit('edit', event)"
         >
-          <IconPencil :size="16" aria-hidden="true" />编辑
-        </BaseButton>
+          <IconPencil :size="16" aria-hidden="true" />{{ t('编辑') }} </BaseButton>
       </li>
     </ol>
 
     <div v-else class="person-events-module__empty">
       <IconCalendarEvent :size="28" aria-hidden="true" />
       <div>
-        <strong>还没有人物事件</strong>
-        <span>可以记录出生、迁居、婚姻、任职等经历。</span>
+        <strong>{{ t('还没有人物事件') }}</strong>
+        <span>{{ t('可以记录出生、迁居、婚姻、任职等经历。') }}</span>
       </div>
-      <BaseButton name="记录第一件人物事件" size="sm" variant="secondary" @click="emit('create')">
-        记录事件
-      </BaseButton>
+      <BaseButton :name="t('记录第一件人物事件')" size="sm" variant="secondary" @click="emit('create')"> {{ t('记录事件') }} </BaseButton>
     </div>
   </section>
 </template>

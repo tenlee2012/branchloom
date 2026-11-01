@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import LanguageSelect from './LanguageSelect.vue'
+import { getLocale, localizeSystemMessage, t } from '../../shared/i18n'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { RouterLink, useRoute } from 'vue-router'
@@ -54,9 +56,9 @@ async function loadProjects() {
   try {
     projects.value = await repository.listProjects()
   } catch (error) {
-    projectListError.value = error instanceof Error && error.message.trim()
-      ? error.message
-      : '项目列表暂时无法读取'
+    projectListError.value = error instanceof Error && localizeSystemMessage(error.message).trim()
+      ? localizeSystemMessage(error.message)
+      : t('项目列表暂时无法读取')
   }
 }
 
@@ -111,11 +113,11 @@ const navigation = computed(() => {
   if (!props.projectId) return []
   const base = `/project/${props.projectId}`
   return [
-    { label: '家谱树', icon: IconNetwork, to: `${base}/tree`, segment: '/tree' },
-    { label: '人物', icon: IconUser, to: `${base}/people`, segment: '/people' },
-    { label: '查称呼', icon: IconUsersGroup, to: `${base}/kinship`, segment: '/kinship' },
-    { label: '时间线', icon: IconClock, to: `${base}/timeline`, segment: '/timeline' },
-    { label: '资料来源', icon: IconFileDescription, to: `${base}/sources`, segment: '/sources' },
+    { label: t('家谱树'), icon: IconNetwork, to: `${base}/tree`, segment: '/tree' },
+    { label: t('人物'), icon: IconUser, to: `${base}/people`, segment: '/people' },
+    { label: t('查称呼'), icon: IconUsersGroup, to: `${base}/kinship`, segment: '/kinship' },
+    { label: t('时间线'), icon: IconClock, to: `${base}/timeline`, segment: '/timeline' },
+    { label: t('资料来源'), icon: IconFileDescription, to: `${base}/sources`, segment: '/sources' },
   ]
 })
 
@@ -124,21 +126,21 @@ const projectNavigation = computed(() => {
   const base = `/project/${props.projectId}`
   return [
     {
-      label: '项目管理',
+      label: t('项目管理'),
       icon: IconFolder,
       to: `${base}/manage/overview`,
       segment: '/manage/',
       badge: undefined,
     },
     {
-      label: '协作同步',
+      label: t('协作同步'),
       icon: IconRefresh,
       to: `${base}/collaboration-sync`,
       segment: '/collaboration-sync',
       badge: undefined,
     },
     {
-      label: '数据检查',
+      label: t('数据检查'),
       icon: IconShieldCheck,
       to: `${base}/manage/checks`,
       segment: '/manage/checks',
@@ -161,25 +163,25 @@ function isExact(to: string) {
     <RouterLink
       class="app-sidebar__brand"
       :to="projectTreePath"
-      :aria-label="projectId ? '返回当前项目家谱树' : '返回 Branchloom 首页'"
-      :title="projectId ? '返回当前项目家谱树' : '返回 Branchloom 首页'"
+      :aria-label="projectId ? t('返回当前项目家谱树') : t('返回 Branchloom 首页')"
+      :title="projectId ? t('返回当前项目家谱树') : t('返回 Branchloom 首页')"
     >
       <img class="app-sidebar__seal" :src="appIcon" alt="" aria-hidden="true" />
       <span>
-        <strong>有谱</strong>
-        <small>BRANCHLOOM</small>
+        <strong>{{ t('有谱') }}</strong>
+        <small>{{ getLocale() === 'en' ? 'FAMILY ARCHIVE' : 'BRANCHLOOM' }}</small>
       </span>
     </RouterLink>
 
     <div v-if="projectId" class="app-sidebar__project">
-      <span>当前项目</span>
+      <span>{{ t('当前项目') }}</span>
       <details ref="projectSwitcher" class="app-sidebar__project-switcher">
-        <summary aria-label="切换项目" tabindex="0">
+        <summary :aria-label="t('切换项目')" tabindex="0">
           <strong :title="projectName">{{ projectName }}</strong>
           <IconChevronDown :size="16" aria-hidden="true" />
         </summary>
         <div class="app-sidebar__project-panel">
-          <nav aria-label="项目列表">
+          <nav :aria-label="t('项目列表')">
             <RouterLink
               v-for="project in projects"
               :key="project.id"
@@ -188,7 +190,7 @@ function isExact(to: string) {
               @click="closeProjectSwitcher"
             >
               <span>{{ project.name }}</span>
-              <small v-if="project.id === projectId">当前</small>
+              <small v-if="project.id === projectId">{{ t('当前') }}</small>
             </RouterLink>
             <small v-if="projectListError" class="app-sidebar__project-error" role="alert">
               {{ projectListError }}
@@ -197,48 +199,44 @@ function isExact(to: string) {
           <RouterLink
             class="app-sidebar__new-project"
             :to="{ name: 'project-new', params: { projectId } }"
-            aria-label="新建项目"
+            :aria-label="t('新建项目')"
             @click="closeProjectSwitcher"
           >
-            <IconPlus :size="17" aria-hidden="true" />新建项目
-          </RouterLink>
+            <IconPlus :size="17" aria-hidden="true" />{{ t('新建项目') }} </RouterLink>
           <RouterLink
             class="app-sidebar__new-project app-sidebar__github-import"
             :to="{ name: 'github-import' }"
-            aria-label="从 GitHub 导入项目"
+            :aria-label="t('从 GitHub 导入项目')"
             @click="closeProjectSwitcher"
           >
-            <IconBrandGithub :size="17" aria-hidden="true" />从 GitHub 导入
-          </RouterLink>
-          <div class="app-sidebar__history" aria-label="编辑历史">
+            <IconBrandGithub :size="17" aria-hidden="true" />{{ t('从 GitHub 导入') }} </RouterLink>
+          <div class="app-sidebar__history" :aria-label="t('编辑历史')">
             <BaseButton
               variant="ghost"
               size="sm"
               :disabled="!canUndo || saveStatus === 'saving'"
-              aria-label="撤销最近修改"
+              :aria-label="t('撤销最近修改')"
               @click="session.undo(repository)"
             >
-              <IconHistory :size="16" aria-hidden="true" />撤销
-            </BaseButton>
+              <IconHistory :size="16" aria-hidden="true" />{{ t('撤销') }} </BaseButton>
             <BaseButton
               variant="ghost"
               size="sm"
               :disabled="!canRedo || saveStatus === 'saving'"
-              aria-label="重做最近修改"
+              :aria-label="t('重做最近修改')"
               @click="session.redo(repository)"
             >
-              <IconRotateClockwise :size="16" aria-hidden="true" />重做
-            </BaseButton>
+              <IconRotateClockwise :size="16" aria-hidden="true" />{{ t('重做') }} </BaseButton>
           </div>
         </div>
       </details>
     </div>
     <div v-else class="app-sidebar__project app-sidebar__project--empty">
-      <span>当前项目</span>
-      <RouterLink to="/">尚未打开项目</RouterLink>
+      <span>{{ t('当前项目') }}</span>
+      <RouterLink to="/">{{ t('尚未打开项目') }}</RouterLink>
     </div>
 
-    <nav class="app-sidebar__navigation" aria-label="项目导航">
+    <nav class="app-sidebar__navigation" :aria-label="t('项目导航')">
       <RouterLink
         v-for="item in navigation"
         :key="item.label"
@@ -255,7 +253,7 @@ function isExact(to: string) {
       </RouterLink>
     </nav>
 
-    <nav class="app-sidebar__navigation app-sidebar__navigation--project" aria-label="项目管理导航">
+    <nav class="app-sidebar__navigation app-sidebar__navigation--project" :aria-label="t('项目管理导航')">
       <RouterLink
         v-for="item in projectNavigation"
         :key="item.label"
@@ -271,18 +269,22 @@ function isExact(to: string) {
         <span
           v-if="item.badge"
           class="app-sidebar__badge"
-          :aria-label="`${item.badge} 个问题`"
+          :aria-label="t('{0} 个问题', [item.badge])"
         >{{ item.badge }}</span>
       </RouterLink>
     </nav>
 
     <div class="app-sidebar__footer">
+      <div v-if="mobile" class="app-sidebar__language">
+        <span>{{ t('界面语言') }}</span>
+        <LanguageSelect />
+      </div>
       <RouterLink
         v-if="aiToolsAvailable"
         :to="aiToolsTarget"
         :aria-current="isAiToolsCurrent ? 'page' : undefined"
-      ><IconRobot :size="22" aria-hidden="true" />AI 工具</RouterLink>
-      <RouterLink v-if="projectId" :to="`/project/${projectId}/manage/settings`"><IconSettings :size="22" aria-hidden="true" />设置</RouterLink>
+      ><IconRobot :size="22" aria-hidden="true" />{{ t('AI 工具') }}</RouterLink>
+      <RouterLink v-if="projectId" :to="`/project/${projectId}/manage/settings`"><IconSettings :size="22" aria-hidden="true" />{{ t('设置') }}</RouterLink>
     </div>
   </aside>
 </template>
@@ -326,6 +328,12 @@ function isExact(to: string) {
   font-size: 1.75rem;
   font-weight: 520;
   letter-spacing: .18em;
+}
+
+.app-sidebar__brand strong:lang(en) {
+  font-size: 1.45rem;
+  letter-spacing: 0;
+  white-space: nowrap;
 }
 
 .app-sidebar__brand small {
@@ -542,6 +550,9 @@ function isExact(to: string) {
   color: inherit;
   text-decoration: none;
 }
+
+.app-sidebar__language { display: grid; gap: .35rem; }
+.app-sidebar__language :deep(.language-select) { color: inherit; }
 
 .app-sidebar__footer a[aria-current='page'] {
   color: #fff;

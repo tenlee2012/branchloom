@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localizeSystemMessage, t } from '../../../shared/i18n'
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import ProjectManagementTabs from '../../../app/components/ProjectManagementTabs.vue'
@@ -84,9 +85,9 @@ async function loadDuplicateData(scopedProjectId = projectId.value) {
     duplicateState.value = 'ready'
   } catch (error) {
     if (request !== duplicateRequestId || scopedProjectId !== projectId.value) return
-    duplicateError.value = error instanceof Error && error.message.trim()
-      ? error.message
-      : '重复人物候选暂时无法读取'
+    duplicateError.value = error instanceof Error && localizeSystemMessage(error.message).trim()
+      ? localizeSystemMessage(error.message)
+      : t('重复人物候选暂时无法读取')
     duplicateState.value = 'failed'
   }
 }
@@ -121,10 +122,10 @@ async function continueInspection() {
     const next = await repository.inspectProject(projectId.value)
     if (request !== requestId) return
     issues.value = next
-    task.value = completeLongTask(task.value, [`检查完成，共 ${next.length} 个检查项`])
+    task.value = completeLongTask(task.value, [t('检查完成，共 {0} 个检查项', [next.length])])
   } catch (error) {
     if (request !== requestId) return
-    errorMessage.value = error instanceof Error && error.message ? error.message : '项目检查失败'
+    errorMessage.value = error instanceof Error && localizeSystemMessage(error.message) ? localizeSystemMessage(error.message) : t('项目检查失败')
     task.value = failLongTask(task.value, errorMessage.value)
   }
 }
@@ -134,7 +135,7 @@ function retryInspection() { startInspection() }
 function cleanupCompleted(result: CleanupResult) {
   lastCleanup.value = result
   issues.value = result.issues
-  task.value = completeLongTask(task.value, [`清理后重新检查，共 ${result.issues.length} 个检查项`])
+  task.value = completeLongTask(task.value, [t('清理后重新检查，共 {0} 个检查项', [result.issues.length])])
   cleanupOpen.value = false
 }
 
@@ -150,30 +151,30 @@ watch(projectId, () => {
 </script>
 
 <template>
-  <section class="checks-view" aria-label="数据检查与维护">
+  <section class="checks-view" :aria-label="t('数据检查与维护')">
     <ProjectManagementTabs />
-    <section class="checks-view__actions" aria-label="检查操作">
-      <div><strong>完整性检查</strong><span>结构错误会阻止写入；日期、历史和附件疑点作为可跳转警告保留。</span></div>
+    <section class="checks-view__actions" :aria-label="t('检查操作')">
+      <div><strong>{{ t('完整性检查') }}</strong><span>{{ t('结构错误会阻止写入；日期、历史和附件疑点作为可跳转警告保留。') }}</span></div>
       <div>
-        <BaseButton v-if="task.stage === 'idle' || task.stage === 'cancelled'" name="开始项目检查" variant="secondary" @click="startInspection">开始检查</BaseButton>
-        <BaseButton v-if="task.stage === 'processing'" name="继续项目检查" variant="secondary" @click="continueInspection">继续检查</BaseButton>
-        <BaseButton v-if="task.stage === 'processing'" name="取消项目检查" variant="ghost" @click="cancelInspection">安全取消</BaseButton>
-        <BaseButton v-if="task.stage === 'committing'" name="取消项目检查" variant="ghost" disabled>不可取消</BaseButton>
-        <BaseButton v-if="task.stage === 'complete'" variant="secondary" @click="startInspection">重新检查</BaseButton>
-        <BaseButton name="打开清理项目对话框" variant="danger" :disabled="task.stage === 'committing'" @click="cleanupOpen = true">清理项目</BaseButton>
+        <BaseButton v-if="task.stage === 'idle' || task.stage === 'cancelled'" :name="t('开始项目检查')" variant="secondary" @click="startInspection">{{ t('开始检查') }}</BaseButton>
+        <BaseButton v-if="task.stage === 'processing'" :name="t('继续项目检查')" variant="secondary" @click="continueInspection">{{ t('继续检查') }}</BaseButton>
+        <BaseButton v-if="task.stage === 'processing'" :name="t('取消项目检查')" variant="ghost" @click="cancelInspection">{{ t('安全取消') }}</BaseButton>
+        <BaseButton v-if="task.stage === 'committing'" :name="t('取消项目检查')" variant="ghost" disabled>{{ t('不可取消') }}</BaseButton>
+        <BaseButton v-if="task.stage === 'complete'" variant="secondary" @click="startInspection">{{ t('重新检查') }}</BaseButton>
+        <BaseButton :name="t('打开清理项目对话框')" variant="danger" :disabled="task.stage === 'committing'" @click="cleanupOpen = true">{{ t('清理项目') }}</BaseButton>
       </div>
     </section>
-    <p v-if="lastCleanup" class="checks-view__result" role="status">清理完成：移除附件 {{ lastCleanup.removedAttachments }} 个、来源 {{ lastCleanup.removedSources }} 个，并重新执行检查。</p>
-    <div v-if="task.stage === 'idle'" class="checks-view__state" role="status">检查尚未开始。点击“开始检查”后可在安全阶段取消。</div>
-    <div v-else-if="task.stage === 'processing' || task.stage === 'committing'" class="checks-view__state" role="status"><progress :value="task.progress" max="100" role="progressbar" :aria-valuenow="task.progress">{{ task.progress }}%</progress><strong>{{ task.phase }}</strong><span>{{ task.stage === 'committing' ? '正在汇总检查结果，当前阶段不可安全取消。' : '正在分析人物结构、日期、来源和附件；当前可安全取消。' }}</span></div>
-    <div v-else-if="task.stage === 'cancelled'" class="checks-view__state" role="status">检查已安全取消，没有修改项目资料。</div>
-    <div v-else-if="task.stage === 'failed'" class="checks-view__state checks-view__state--error" role="alert"><strong>检查未完成</strong><span>{{ errorMessage }}</span><BaseButton name="重试项目检查" size="sm" variant="secondary" @click="retryInspection">重试检查</BaseButton></div>
+    <p v-if="lastCleanup" class="checks-view__result" role="status">{{ t('清理完成：移除附件 {0} 个、来源 {1} 个，并重新执行检查。', [lastCleanup.removedAttachments, lastCleanup.removedSources]) }}</p>
+    <div v-if="task.stage === 'idle'" class="checks-view__state" role="status">{{ t('检查尚未开始。点击“开始检查”后可在安全阶段取消。') }}</div>
+    <div v-else-if="task.stage === 'processing' || task.stage === 'committing'" class="checks-view__state" role="status"><progress :value="task.progress" max="100" role="progressbar" :aria-valuenow="task.progress">{{ task.progress }}%</progress><strong>{{ task.phase }}</strong><span>{{ task.stage === 'committing' ? t('正在汇总检查结果，当前阶段不可安全取消。') : t('正在分析人物结构、日期、来源和附件；当前可安全取消。') }}</span></div>
+    <div v-else-if="task.stage === 'cancelled'" class="checks-view__state" role="status">{{ t('检查已安全取消，没有修改项目资料。') }}</div>
+    <div v-else-if="task.stage === 'failed'" class="checks-view__state checks-view__state--error" role="alert"><strong>{{ t('检查未完成') }}</strong><span>{{ errorMessage }}</span><BaseButton :name="t('重试项目检查')" size="sm" variant="secondary" @click="retryInspection">{{ t('重试检查') }}</BaseButton></div>
     <IssueList v-else-if="task.stage === 'complete'" :project-id="projectId" :issues="issues" />
-    <section class="checks-view__duplicates" aria-label="重复人物维护">
-      <p v-if="duplicateState === 'loading'" role="status">正在分析重复人物候选…</p>
+    <section class="checks-view__duplicates" :aria-label="t('重复人物维护')">
+      <p v-if="duplicateState === 'loading'" role="status">{{ t('正在分析重复人物候选…') }}</p>
       <div v-else-if="duplicateState === 'failed'" class="checks-view__state checks-view__state--error" role="alert">
-        <strong>重复人物候选无法读取</strong><span>{{ duplicateError }}</span>
-        <BaseButton size="sm" variant="secondary" @click="loadDuplicateData()">重试</BaseButton>
+        <strong>{{ t('重复人物候选无法读取') }}</strong><span>{{ duplicateError }}</span>
+        <BaseButton size="sm" variant="secondary" @click="loadDuplicateData()">{{ t('重试') }}</BaseButton>
       </div>
       <DuplicateCandidates
         v-else

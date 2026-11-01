@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localizeSystemMessage, t } from '../../../shared/i18n'
 import { onBeforeUnmount, ref, watch } from 'vue'
 import type { PDFDocumentProxy, PDFPageProxy, RenderTask } from 'pdfjs-dist'
 const props = withDefaults(defineProps<{ document: PDFDocumentProxy; page: number; scale?: number; thumbnail?: boolean }>(), { scale: 1, thumbnail: false })
@@ -29,7 +30,7 @@ watch(() => [props.document, props.page, props.scale, canvas.value], async () =>
     target.width = Math.ceil(viewport.width * ratio)
     target.height = Math.ceil(viewport.height * ratio)
     const context = target.getContext('2d')
-    if (!context) throw new Error('当前设备无法显示 PDF 预览')
+    if (!context) throw new Error(t('当前设备无法显示 PDF 预览'))
     task = pdfPage.render({ canvas: target, canvasContext: context, viewport, transform: ratio === 1 ? undefined : [ratio, 0, 0, ratio, 0, 0] })
     await task.promise
     if (!props.thumbnail) {
@@ -44,15 +45,15 @@ watch(() => [props.document, props.page, props.scale, canvas.value], async () =>
       }
     }
   } catch (error) {
-    if (current === request && !(error instanceof Error && error.name === 'RenderingCancelledException')) emit('error', error instanceof Error ? error.message : 'PDF 页面无法显示')
+    if (current === request && !(error instanceof Error && error.name === 'RenderingCancelledException')) emit('error', error instanceof Error ? localizeSystemMessage(error.message) : t('PDF 页面无法显示'))
   } finally { loadedPage?.cleanup(); if (current === request) busy.value = false }
 }, { immediate: true, flush: 'post' })
 onBeforeUnmount(() => { request++; task?.cancel() })
 </script>
 <template>
   <div class="pdf-page" :aria-busy="busy" :style="{ width: `${dimensions.width}px`, height: `${dimensions.height}px` }">
-    <canvas ref="canvas" :style="{ width: `${dimensions.width}px`, height: `${dimensions.height}px` }" role="img" :aria-label="`PDF 第 ${page} 页`" />
-    <button v-for="(link, index) in links" :key="index" class="pdf-page__link" type="button" :aria-label="`跳转到第 ${link.page} 页`"
+    <canvas ref="canvas" :style="{ width: `${dimensions.width}px`, height: `${dimensions.height}px` }" role="img" :aria-label="t('PDF 第 {0} 页', [page])" />
+    <button v-for="(link, index) in links" :key="index" class="pdf-page__link" type="button" :aria-label="t('跳转到第 {0} 页', [link.page])"
       :style="{ left: `${link.left}px`, top: `${link.top}px`, width: `${link.width}px`, height: `${link.height}px` }" @click="emit('navigate', link.page)" />
   </div>
 </template>

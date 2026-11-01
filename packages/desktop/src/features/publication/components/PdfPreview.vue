@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '../../../shared/i18n'
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import type { PDFDocumentProxy, PDFDocumentLoadingTask } from 'pdfjs-dist'
 import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url'
@@ -53,23 +54,23 @@ watch(() => [props.projectId, props.jobId], async () => {
 onBeforeUnmount(() => { request++; void task?.destroy() })
 </script>
 <template>
-  <section class="pdf-preview" aria-label="成品 PDF 预览">
+  <section class="pdf-preview" :aria-label="t('成品 PDF 预览')">
     <p v-if="error" role="alert">{{ error }}</p>
-    <p v-else-if="!document" role="status">正在读取成品 PDF…</p>
+    <p v-else-if="!document" role="status">{{ t('正在读取成品 PDF…') }}</p>
     <template v-else>
       <div class="pdf-preview__toolbar">
-        <BaseButton variant="ghost" size="sm" :disabled="page <= 1" @click="go(page - 1)">上一页</BaseButton>
-        <label>页码 <input :value="page" type="number" :min="1" :max="document.numPages" @change="go(Number(($event.target as HTMLInputElement).value))" /> / {{ document.numPages }}</label>
-        <BaseButton variant="ghost" size="sm" :disabled="page >= document.numPages" @click="go(page + 1)">下一页</BaseButton>
-        <label>缩放 <BaseSelectControl><select v-model.number="scale"><option :value="0.5">50%</option><option :value="0.75">75%</option><option :value="1">100%</option><option :value="1.5">150%</option><option :value="2">200%</option></select></BaseSelectControl></label>
-        <BaseButton variant="ghost" size="sm" :aria-pressed="thumbs" @click="thumbs = !thumbs">缩略图</BaseButton>
+        <BaseButton variant="ghost" size="sm" :disabled="page <= 1" @click="go(page - 1)">{{ t('上一页') }}</BaseButton>
+        <label>{{ t('页码') }} <input :value="page" type="number" :min="1" :max="document.numPages" @change="go(Number(($event.target as HTMLInputElement).value))" /> / {{ document.numPages }}</label>
+        <BaseButton variant="ghost" size="sm" :disabled="page >= document.numPages" @click="go(page + 1)">{{ t('下一页') }}</BaseButton>
+        <label>{{ t('缩放') }} <BaseSelectControl><select v-model.number="scale"><option :value="0.5">50%</option><option :value="0.75">75%</option><option :value="1">100%</option><option :value="1.5">150%</option><option :value="2">200%</option></select></BaseSelectControl></label>
+        <BaseButton variant="ghost" size="sm" :aria-pressed="thumbs" @click="thumbs = !thumbs">{{ t('缩略图') }}</BaseButton>
       </div>
-      <div v-if="thumbs" class="pdf-preview__thumbnails" aria-label="附近页面">
-        <button v-for="index in nearby" :key="index" type="button" :aria-label="`查看第 ${index} 页`" :aria-current="index === page ? 'page' : undefined" @click="go(index)">
+      <div v-if="thumbs" class="pdf-preview__thumbnails" :aria-label="t('附近页面')">
+        <button v-for="index in nearby" :key="index" type="button" :aria-label="t('查看第 {0} 页', [index])" :aria-current="index === page ? 'page' : undefined" @click="go(index)">
           <PdfPage :document="document" :page="index" thumbnail @error="error = $event" /><span>{{ index }}</span>
         </button>
       </div>
-      <div class="pdf-preview__paper" tabindex="0" aria-label="PDF 纸面，可横向滚动" @keydown.left.prevent="go(page - 1)" @keydown.right.prevent="go(page + 1)">
+      <div class="pdf-preview__paper" tabindex="0" :aria-label="t('PDF 纸面，可横向滚动')" @keydown.left.prevent="go(page - 1)" @keydown.right.prevent="go(page + 1)">
         <PdfPage :key="page" :document="document" :page="page" :scale="scale" @navigate="go" @error="error = $event" />
       </div>
     </template>

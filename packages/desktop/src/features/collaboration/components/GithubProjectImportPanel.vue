@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localizeSystemMessage, t } from '../../../shared/i18n'
 import {
   IconAlertTriangle,
   IconBrandGithub,
@@ -95,16 +96,16 @@ const progressPercent = computed(() => {
   return phaseProgress[current?.phase ?? 'starting'] ?? 8
 })
 const progressStage = computed(() => progress.value?.operation === 'applyImport'
-  ? '正在导入项目'
-  : '正在整理仓库资料')
+  ? t('正在导入项目')
+  : t('正在整理仓库资料'))
 const progressCount = computed(() => {
   const current = progress.value
   if (!current?.total || current.completed === undefined) return ''
   return `${current.completed} / ${current.total}`
 })
 const progressHint = computed(() => props.mobileRuntime
-  ? '首次读取会受仓库大小和网络影响；读取期间请保持网络连接。'
-  : '首次读取会受仓库大小和网络影响；确认导入时会复用这次预览。')
+  ? t('首次读取会受仓库大小和网络影响；读取期间请保持网络连接。')
+  : t('首次读取会受仓库大小和网络影响；确认导入时会复用这次预览。'))
 const requestInput = computed(() => ({
   ...(props.placeholderProjectId ? { placeholderProjectId: props.placeholderProjectId } : {}),
   owner: draft.owner.trim(),
@@ -114,9 +115,9 @@ const requestInput = computed(() => ({
 }))
 
 function validateDraft(): string {
-  if (!requestInput.value.owner) return '请输入 GitHub 仓库所有者。'
-  if (!requestInput.value.repository) return '请输入 GitHub 仓库名称。'
-  if (tokenRequired.value && !requestInput.value.token) return '请输入可访问该仓库的 GitHub Token。'
+  if (!requestInput.value.owner) return t('请输入 GitHub 仓库所有者。')
+  if (!requestInput.value.repository) return t('请输入 GitHub 仓库名称。')
+  if (tokenRequired.value && !requestInput.value.token) return t('请输入可访问该仓库的 GitHub Token。')
   return ''
 }
 
@@ -124,7 +125,7 @@ function requiresCredentialInput(error: unknown): boolean {
   const message = typeof error === 'string'
     ? error
     : error instanceof Error
-      ? error.message
+      ? localizeSystemMessage(error.message)
       : ''
   const normalized = message.toLowerCase()
   return normalized.includes('没有找到已保存的 github token')
@@ -159,13 +160,13 @@ async function createPreview() {
   loading.value = true
   preview.value = undefined
   result.value = undefined
-  const operationId = beginProgress('previewImport', '正在启动仓库检查…')
+  const operationId = beginProgress('previewImport', t('正在启动仓库检查…'))
   try {
     preview.value = await props.gateway.previewImport({ ...requestInput.value, operationId })
     credentialRecovery.value = false
   } catch (error) {
     credentialRecovery.value = props.autoPreview && requiresCredentialInput(error)
-    failure.value = githubError(error, '无法读取 GitHub 项目。')
+    failure.value = githubError(error, t('无法读取 GitHub 项目。'))
   } finally {
     loading.value = false
   }
@@ -199,7 +200,7 @@ async function applyImport() {
   if (!preview.value || loading.value) return
   failure.value = ''
   loading.value = true
-  const operationId = beginProgress('applyImport', '正在确认预览仍然有效…')
+  const operationId = beginProgress('applyImport', t('正在确认预览仍然有效…'))
   try {
     const outcome = await props.gateway.applyImport({
       ...requestInput.value,
@@ -209,7 +210,7 @@ async function applyImport() {
     result.value = outcome
     if (outcome.warnings.length === 0) emit('imported', outcome)
   } catch (error) {
-    failure.value = githubError(error, 'GitHub 项目导入失败，请重新预览。')
+    failure.value = githubError(error, t('GitHub 项目导入失败，请重新预览。'))
     preview.value = undefined
   } finally {
     loading.value = false
@@ -222,8 +223,8 @@ async function applyImport() {
     <div v-if="!desktopRuntime" class="github-import__notice" role="status">
       <IconBrandGithub :size="24" aria-hidden="true" />
       <div>
-        <strong>GitHub 项目导入仅在桌面端可用</strong>
-        <p>请在有谱 App 中打开此页面并连接私有仓库。</p>
+        <strong>{{ t('GitHub 项目导入仅在桌面端可用') }}</strong>
+        <p>{{ t('请在有谱 App 中打开此页面并连接私有仓库。') }}</p>
       </div>
     </div>
 
@@ -231,13 +232,11 @@ async function applyImport() {
       <div class="github-import__result">
         <IconAlertTriangle :size="28" aria-hidden="true" />
         <div>
-          <h3>项目已经导入，连接设置需要检查</h3>
-          <p v-for="warning in result.warnings" :key="warning">{{ warning }}</p>
+          <h3>{{ t('项目已经导入，连接设置需要检查') }}</h3>
+          <p v-for="warning in result.warnings" :key="warning">{{ localizeSystemMessage(warning) }}</p>
         </div>
       </div>
-      <BaseButton name="打开已导入的 GitHub 项目" @click="emit('imported', result)">
-        打开已导入项目
-      </BaseButton>
+      <BaseButton :name="t('打开已导入的 GitHub 项目')" @click="emit('imported', result)"> {{ t('打开已导入项目') }} </BaseButton>
     </template>
 
     <template v-else-if="preview">
@@ -245,37 +244,37 @@ async function applyImport() {
         <div class="github-import__preview-heading">
           <span aria-hidden="true"><IconBrandGithub :size="24" /></span>
           <div>
-            <p>GitHub 项目</p>
+            <p>{{ t('GitHub 项目') }}</p>
             <h3 id="github-import-preview-title">{{ preview.projectName }}</h3>
           </div>
           <StatusBadge :tone="preview.alreadyExists ? 'info' : 'success'">
-            {{ preview.alreadyExists ? '本机已存在' : '可以导入' }}
+            {{ preview.alreadyExists ? t('本机已存在') : t('可以导入') }}
           </StatusBadge>
         </div>
         <p v-if="preview.projectDescription" class="github-import__description">
           {{ preview.projectDescription }}
         </p>
         <dl>
-          <div><dt>稳定项目 ID</dt><dd><code>{{ preview.projectId }}</code></dd></div>
-          <div><dt>远端提交</dt><dd><code>{{ preview.commit || '未知' }}</code></dd></div>
-          <div><dt>资料记录</dt><dd>{{ totalRecords }} 条</dd></div>
-          <div><dt>人物 / 关系 / 附件</dt><dd>{{ preview.recordCounts.people || 0 }} / {{ preview.recordCounts.relationships || 0 }} / {{ preview.recordCounts.attachments || 0 }}</dd></div>
+          <div><dt>{{ t('稳定项目 ID') }}</dt><dd><code>{{ preview.projectId }}</code></dd></div>
+          <div><dt>{{ t('远端提交') }}</dt><dd><code>{{ preview.commit || t('未知') }}</code></dd></div>
+          <div><dt>{{ t('资料记录') }}</dt><dd>{{ t('{0} 条', [totalRecords]) }}</dd></div>
+          <div><dt>{{ t('人物 / 关系 / 附件') }}</dt><dd>{{ preview.recordCounts.people || 0 }} / {{ preview.recordCounts.relationships || 0 }} / {{ preview.recordCounts.attachments || 0 }}</dd></div>
         </dl>
       </article>
 
       <div v-if="preview.alreadyExists" class="github-import__notice github-import__notice--success">
         <IconCircleCheck :size="24" aria-hidden="true" />
         <div>
-          <strong>本机已经有这个稳定项目</strong>
-          <p>不会重复导入或覆盖本地资料，可以直接打开现有项目。</p>
+          <strong>{{ t('本机已经有这个稳定项目') }}</strong>
+          <p>{{ t('不会重复导入或覆盖本地资料，可以直接打开现有项目。') }}</p>
         </div>
       </div>
 
       <div v-else-if="importingAsReplacement" class="github-import__notice github-import__notice--replacement">
         <IconCircleCheck :size="24" aria-hidden="true" />
         <div>
-          <strong>将直接覆盖当前空白项目</strong>
-          <p>确认后会采用 GitHub 项目的内容与稳定身份；GitHub 仓库不会被修改。</p>
+          <strong>{{ t('将直接覆盖当前空白项目') }}</strong>
+          <p>{{ t('确认后会采用 GitHub 项目的内容与稳定身份；GitHub 仓库不会被修改。') }}</p>
         </div>
       </div>
 
@@ -285,23 +284,21 @@ async function applyImport() {
           :disabled="loading"
           @click="props.autoPreview ? createPreview() : editConnection()"
         >
-          {{ props.autoPreview ? '重新检查' : '修改仓库' }}
+          {{ props.autoPreview ? t('重新检查') : t('修改仓库') }}
         </BaseButton>
         <BaseButton
           v-if="preview.alreadyExists"
-          name="打开本机已有的 GitHub 项目"
+          :name="t('打开本机已有的 GitHub 项目')"
           @click="emit('existing', preview.projectId)"
-        >
-          打开已有项目
-        </BaseButton>
+        > {{ t('打开已有项目') }} </BaseButton>
         <BaseButton
           v-else
-          name="确认导入 GitHub 项目"
+          :name="t('确认导入 GitHub 项目')"
           :loading="loading"
           @click="applyImport"
         >
           <IconDownload :size="18" aria-hidden="true" />
-          {{ importingAsReplacement ? '覆盖当前空白项目' : '导入并建立同步' }}
+          {{ importingAsReplacement ? t('覆盖当前空白项目') : t('导入并建立同步') }}
         </BaseButton>
       </div>
     </template>
@@ -314,14 +311,14 @@ async function applyImport() {
       <div class="github-import__notice">
         <IconAlertTriangle :size="24" aria-hidden="true" />
         <div>
-          <strong>已保存的 GitHub 凭据不可用</strong>
-          <p>请补充一个可访问当前仓库的 Token。{{ props.mobileRuntime ? '验证成功后会在本次运行期间继续使用。' : '验证成功后会重新安全保存。' }}</p>
+          <strong>{{ t('已保存的 GitHub 凭据不可用') }}</strong>
+          <p>{{ t('请补充一个可访问当前仓库的 Token。{0}', [props.mobileRuntime ? t('验证成功后会在本次运行期间继续使用。') : t('验证成功后会重新安全保存。')]) }}</p>
         </div>
       </div>
       <BaseField
         id="github-import-token"
         label="GitHub Token"
-        hint="需要当前仓库的 Contents 读取权限。"
+        :hint="t('需要当前仓库的 Contents 读取权限。')"
         required
       >
         <input
@@ -335,27 +332,23 @@ async function applyImport() {
         />
       </BaseField>
       <div class="github-import__actions">
-        <BaseButton name="使用新 Token 重新检查 GitHub 项目" type="submit" :loading="loading">
-          使用新 Token 重新检查
-        </BaseButton>
+        <BaseButton :name="t('使用新 Token 重新检查 GitHub 项目')" type="submit" :loading="loading"> {{ t('使用新 Token 重新检查') }} </BaseButton>
       </div>
     </form>
 
     <div v-else-if="props.autoPreview && !loading" class="github-import__actions">
-      <BaseButton name="重新检查 GitHub 项目" :loading="loading" @click="createPreview">
-        重新检查
-      </BaseButton>
+      <BaseButton :name="t('重新检查 GitHub 项目')" :loading="loading" @click="createPreview"> {{ t('重新检查') }} </BaseButton>
     </div>
 
     <form v-else-if="!props.autoPreview" class="github-import__form" @submit.prevent="createPreview">
       <div class="github-import__fields">
-        <BaseField id="github-import-owner" label="仓库所有者" required>
+        <BaseField id="github-import-owner" :label="t('仓库所有者')" required>
           <input id="github-import-owner" v-model="draft.owner" name="githubImportOwner" autocomplete="off" />
         </BaseField>
-        <BaseField id="github-import-repository" label="仓库名称" required>
+        <BaseField id="github-import-repository" :label="t('仓库名称')" required>
           <input id="github-import-repository" v-model="draft.repository" name="githubImportRepository" autocomplete="off" />
         </BaseField>
-        <BaseField id="github-import-branch" label="分支" required>
+        <BaseField id="github-import-branch" :label="t('分支')" required>
           <input id="github-import-branch" v-model="draft.branch" name="githubImportBranch" autocomplete="off" />
         </BaseField>
         <BaseField
@@ -363,11 +356,11 @@ async function applyImport() {
           label="GitHub Token"
           :hint="tokenRequired
             ? props.mobileRuntime
-              ? '需要 Contents 读取权限；Token 只在本次 App 运行期间保留。'
-              : '需要 Contents 读取权限；导入后保存在系统安全凭据中。'
+              ? t('需要 Contents 读取权限；Token 只在本次 App 运行期间保留。')
+              : t('需要 Contents 读取权限；导入后保存在系统安全凭据中。')
             : props.mobileRuntime
-              ? '留空时使用本次运行期间保留的 Token。'
-              : '留空时使用当前项目已安全保存的凭据。'"
+              ? t('留空时使用本次运行期间保留的 Token。')
+              : t('留空时使用当前项目已安全保存的凭据。')"
           :required="tokenRequired"
         >
           <input
@@ -376,14 +369,12 @@ async function applyImport() {
             name="githubImportToken"
             type="password"
             autocomplete="off"
-            :placeholder="tokenRequired ? 'github_pat_…' : '使用已保存凭据'"
+            :placeholder="tokenRequired ? 'github_pat_…' : t('使用已保存凭据')"
           />
         </BaseField>
       </div>
       <div class="github-import__actions">
-        <BaseButton name="预览 GitHub 项目导入" type="submit" :loading="loading">
-          检查仓库并预览
-        </BaseButton>
+        <BaseButton :name="t('预览 GitHub 项目导入')" type="submit" :loading="loading"> {{ t('检查仓库并预览') }} </BaseButton>
       </div>
     </form>
 
@@ -400,7 +391,7 @@ async function applyImport() {
         </span>
         <div>
           <span>{{ progressStage }}</span>
-          <strong>{{ progress?.message || '正在准备…' }}</strong>
+          <strong>{{ localizeSystemMessage(progress?.message || t('正在准备…')) }}</strong>
         </div>
         <b v-if="progressCount">{{ progressCount }}</b>
       </div>

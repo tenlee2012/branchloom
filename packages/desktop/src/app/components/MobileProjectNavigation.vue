@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { beforeLanguageRestartKey, t } from '../../shared/i18n'
+import { onBeforeUnmount, provide, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { IconX } from '@tabler/icons-vue'
 import AppSidebar from './AppSidebar.vue'
@@ -11,6 +12,7 @@ const emit = defineEmits<{ 'update:open': [open: boolean] }>()
 const route = useRoute()
 const router = useRouter()
 const { open, show, close } = useNavigationDrawer()
+provide(beforeLanguageRestartKey, close)
 const surface = ref<HTMLElement | null>(null)
 const backdrop = ref<HTMLElement | null>(null)
 let disposed = false
@@ -95,7 +97,7 @@ defineExpose({ show })
           class="mobile-navigation__panel"
           role="dialog"
           aria-modal="true"
-          aria-label="项目菜单"
+          :aria-label="t('项目菜单')"
           tabindex="-1"
           @click.capture="handleClick"
           @pointerdown="startSwipe($event, false)"
@@ -103,7 +105,7 @@ defineExpose({ show })
           @pointerup="endSwipe"
           @pointercancel="gesture = undefined"
         >
-          <button class="mobile-navigation__close" type="button" aria-label="关闭菜单" @click="close">
+          <button class="mobile-navigation__close" type="button" :aria-label="t('关闭菜单')" @click="close">
             <IconX :size="22" aria-hidden="true" />
           </button>
           <AppSidebar mobile :project-id="projectId" :project-name="projectName" />

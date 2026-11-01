@@ -1,3 +1,4 @@
+import { t } from '../../../shared/i18n'
 import { onScopeDispose, ref, shallowRef, toValue, watch, type MaybeRefOrGetter } from 'vue'
 import type { BranchloomRepository, Person, Relationship } from '../../../shared/domain/types'
 
@@ -35,13 +36,13 @@ export function useKinshipFamily(repository: BranchloomRepository, projectId: Ma
         const next = await repository.listPeople(scope, { page: ++page, pageSize: first.pageSize, sort: 'name' })
         if (!active()) return
         if (!next.items.length || next.total !== first.total || next.pageSize !== first.pageSize) {
-          throw new Error('人物资料在读取期间发生变化，请重新读取。')
+          throw new Error(t('人物资料在读取期间发生变化，请重新读取。'))
         }
         collected.push(...next.items)
         loadedCount.value = collected.length
       }
       if (collected.length !== first.total || new Set(collected.map(({ id }) => id)).size !== first.total) {
-        throw new Error('人物资料未能完整读取，请重试。')
+        throw new Error(t('人物资料未能完整读取，请重试。'))
       }
       const scopedPeople = collected.filter((person) => person.projectId === scope && !person.deletedAt)
       const scopedRelations = relations.filter((relation) => relation.projectId === scope)
@@ -52,7 +53,7 @@ export function useKinshipFamily(repository: BranchloomRepository, projectId: Ma
       state.value = 'ready'
     } catch (cause) {
       if (!active()) return
-      error.value = cause instanceof Error ? cause.message : '人物与关系资料暂时无法读取。'
+      error.value = cause instanceof Error ? cause.message : t('人物与关系资料暂时无法读取。')
       state.value = 'error'
     }
   }

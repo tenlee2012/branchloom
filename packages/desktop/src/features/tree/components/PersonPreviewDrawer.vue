@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '../../../shared/i18n'
 import {
   IconBook2,
   IconEdit,
@@ -45,7 +46,7 @@ function relativePerson(relationship: Relationship): Person | undefined {
 
 function relativeName(relationship: Relationship) {
   const person = relativePerson(relationship)
-  return person ? primaryName(person) : '未知人物'
+  return person ? primaryName(person) : t('未知人物')
 }
 
 function treeReturnPath(person: Person): string {
@@ -61,21 +62,21 @@ function treeReturnPath(person: Person): string {
   <BaseDrawer
     :open="open && Boolean(person)"
     :inline="inline"
-    :title="person ? `研究视图：${primaryName(person)}的家庭关系` : '人物研究视图'"
-    close-label="关闭人物预览"
+    :title="person ? t('研究视图：{0}的家庭关系', [primaryName(person)]) : t('人物研究视图')"
+    :close-label="t('关闭人物预览')"
     @close="emit('close')"
   >
     <article v-if="person" class="person-preview">
-      <span class="visually-hidden">{{ primaryName(person) }}的人物预览 · 添加人物</span>
+      <span class="visually-hidden">{{ t('{0}的人物预览 · 添加人物', [primaryName(person)]) }}</span>
       <header>
-        <img class="person-preview__avatar" :src="person.avatarUrl || personPlaceholder" :alt="`${primaryName(person)}的头像`" />
-        <div class="person-preview__identity"><p>{{ person.status === 'living' ? '在世' : person.status === 'deceased' ? '已故' : '状态未知' }}</p><h3>{{ primaryName(person) }}</h3></div>
+        <img class="person-preview__avatar" :src="person.avatarUrl || personPlaceholder" :alt="t('{0}的头像', [primaryName(person)])" />
+        <div class="person-preview__identity"><p>{{ person.status === 'living' ? t('在世') : person.status === 'deceased' ? t('已故') : t('状态未知') }}</p><h3>{{ primaryName(person) }}</h3></div>
         <div class="person-preview__header-actions">
           <RouterLink
             class="person-preview__header-action person-preview__header-detail"
             :to="{ name: 'person-detail', params: { projectId: person.projectId, personId: person.id } }"
-            :aria-label="`查看人物详情：${primaryName(person)}`"
-            :title="`查看人物详情：${primaryName(person)}`"
+            :aria-label="t('查看人物详情：{0}', [primaryName(person)])"
+            :title="t('查看人物详情：{0}', [primaryName(person)])"
           >
             <IconEye :size="20" :stroke-width="1.8" aria-hidden="true" />
           </RouterLink>
@@ -86,52 +87,51 @@ function treeReturnPath(person: Person): string {
               params: { projectId: person.projectId, personId: person.id },
               query: { returnTo: treeReturnPath(person) },
             }"
-            :aria-label="`编辑人物：${primaryName(person)}`"
-            :title="`编辑人物：${primaryName(person)}`"
+            :aria-label="t('编辑人物：{0}', [primaryName(person)])"
+            :title="t('编辑人物：{0}', [primaryName(person)])"
           >
             <IconEdit :size="20" :stroke-width="1.8" aria-hidden="true" />
           </RouterLink>
         </div>
       </header>
       <dl>
-        <div><dt>出生</dt><dd>{{ person.birth?.display ?? '未记录' }}</dd></div>
-        <div><dt>死亡</dt><dd>{{ person.death?.display ?? '未记录' }}</dd></div>
+        <div><dt>{{ t('出生') }}</dt><dd>{{ person.birth?.display ?? t('未记录') }}</dd></div>
+        <div><dt>{{ t('死亡') }}</dt><dd>{{ person.death?.display ?? t('未记录') }}</dd></div>
       </dl>
-      <p class="person-preview__bio">{{ person.biography || '还没有生平摘要。' }}</p>
+      <p class="person-preview__bio">{{ person.biography || t('还没有生平摘要。') }}</p>
       <section aria-labelledby="preview-relationships">
-        <h4 id="preview-relationships">直接关系</h4>
+        <h4 id="preview-relationships">{{ t('直接关系') }}</h4>
         <ul v-if="relationships.length">
           <li v-for="relationship in relationships" :key="relationship.id">
             <strong>{{ relationshipDisplayLabel(relationship, person.id, relativePerson(relationship)) }}</strong>
             <span>{{ relativeName(relationship) }}</span>
           </li>
         </ul>
-        <p v-else>还没有记录关系。</p>
+        <p v-else>{{ t('还没有记录关系。') }}</p>
       </section>
       <section class="person-preview__sources" aria-labelledby="preview-sources">
         <div class="person-preview__section-title">
-          <h4 id="preview-sources">关键来源（{{ person.sourceIds?.length ?? 0 }}）</h4>
-          <span>查看全部来源</span>
+          <h4 id="preview-sources">{{ t('关键来源（{0}）', [person.sourceIds?.length ?? 0]) }}</h4>
+          <span>{{ t('查看全部来源') }}</span>
         </div>
         <article v-if="person.sourceIds?.length">
           <span class="person-preview__source-number">1</span>
           <div>
-            <strong>家庭档案与人物记录</strong>
-            <p>已关联 {{ person.sourceIds?.length ?? 0 }} 项原始资料，可在资料来源中查看引用位置与摘录。</p>
+            <strong>{{ t('家庭档案与人物记录') }}</strong>
+            <p>{{ t('已关联 {0} 项原始资料，可在资料来源中查看引用位置与摘录。', [person.sourceIds?.length ?? 0]) }}</p>
           </div>
         </article>
-        <p v-else>还没有关联资料来源。</p>
+        <p v-else>{{ t('还没有关联资料来源。') }}</p>
       </section>
       <footer>
         <RouterLink class="person-preview__kinship" :to="{ name: 'project-kinship', params: { projectId: person.projectId }, query: { from: person.id, returnTo: treeReturnPath(person) } }">
-          <IconUsersGroup :size="18" aria-hidden="true" />查称呼
-        </RouterLink>
-        <BaseButton name="添加人物" variant="secondary" @click="emit('quickAdd')"><IconUserPlus :size="18" aria-hidden="true" />添加人物</BaseButton>
-        <BaseButton v-if="!isCenter" name="设为中心人物" variant="secondary" @click="emit('center', person.id)"><IconFocusCentered :size="18" aria-hidden="true" />设为中心</BaseButton>
-        <BaseButton :class="{ 'person-preview__full-width': isCenter }" :name="collapsed ? `展开${primaryName(person)}分支` : `收起${primaryName(person)}分支`" variant="secondary" @click="emit('toggleBranch', person.id)">
-          {{ collapsed ? '展开分支' : '收起分支' }}
+          <IconUsersGroup :size="18" aria-hidden="true" />{{ t('查称呼') }} </RouterLink>
+        <BaseButton :name="t('添加人物')" variant="secondary" @click="emit('quickAdd')"><IconUserPlus :size="18" aria-hidden="true" />{{ t('添加人物') }}</BaseButton>
+        <BaseButton v-if="!isCenter" :name="t('设为中心人物')" variant="secondary" @click="emit('center', person.id)"><IconFocusCentered :size="18" aria-hidden="true" />{{ t('设为中心') }}</BaseButton>
+        <BaseButton :class="{ 'person-preview__full-width': isCenter }" :name="collapsed ? t('展开{0}分支', [primaryName(person)]) : t('收起{0}分支', [primaryName(person)])" variant="secondary" @click="emit('toggleBranch', person.id)">
+          {{ collapsed ? t('展开分支') : t('收起分支') }}
         </BaseButton>
-        <RouterLink class="person-preview__view-sources" :to="{ name: 'project-sources', params: { projectId: person.projectId } }"><IconBook2 :size="18" aria-hidden="true" />查看来源</RouterLink>
+        <RouterLink class="person-preview__view-sources" :to="{ name: 'project-sources', params: { projectId: person.projectId } }"><IconBook2 :size="18" aria-hidden="true" />{{ t('查看来源') }}</RouterLink>
       </footer>
     </article>
   </BaseDrawer>
