@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 import type {
   DataIssue,
   GenealogyDate,
@@ -139,7 +140,7 @@ export function validateRelationship(
       candidate,
       'error',
       isParent ? 'self-parent' : 'self-partner',
-      isParent ? '人物不能成为自己的父母或监护人。' : '人物不能成为自己的伴侣。',
+      isParent ? t('人物不能成为自己的父母或监护人。') : t('人物不能成为自己的伴侣。'),
     )
   }
 
@@ -148,7 +149,7 @@ export function validateRelationship(
       candidate,
       'warning',
       'duplicate-relationship',
-      '已存在相同类型的人物关系。',
+      t('已存在相同类型的人物关系。'),
     )
   }
 
@@ -157,7 +158,7 @@ export function validateRelationship(
       candidate,
       'error',
       'ancestor-cycle',
-      '该父母关系会形成祖先循环。',
+      t('该父母关系会形成祖先循环。'),
     )
   }
 

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { getLocale, localizeSystemMessage, t } from '../../../shared/i18n'
 import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import {
@@ -30,44 +31,44 @@ let loadRequest = 0
 
 const managementLinks = computed(() => [
   {
-    label: '协作同步',
-    ariaLabel: '打开协作同步',
-    description: '预览并同步 GitHub 项目资料',
+    label: t('协作同步'),
+    ariaLabel: t('打开协作同步'),
+    description: t('预览并同步 GitHub 项目资料'),
     icon: IconRefresh,
     to: `/project/${projectId.value}/collaboration-sync`,
   },
   {
-    label: '导入与导出',
-    ariaLabel: '打开导入与导出',
-    description: '交换 GEDCOM、备份包与打印资料',
+    label: t('导入与导出'),
+    ariaLabel: t('打开导入与导出'),
+    description: t('交换 GEDCOM、备份包与打印资料'),
     icon: IconFileImport,
     to: `/project/${projectId.value}/manage/exchange`,
   },
   {
-    label: '编印族谱',
-    ariaLabel: '打开编印族谱',
-    description: '编排谱册与世系挂图，导出打印 PDF',
+    label: t('编印族谱'),
+    ariaLabel: t('打开编印族谱'),
+    description: t('编排谱册与世系挂图，导出打印 PDF'),
     icon: IconPrinter,
     to: `/project/${projectId.value}/manage/publication`,
   },
   {
-    label: '项目设置',
-    ariaLabel: '打开项目设置',
-    description: '编辑档案信息与备份策略',
+    label: t('项目设置'),
+    ariaLabel: t('打开项目设置'),
+    description: t('编辑档案信息与备份策略'),
     icon: IconSettings,
     to: `/project/${projectId.value}/manage/settings`,
   },
   {
-    label: '备份与历史',
-    ariaLabel: '打开备份与历史',
-    description: '创建快照并查看修改记录',
+    label: t('备份与历史'),
+    ariaLabel: t('打开备份与历史'),
+    description: t('创建快照并查看修改记录'),
     icon: IconHistory,
     to: `/project/${projectId.value}/manage/history`,
   },
   {
-    label: '检查与维护',
-    ariaLabel: '打开检查与维护',
-    description: '发现重复、缺失和结构问题',
+    label: t('检查与维护'),
+    ariaLabel: t('打开检查与维护'),
+    description: t('发现重复、缺失和结构问题'),
     icon: IconShieldCheck,
     to: `/project/${projectId.value}/manage/checks`,
   },
@@ -75,8 +76,8 @@ const managementLinks = computed(() => [
 
 function formatDate(value: string): string {
   const date = new Date(value)
-  if (Number.isNaN(date.valueOf())) return '时间记录无效'
-  return new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(date)
+  if (Number.isNaN(date.valueOf())) return t('时间记录无效')
+  return new Intl.DateTimeFormat(getLocale(), { dateStyle: 'medium', timeStyle: 'short' }).format(date)
 }
 
 async function loadOverview() {
@@ -95,9 +96,9 @@ async function loadOverview() {
     loadState.value = 'ready'
   } catch (error) {
     if (request !== loadRequest) return
-    loadError.value = error instanceof Error && error.message.trim()
-      ? error.message
-      : '项目概览暂时无法读取'
+    loadError.value = error instanceof Error && localizeSystemMessage(error.message).trim()
+      ? localizeSystemMessage(error.message)
+      : t('项目概览暂时无法读取')
     loadState.value = 'error'
   }
 }
@@ -109,45 +110,41 @@ watch(projectId, () => { void loadOverview() }, { immediate: true })
   <section class="project-overview" aria-labelledby="project-overview-title">
     <header class="project-overview__heading">
       <div>
-        <p>项目管理</p>
-        <h1 id="project-overview-title">项目概览</h1>
-        <span>查看当前档案状态，并集中处理项目级操作。</span>
+        <p>{{ t('项目管理') }}</p>
+        <h1 id="project-overview-title">{{ t('项目概览') }}</h1>
+        <span>{{ t('查看当前档案状态，并集中处理项目级操作。') }}</span>
       </div>
       <RouterLink
         class="project-overview__create"
         :to="{ name: 'project-new', params: { projectId } }"
-        aria-label="新建项目"
+        :aria-label="t('新建项目')"
       >
-        <IconPlus :size="19" aria-hidden="true" />
-        新建项目
-      </RouterLink>
+        <IconPlus :size="19" aria-hidden="true" /> {{ t('新建项目') }} </RouterLink>
     </header>
     <ProjectSwitcher :project-id="projectId" />
-    <div v-if="loadState === 'loading'" class="project-overview__state" role="status">正在汇总项目资料…</div>
+    <div v-if="loadState === 'loading'" class="project-overview__state" role="status">{{ t('正在汇总项目资料…') }}</div>
     <div v-else-if="loadState === 'error'" class="project-overview__state project-overview__state--error" role="alert">
-      <strong>项目概览暂时无法读取</strong><span>{{ loadError }}</span>
-      <BaseButton size="sm" variant="secondary" @click="loadOverview">重新读取</BaseButton>
+      <strong>{{ t('项目概览暂时无法读取') }}</strong><span>{{ loadError }}</span>
+      <BaseButton size="sm" variant="secondary" @click="loadOverview">{{ t('重新读取') }}</BaseButton>
     </div>
     <template v-else-if="project && summary">
       <section class="project-overview__intro">
         <div>
-          <span>当前档案</span>
+          <span>{{ t('当前档案') }}</span>
           <h2>{{ project.name }}</h2>
-          <p>{{ project.description || '尚未填写项目简介。' }}</p>
+          <p>{{ project.description || t('尚未填写项目简介。') }}</p>
         </div>
         <RouterLink :to="`/project/${projectId}/tree`">
-          <IconNetwork :size="20" aria-hidden="true" />
-          打开家谱树
-        </RouterLink>
+          <IconNetwork :size="20" aria-hidden="true" /> {{ t('打开家谱树') }} </RouterLink>
       </section>
 
       <section class="project-overview__section" aria-labelledby="project-stats-title">
         <div class="project-overview__section-heading">
           <div>
-            <p>档案规模</p>
-            <h2 id="project-stats-title">项目数据</h2>
+            <p>{{ t('档案规模') }}</p>
+            <h2 id="project-stats-title">{{ t('项目数据') }}</h2>
           </div>
-          <span>本地保存 · 自动汇总</span>
+          <span>{{ t('本地保存 · 自动汇总') }}</span>
         </div>
         <ProjectStats :summary="summary" />
       </section>
@@ -155,11 +152,11 @@ watch(projectId, () => { void loadOverview() }, { immediate: true })
       <section class="project-overview__section" aria-labelledby="project-tools-title">
         <div class="project-overview__section-heading">
           <div>
-            <p>快捷操作</p>
-            <h2 id="project-tools-title">管理工具</h2>
+            <p>{{ t('快捷操作') }}</p>
+            <h2 id="project-tools-title">{{ t('管理工具') }}</h2>
           </div>
         </div>
-        <nav class="project-overview__tools" aria-label="项目管理导航">
+        <nav class="project-overview__tools" :aria-label="t('项目管理导航')">
           <RouterLink
             v-for="item in managementLinks"
             :key="item.label"
@@ -176,18 +173,18 @@ watch(projectId, () => { void loadOverview() }, { immediate: true })
       <section class="project-overview__section" aria-labelledby="project-activity-title">
         <div class="project-overview__section-heading">
           <div>
-            <p>时间记录</p>
-            <h2 id="project-activity-title">最近活动</h2>
+            <p>{{ t('时间记录') }}</p>
+            <h2 id="project-activity-title">{{ t('最近活动') }}</h2>
           </div>
         </div>
         <dl class="project-overview__timestamps">
           <div>
-            <dt><IconClock :size="20" aria-hidden="true" />最近修改</dt>
+            <dt><IconClock :size="20" aria-hidden="true" />{{ t('最近修改') }}</dt>
             <dd><time data-field="updatedAt" :datetime="summary.updatedAt">{{ formatDate(summary.updatedAt) }}</time></dd>
           </div>
           <div>
-            <dt><IconHistory :size="20" aria-hidden="true" />最近备份</dt>
-            <dd><time v-if="summary.lastBackupAt" data-field="lastBackupAt" :datetime="summary.lastBackupAt">{{ formatDate(summary.lastBackupAt) }}</time><span v-else>尚无备份记录</span></dd>
+            <dt><IconHistory :size="20" aria-hidden="true" />{{ t('最近备份') }}</dt>
+            <dd><time v-if="summary.lastBackupAt" data-field="lastBackupAt" :datetime="summary.lastBackupAt">{{ formatDate(summary.lastBackupAt) }}</time><span v-else>{{ t('尚无备份记录') }}</span></dd>
           </div>
         </dl>
       </section>

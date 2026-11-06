@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '../../shared/i18n'
 import { computed } from 'vue'
 import {
   RouterLink,
@@ -67,9 +68,9 @@ const target = computed<RouteLocationRaw>(() => {
   }
 })
 const label = computed(() => {
-  if (personReturnTarget.value) return '返回人物详情'
-  if (usesHistoryBack.value && previousLocation.value) return '返回上一页'
-  return treeReturnTarget.value ? '返回家谱树' : parent.value?.label ?? '返回首页'
+  if (personReturnTarget.value) return t('返回人物详情')
+  if (usesHistoryBack.value && previousLocation.value) return t('返回上一页')
+  return treeReturnTarget.value ? t('返回家谱树') : t(parent.value?.label ?? '返回首页')
 })
 
 function goBack() {

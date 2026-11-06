@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localizeSystemMessage, t } from '../../../shared/i18n'
 import { IconLock } from '@tabler/icons-vue'
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -31,9 +32,9 @@ async function openProject(projectId: string) {
     recentLocations.record(project)
     await router.replace({ name: 'project-tree', params: { projectId } })
   } catch (error) {
-    navigationError.value = error instanceof Error && error.message.trim()
-      ? error.message
-      : '项目已经导入，但暂时无法打开。请返回首页后重试。'
+    navigationError.value = error instanceof Error && localizeSystemMessage(error.message).trim()
+      ? localizeSystemMessage(error.message)
+      : t('项目已经导入，但暂时无法打开。请返回首页后重试。')
   }
 }
 
@@ -45,17 +46,14 @@ async function handleImported(result: GithubProjectImportResult) {
 <template>
   <section class="github-import-view" aria-labelledby="github-import-title">
     <div class="github-import-view__intro">
-      <p class="github-import-view__eyebrow">加入已有家族档案</p>
-      <h1 id="github-import-title">从 GitHub 导入</h1>
-      <p>
-        直接读取家人已经同步的 Branchloom 私有仓库，保留原有稳定项目身份，并在本机建立同步基线。
-      </p>
+      <p class="github-import-view__eyebrow">{{ t('加入已有家族档案') }}</p>
+      <h1 id="github-import-title">{{ t('从 GitHub 导入') }}</h1>
+      <p> {{ t('直接读取家人已经同步的 Branchloom 私有仓库，保留原有稳定项目身份，并在本机建立同步基线。') }} </p>
       <div class="github-import-view__privacy">
         <IconLock :size="20" aria-hidden="true" />
-        <span>
-          导入预览不会修改 GitHub；{{ mobileRuntime
-            ? 'Token 只在本次 App 运行期间保留。'
-            : 'Token 保存在系统安全凭据中。' }}
+        <span> {{ t('导入预览不会修改 GitHub；{0}', [mobileRuntime
+            ? t('Token 只在本次 App 运行期间保留。')
+            : t('Token 保存在系统安全凭据中。')]) }}
         </span>
       </div>
     </div>

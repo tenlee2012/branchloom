@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '../../../shared/i18n'
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import {
@@ -37,23 +38,23 @@ const emit = defineEmits<{
 }>()
 
 const relationshipLabels: Record<Relationship['type'], string> = {
-  biological: '亲生',
-  adoptive: '收养',
-  step: '继亲',
-  guardian: '监护',
-  engaged: '订婚',
-  married: '婚姻',
-  partner: '事实伴侣',
-  separated: '分居',
-  divorced: '离异',
+  biological: t('亲生'),
+  adoptive: t('收养'),
+  step: t('继亲'),
+  guardian: t('监护'),
+  engaged: t('订婚'),
+  married: t('婚姻'),
+  partner: t('事实伴侣'),
+  separated: t('分居'),
+  divorced: t('离异'),
 }
 
 function primaryName(person: Person | undefined) {
-  return person ? getPrimaryName(person) : '未知人物'
+  return person ? getPrimaryName(person) : t('未知人物')
 }
 
 function lifespan(person: Person | undefined) {
-  if (!person) return '生卒未详'
+  if (!person) return t('生卒未详')
   const birth = person.birth?.display ?? '?'
   const death = person.status === 'living' ? '' : person.death?.display ?? '?'
   return death ? `${birth}—${death}` : `${birth}—`
@@ -62,8 +63,8 @@ function lifespan(person: Person | undefined) {
 function placeName(person: Person | undefined) {
   const placeId = person?.birthPlaceId
   return placeId
-    ? props.places.find(({ id }) => id === placeId)?.name ?? '地点未详'
-    : '地点未详'
+    ? props.places.find(({ id }) => id === placeId)?.name ?? t('地点未详')
+    : t('地点未详')
 }
 
 const fromPerson = computed(() =>
@@ -73,8 +74,8 @@ const toPerson = computed(() =>
 const relationshipLabel = computed(() => relationshipLabels[props.relationship.type])
 const relationshipPlace = computed(() =>
   props.relationship.placeId
-    ? props.places.find(({ id }) => id === props.relationship.placeId)?.name ?? '地点未详'
-    : '未记录')
+    ? props.places.find(({ id }) => id === props.relationship.placeId)?.name ?? t('地点未详')
+    : t('未记录'))
 
 const relatedSourceIds = computed(() => {
   const ids = new Set(props.relationship.sourceIds)
@@ -103,18 +104,16 @@ function citationFor(sourceId: string) {
 <template>
   <aside class="relationship-research" aria-labelledby="relationship-research-title">
     <header class="relationship-research__header">
-      <h2 id="relationship-research-title">
-        研究视图：{{ primaryName(fromPerson) }} 与 {{ primaryName(toPerson) }} 的 {{ relationshipLabel }}关系
-      </h2>
-      <button type="button" aria-label="关闭关系研究视图" @click="emit('close')">
+      <h2 id="relationship-research-title"> {{ t('研究视图：{0} 与 {1} 的 {2}关系', [primaryName(fromPerson), primaryName(toPerson), relationshipLabel]) }} </h2>
+      <button type="button" :aria-label="t('关闭关系研究视图')" @click="emit('close')">
         <IconX :size="20" :stroke-width="1.6" aria-hidden="true" />
       </button>
     </header>
 
     <div class="relationship-research__scroll">
-      <section class="relationship-research__couple" aria-label="关系双方">
+      <section class="relationship-research__couple" :aria-label="t('关系双方')">
         <article>
-          <img :src="fromPerson?.avatarUrl || personPlaceholder" :alt="`${primaryName(fromPerson)}的头像`" />
+          <img :src="fromPerson?.avatarUrl || personPlaceholder" :alt="t('{0}的头像', [primaryName(fromPerson)])" />
           <div>
             <h3>{{ primaryName(fromPerson) }}</h3>
             <p>{{ lifespan(fromPerson) }}</p>
@@ -123,10 +122,10 @@ function citationFor(sourceId: string) {
         </article>
         <div class="relationship-research__bond">
           <strong>{{ relationshipLabel }}</strong>
-          <span>{{ relationship.start?.display ?? '日期未详' }}</span>
+          <span>{{ relationship.start?.display ?? t('日期未详') }}</span>
         </div>
         <article>
-          <img :src="toPerson?.avatarUrl || personPlaceholder" :alt="`${primaryName(toPerson)}的头像`" />
+          <img :src="toPerson?.avatarUrl || personPlaceholder" :alt="t('{0}的头像', [primaryName(toPerson)])" />
           <div>
             <h3>{{ primaryName(toPerson) }}</h3>
             <p>{{ lifespan(toPerson) }}</p>
@@ -137,26 +136,25 @@ function citationFor(sourceId: string) {
 
       <dl class="relationship-research__facts">
         <div>
-          <dt><IconCalendarEvent :size="18" aria-hidden="true" />{{ relationshipLabel }}日期</dt>
-          <dd>{{ relationship.start?.display ?? '未记录' }}</dd>
+          <dt><IconCalendarEvent :size="18" aria-hidden="true" />{{ t('{0}日期', [relationshipLabel]) }}</dt>
+          <dd>{{ relationship.start?.display ?? t('未记录') }}</dd>
         </div>
         <div>
-          <dt><IconMapPin :size="18" aria-hidden="true" />登记地点</dt>
+          <dt><IconMapPin :size="18" aria-hidden="true" />{{ t('登记地点') }}</dt>
           <dd>{{ relationshipPlace }}</dd>
         </div>
         <div>
-          <dt><IconNotes :size="18" aria-hidden="true" />备注</dt>
-          <dd>{{ relationship.notes || '暂无补充备注' }}</dd>
+          <dt><IconNotes :size="18" aria-hidden="true" />{{ t('备注') }}</dt>
+          <dd>{{ relationship.notes || t('暂无补充备注') }}</dd>
         </div>
       </dl>
 
       <section class="relationship-research__sources" aria-labelledby="relationship-sources-title">
         <div class="relationship-research__section-title">
-          <h3 id="relationship-sources-title">关键来源（{{ keySources.length }}）</h3>
+          <h3 id="relationship-sources-title">{{ t('关键来源（{0}）', [keySources.length]) }}</h3>
           <RouterLink
             :to="{ name: 'project-sources', params: { projectId } }"
-          >
-            查看全部来源 <IconChevronRight :size="15" aria-hidden="true" />
+          > {{ t('查看全部来源') }} <IconChevronRight :size="15" aria-hidden="true" />
           </RouterLink>
         </div>
 
@@ -172,31 +170,28 @@ function citationFor(sourceId: string) {
                 <IconChevronRight :size="17" aria-hidden="true" />
               </RouterLink>
               <dl>
-                <div><dt>档案号：</dt><dd>{{ source.referenceCode || '未记录' }}</dd></div>
-                <div><dt>页码/位置：</dt><dd>{{ citationFor(source.id)?.locator || '未记录' }}</dd></div>
-                <div><dt>记录日期：</dt><dd>{{ citationFor(source.id)?.accessedAt?.display || source.date?.display || '未记录' }}</dd></div>
+                <div><dt>{{ t('档案号：') }}</dt><dd>{{ source.referenceCode || t('未记录') }}</dd></div>
+                <div><dt>{{ t('页码/位置：') }}</dt><dd>{{ citationFor(source.id)?.locator || t('未记录') }}</dd></div>
+                <div><dt>{{ t('记录日期：') }}</dt><dd>{{ citationFor(source.id)?.accessedAt?.display || source.date?.display || t('未记录') }}</dd></div>
               </dl>
               <p>
-                <IconFileDescription :size="16" aria-hidden="true" />
-                摘录：{{ citationFor(source.id)?.excerpt || source.notes || '暂无摘录。' }}
+                <IconFileDescription :size="16" aria-hidden="true" /> {{ t('摘录：{0}', [citationFor(source.id)?.excerpt || source.notes || t('暂无摘录。')]) }}
               </p>
             </div>
           </li>
         </ol>
-        <p v-else class="relationship-research__empty">这段关系还没有关联资料来源。</p>
+        <p v-else class="relationship-research__empty">{{ t('这段关系还没有关联资料来源。') }}</p>
       </section>
     </div>
 
     <footer>
-      <BaseButton name="编辑关系" variant="secondary" @click="emit('edit')">
-        <IconPencil :size="18" aria-hidden="true" />编辑关系
-      </BaseButton>
+      <BaseButton :name="t('编辑关系')" variant="secondary" @click="emit('edit')">
+        <IconPencil :size="18" aria-hidden="true" />{{ t('编辑关系') }} </BaseButton>
       <RouterLink
         class="relationship-research__view-sources"
         :to="{ name: 'project-sources', params: { projectId } }"
       >
-        <IconBook2 :size="20" aria-hidden="true" />查看来源
-      </RouterLink>
+        <IconBook2 :size="20" aria-hidden="true" />{{ t('查看来源') }} </RouterLink>
     </footer>
   </aside>
 </template>

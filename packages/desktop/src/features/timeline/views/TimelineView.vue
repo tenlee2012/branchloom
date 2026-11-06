@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localizeSystemMessage, t } from '../../../shared/i18n'
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { IconFilterX } from '@tabler/icons-vue'
@@ -73,7 +74,7 @@ async function listAllActivePeople(scopedProjectId: string): Promise<Person[]> {
     if (!Number.isInteger(result.page) || result.page <= 0
       || !Number.isInteger(result.pageSize) || result.pageSize <= 0
       || !Number.isFinite(result.total) || result.total < 0) {
-      throw new Error('人物分页信息无效，无法安全读取全部人物。')
+      throw new Error(t('人物分页信息无效，无法安全读取全部人物。'))
     }
     maxPages ??= Math.max(1, Math.ceil(result.total / result.pageSize))
     const previousSize = byId.size
@@ -112,7 +113,7 @@ async function loadTimeline() {
     locateEvent()
   } catch (error) {
     if (request !== loadRequest) return
-    loadError.value = error instanceof Error ? error.message : '无法读取时间线资料'
+    loadError.value = error instanceof Error ? localizeSystemMessage(error.message) : t('无法读取时间线资料')
     loadState.value = 'error'
   }
 }
@@ -171,43 +172,43 @@ function clearFilters() {
   <section class="timeline-view" aria-labelledby="timeline-title">
     <header class="timeline-view__heading">
       <div>
-        <h1 id="timeline-title">时间线</h1>
+        <h1 id="timeline-title">{{ t('时间线') }}</h1>
       </div>
       <div class="timeline-view__heading-actions">
         <div class="timeline-view__count" aria-live="polite">
           <strong>{{ grouped.totalEvents }}</strong>
-          <span>件事件</span>
+          <span>{{ t('件事件') }}</span>
         </div>
-        <BaseButton name="管理地点" variant="secondary" @click="placeManagerOpen = true">管理地点</BaseButton>
-        <BaseButton name="新建事件" @click="createEvent">新建事件</BaseButton>
+        <BaseButton :name="t('管理地点')" variant="secondary" @click="placeManagerOpen = true">{{ t('管理地点') }}</BaseButton>
+        <BaseButton :name="t('新建事件')" @click="createEvent">{{ t('新建事件') }}</BaseButton>
       </div>
     </header>
-    <p v-if="selectedEvent && locatedEventId" class="timeline-view__located" role="status" :data-located-event-id="selectedEvent.id">已定位并打开事件 <code>{{ selectedEvent.id }}</code>：{{ selectedEvent.title }}</p>
+    <p v-if="selectedEvent && locatedEventId" class="timeline-view__located" role="status" :data-located-event-id="selectedEvent.id">{{ t('已定位并打开事件') }} <code>{{ selectedEvent.id }}</code>：{{ selectedEvent.title }}</p>
 
-    <form class="timeline-view__filters" aria-label="时间线筛选" @submit.prevent>
+    <form class="timeline-view__filters" :aria-label="t('时间线筛选')" @submit.prevent>
       <label>
-        <span>参与人物</span>
+        <span>{{ t('参与人物') }}</span>
         <FilterSelectControl>
           <select v-model="participantFilter" name="participantFilter">
-            <option value="">全部人物</option>
+            <option value="">{{ t('全部人物') }}</option>
             <option v-for="person in people" :key="person.id" :value="person.id">{{ primaryName(person) }}</option>
           </select>
         </FilterSelectControl>
       </label>
       <label>
-        <span>事件类型</span>
+        <span>{{ t('事件类型') }}</span>
         <FilterSelectControl>
           <select v-model="eventTypeFilter" name="eventTypeFilter">
-            <option value="">全部类型</option>
+            <option value="">{{ t('全部类型') }}</option>
             <option v-for="type in eventTypes" :key="type" :value="type">{{ eventTypeLabel(type) }}</option>
           </select>
         </FilterSelectControl>
       </label>
       <label>
-        <span>地点</span>
+        <span>{{ t('地点') }}</span>
         <FilterSelectControl>
           <select v-model="placeFilter" name="placeFilter">
-            <option value="">全部地点</option>
+            <option value="">{{ t('全部地点') }}</option>
             <option v-for="place in places" :key="place.id" :value="place.id">{{ place.name }}</option>
           </select>
         </FilterSelectControl>
@@ -215,31 +216,29 @@ function clearFilters() {
       <BaseButton
         class="timeline-view__clear-filters"
         variant="secondary"
-        aria-label="清除时间线筛选"
-        title="清除筛选"
+        :aria-label="t('清除时间线筛选')"
+        :title="t('清除筛选')"
         @click="clearFilters"
       >
         <IconFilterX :size="18" :stroke-width="1.8" aria-hidden="true" />
       </BaseButton>
     </form>
 
-    <div v-if="loadState === 'loading'" class="timeline-view__state" role="status">
-      正在整理时间线…
-    </div>
+    <div v-if="loadState === 'loading'" class="timeline-view__state" role="status"> {{ t('正在整理时间线…') }} </div>
     <div v-else-if="loadState === 'error'" class="timeline-view__state timeline-view__state--error" role="alert">
-      <strong>时间线暂时无法读取</strong>
+      <strong>{{ t('时间线暂时无法读取') }}</strong>
       <span>{{ loadError }}</span>
-      <BaseButton variant="secondary" size="sm" @click="loadTimeline">重新读取</BaseButton>
+      <BaseButton variant="secondary" size="sm" @click="loadTimeline">{{ t('重新读取') }}</BaseButton>
     </div>
     <EmptyState
       v-else-if="grouped.totalEvents === 0"
-      title="没有符合条件的事件"
-      description="可以清除筛选，或新建一件家庭事件。"
+      :title="t('没有符合条件的事件')"
+      :description="t('可以清除筛选，或新建一件家庭事件。')"
     >
-      <span class="timeline-view__empty-mark">时</span>
+      <span class="timeline-view__empty-mark">{{ t('时') }}</span>
       <template #actions>
-        <BaseButton variant="secondary" size="sm" @click="clearFilters">清除筛选</BaseButton>
-        <BaseButton size="sm" @click="createEvent">新建事件</BaseButton>
+        <BaseButton variant="secondary" size="sm" @click="clearFilters">{{ t('清除筛选') }}</BaseButton>
+        <BaseButton size="sm" @click="createEvent">{{ t('新建事件') }}</BaseButton>
       </template>
     </EmptyState>
     <template v-else>
@@ -255,26 +254,22 @@ function clearFilters() {
         />
       </div>
 
-      <nav v-if="grouped.totalPages > 1" class="timeline-view__pagination" aria-label="时间线分页">
+      <nav v-if="grouped.totalPages > 1" class="timeline-view__pagination" :aria-label="t('时间线分页')">
         <BaseButton
           variant="secondary"
           size="sm"
           :disabled="page <= 1"
-          aria-label="上一页时间段"
+          :aria-label="t('上一页时间段')"
           @click="page -= 1"
-        >
-          ← 较早
-        </BaseButton>
-        <span>第 {{ grouped.page }} / {{ grouped.totalPages }} 页，共 {{ grouped.totalGroups }} 个时间段</span>
+        > {{ t('← 较早') }} </BaseButton>
+        <span>{{ t('第 {0} / {1} 页，共 {2} 个时间段', [grouped.page, grouped.totalPages, grouped.totalGroups]) }}</span>
         <BaseButton
           variant="secondary"
           size="sm"
           :disabled="page >= grouped.totalPages"
-          aria-label="下一页时间段"
+          :aria-label="t('下一页时间段')"
           @click="page += 1"
-        >
-          较晚 →
-        </BaseButton>
+        > {{ t('较晚 →') }} </BaseButton>
       </nav>
     </template>
 

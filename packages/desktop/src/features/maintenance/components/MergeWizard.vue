@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localizeSystemMessage, t } from '../../../shared/i18n'
 import { computed, reactive, ref, watch } from 'vue'
 import { useSessionStore } from '../../../app/stores/session'
 import BaseSelectControl from '../../../design-system/BaseSelectControl.vue'
@@ -48,15 +49,15 @@ const choiceKeys: ChoiceKey[] = [
   'sex', 'status', 'avatarUrl', 'birth', 'death', 'birthPlaceId', 'deathPlaceId', 'biography', 'notes',
 ]
 const choiceLabels: Record<ChoiceKey, string> = {
-  sex: '性别',
-  status: '生存状态',
-  avatarUrl: '头像',
-  birth: '出生日期',
-  death: '死亡日期',
-  birthPlaceId: '出生地点',
-  deathPlaceId: '死亡地点',
-  biography: '人物简介',
-  notes: '备注',
+  sex: t('性别'),
+  status: t('生存状态'),
+  avatarUrl: t('头像'),
+  birth: t('出生日期'),
+  death: t('死亡日期'),
+  birthPlaceId: t('出生地点'),
+  deathPlaceId: t('死亡地点'),
+  biography: t('人物简介'),
+  notes: t('备注'),
 }
 const choices = reactive<Record<ChoiceKey, 'auto' | 'keep' | 'remove'>>({
   sex: 'auto', status: 'auto', avatarUrl: 'auto', birth: 'auto', death: 'auto',
@@ -94,20 +95,20 @@ function reset() {
 }
 
 function personName(person: Person | undefined): string {
-  return person ? getPrimaryName(person) : '未知人物'
+  return person ? getPrimaryName(person) : t('未知人物')
 }
 
 function dateText(date: Person['birth']): string {
-  if (!date) return '未填写'
-  return date.display || [date.start, date.end].filter(Boolean).join(' — ') || '未知'
+  if (!date) return t('未填写')
+  return date.display || [date.start, date.end].filter(Boolean).join(' — ') || t('未知')
 }
 
 function sexText(person: Person | undefined): string {
-  return ({ female: '女性', male: '男性', nonbinary: '非二元', unknown: '未知' } as const)[person?.sex ?? 'unknown']
+  return ({ female: t('女性'), male: t('男性'), nonbinary: t('非二元'), unknown: t('未知') } as const)[person?.sex ?? 'unknown']
 }
 
 function statusText(person: Person | undefined): string {
-  return ({ living: '在世', deceased: '已故', unknown: '未知' } as const)[person?.status ?? 'unknown']
+  return ({ living: t('在世'), deceased: t('已故'), unknown: t('未知') } as const)[person?.status ?? 'unknown']
 }
 
 function fieldValue(person: Person, key: ChoiceKey): unknown {
@@ -140,16 +141,16 @@ function familyIds(personId: UUID, kind: 'parents' | 'partners' | 'children'): U
 }
 
 function peopleText(ids: UUID[]): string {
-  return ids.map((id) => personName(personById.value.get(id))).join('、') || '无'
+  return ids.map((id) => personName(personById.value.get(id))).join('、') || t('无')
 }
 
 function eventText(personId: UUID): string {
-  return props.events.filter(({ participantIds }) => participantIds.includes(personId)).map(({ title }) => title).join('、') || '无'
+  return props.events.filter(({ participantIds }) => participantIds.includes(personId)).map(({ title }) => title).join('、') || t('无')
 }
 
 function sourceText(person: Person | undefined): string {
-  if (!person) return '无'
-  return (person.sourceIds ?? []).map((id) => sourceById.value.get(id) ?? id).join('、') || '无'
+  if (!person) return t('无')
+  return (person.sourceIds ?? []).map((id) => sourceById.value.get(id) ?? id).join('、') || t('无')
 }
 
 const relatedRelationships = computed(() => props.relationships.filter(({ fromPersonId, toPersonId }) =>
@@ -234,7 +235,7 @@ watch(
 function citationsText(personId: UUID): string {
   return props.citations.filter(({ targetType, targetId }) => targetType === 'person' && targetId === personId)
     .map((citation) => `${sourceById.value.get(citation.sourceId) ?? citation.sourceId}${citation.locator ? `（${citation.locator}）` : ''}`)
-    .join('、') || '无'
+    .join('、') || t('无')
 }
 
 function attachmentsText(personId: UUID): string {
@@ -245,7 +246,7 @@ function attachmentsText(personId: UUID): string {
     (link.targetType === 'person' && link.targetId === personId)
     || (link.targetType === 'citation' && citationIds.has(link.targetId)))
     .map(({ attachmentId }) => attachmentById.value.get(attachmentId)?.name ?? attachmentId)
-    .join('、') || '无'
+    .join('、') || t('无')
 }
 
 function toggle(values: UUID[], id: UUID, checked: boolean): UUID[] {
@@ -289,7 +290,7 @@ const preview = computed(() => {
 async function confirmMerge() {
   if (saving.value) return
   if (!preview.value) {
-    errorMessage.value = '至少需要保留一个姓名。'
+    errorMessage.value = t('至少需要保留一个姓名。')
     return
   }
   saving.value = true
@@ -306,9 +307,9 @@ async function confirmMerge() {
     session.saveStatus = 'saved'
     emit('merged', result.value)
   } catch (error) {
-    const details = error instanceof Error && error.message.trim()
-      ? error.message
-      : '人物合并事务失败，原数据已保留。'
+    const details = error instanceof Error && localizeSystemMessage(error.message).trim()
+      ? localizeSystemMessage(error.message)
+      : t('人物合并事务失败，原数据已保留。')
     errorMessage.value = details
     session.saveStatus = 'failed'
     session.saveError = details
@@ -322,81 +323,81 @@ async function confirmMerge() {
   <div v-if="open" class="backdrop">
     <section role="dialog" aria-modal="true" aria-labelledby="merge-title" class="wizard">
       <template v-if="result">
-        <h2 id="merge-title">合并完成</h2>
-        <p>已创建合并前快照“{{ result.snapshot.note }}”，可从备份与快照恢复。</p>
+        <h2 id="merge-title">{{ t('合并完成') }}</h2>
+        <p>{{ t('已创建合并前快照“{0}”，可从备份与快照恢复。', [result.snapshot.note]) }}</p>
         <dl class="summary">
-          <div><dt>关系重连</dt><dd>{{ result.summary.rewiredRelationships }}</dd></div>
-          <div><dt>事件重连</dt><dd>{{ result.summary.rewiredEvents }}</dd></div>
-          <div><dt>引用重连</dt><dd>{{ result.summary.rewiredCitations }}</dd></div>
-          <div><dt>检查结果</dt><dd>{{ result.issues.length }}</dd></div>
+          <div><dt>{{ t('关系重连') }}</dt><dd>{{ result.summary.rewiredRelationships }}</dd></div>
+          <div><dt>{{ t('事件重连') }}</dt><dd>{{ result.summary.rewiredEvents }}</dd></div>
+          <div><dt>{{ t('引用重连') }}</dt><dd>{{ result.summary.rewiredCitations }}</dd></div>
+          <div><dt>{{ t('检查结果') }}</dt><dd>{{ result.issues.length }}</dd></div>
         </dl>
-        <button type="button" name="关闭合并结果" @click="emit('cancel')">完成</button>
+        <button type="button" :name="t('关闭合并结果')" @click="emit('cancel')">{{ t('完成') }}</button>
       </template>
 
       <template v-else>
         <header>
           <div>
-            <h2 id="merge-title">合并人物</h2>
-            <p>逐项核对，只有确认后才会创建快照并写入。</p>
+            <h2 id="merge-title">{{ t('合并人物') }}</h2>
+            <p>{{ t('逐项核对，只有确认后才会创建快照并写入。') }}</p>
           </div>
-          <button type="button" name="取消合并" :disabled="saving" @click="emit('cancel')">取消</button>
+          <button type="button" :name="t('取消合并')" :disabled="saving" @click="emit('cancel')">{{ t('取消') }}</button>
         </header>
 
         <div v-if="keep && remove" class="comparison">
-          <div class="row heading"><strong>字段</strong><strong>保留记录：{{ personName(keep) }}</strong><strong>合并记录：{{ personName(remove) }}</strong><strong>采用</strong></div>
-          <div class="row"><b>姓名</b><span>{{ keep.names.map(({ value }) => value).join('、') }}</span><span>{{ remove.names.map(({ value }) => value).join('、') }}</span><span>默认全部保留</span></div>
+          <div class="row heading"><strong>{{ t('字段') }}</strong><strong>{{ t('保留记录：{0}', [personName(keep)]) }}</strong><strong>{{ t('合并记录：{0}', [personName(remove)]) }}</strong><strong>{{ t('采用') }}</strong></div>
+          <div class="row"><b>{{ t('姓名') }}</b><span>{{ keep.names.map(({ value }) => value).join('、') }}</span><span>{{ remove.names.map(({ value }) => value).join('、') }}</span><span>{{ t('默认全部保留') }}</span></div>
           <div v-for="name in [...keep.names, ...remove.names]" :key="`${name.value}-${name.type}`" class="preserve-option">
-            <label><input type="checkbox" :checked="retainedNameIds.includes(name.value)" @change="retainedNameIds = toggle(retainedNameIds, name.value, ($event.target as HTMLInputElement).checked)">保留姓名“{{ name.value }}”</label>
+            <label><input type="checkbox" :checked="retainedNameIds.includes(name.value)" @change="retainedNameIds = toggle(retainedNameIds, name.value, ($event.target as HTMLInputElement).checked)">{{ t('保留姓名“{0}”', [name.value]) }}</label>
           </div>
-          <div class="row"><b>性别</b><span>{{ sexText(keep) }}</span><span>{{ sexText(remove) }}</span><BaseSelectControl v-if="isConflict('sex')"><select name="choice-sex" :aria-label="`保留字段：${choiceLabels.sex}`" v-model="choices.sex"><option value="auto">自动采用保留记录</option><option value="keep">保留记录</option><option value="remove">合并记录</option></select></BaseSelectControl><span v-else>自动保留非空值</span></div>
-          <div class="row"><b>生存状态</b><span>{{ statusText(keep) }}</span><span>{{ statusText(remove) }}</span><BaseSelectControl v-if="isConflict('status')"><select name="choice-status" :aria-label="`保留字段：${choiceLabels.status}`" v-model="choices.status"><option value="auto">自动采用保留记录</option><option value="keep">保留记录</option><option value="remove">合并记录</option></select></BaseSelectControl><span v-else>自动保留非空值</span></div>
-          <div class="row"><b>头像</b><span>{{ keep.avatarUrl ? '已设置本地头像' : '无' }}</span><span>{{ remove.avatarUrl ? '已设置本地头像' : '无' }}</span><BaseSelectControl v-if="isConflict('avatarUrl')"><select name="choice-avatarUrl" :aria-label="`保留字段：${choiceLabels.avatarUrl}`" v-model="choices.avatarUrl"><option value="auto">自动采用保留记录</option><option value="keep">保留记录</option><option value="remove">合并记录</option></select></BaseSelectControl><span v-else>自动保留非空值</span></div>
-          <div class="row"><b>出生</b><span>{{ dateText(keep.birth) }}</span><span>{{ dateText(remove.birth) }}</span><BaseSelectControl v-if="isConflict('birth')"><select name="choice-birth" :aria-label="`保留字段：${choiceLabels.birth}`" v-model="choices.birth"><option value="auto">自动采用保留记录</option><option value="keep">保留记录</option><option value="remove">合并记录</option></select></BaseSelectControl><span v-else>自动保留非空值</span></div>
-          <div class="row"><b>死亡</b><span>{{ dateText(keep.death) }}</span><span>{{ dateText(remove.death) }}</span><BaseSelectControl v-if="isConflict('death')"><select name="choice-death" :aria-label="`保留字段：${choiceLabels.death}`" v-model="choices.death"><option value="auto">自动采用保留记录</option><option value="keep">保留记录</option><option value="remove">合并记录</option></select></BaseSelectControl><span v-else>自动保留非空值</span></div>
-          <div class="row"><b>父母</b><span>{{ peopleText(familyIds(keep.id, 'parents')) }}</span><span>{{ peopleText(familyIds(remove.id, 'parents')) }}</span><span>安全重连</span></div>
-          <div class="row"><b>伴侣</b><span>{{ peopleText(familyIds(keep.id, 'partners')) }}</span><span>{{ peopleText(familyIds(remove.id, 'partners')) }}</span><span>安全重连</span></div>
-          <div class="row"><b>子女</b><span>{{ peopleText(familyIds(keep.id, 'children')) }}</span><span>{{ peopleText(familyIds(remove.id, 'children')) }}</span><span>安全重连</span></div>
-          <div v-for="relationship in relatedRelationships" :key="relationship.id" class="preserve-option"><label><input :name="`retain-relationship-${relationship.id}`" type="checkbox" :checked="retainedRelationshipIds.includes(relationship.id)" @change="retainedRelationshipIds = toggle(retainedRelationshipIds, relationship.id, ($event.target as HTMLInputElement).checked)">保留关系 {{ relationship.id }}</label></div>
+          <div class="row"><b>{{ t('性别') }}</b><span>{{ sexText(keep) }}</span><span>{{ sexText(remove) }}</span><BaseSelectControl v-if="isConflict('sex')"><select name="choice-sex" :aria-label="t('保留字段：{0}', [choiceLabels.sex])" v-model="choices.sex"><option value="auto">{{ t('自动采用保留记录') }}</option><option value="keep">{{ t('保留记录') }}</option><option value="remove">{{ t('合并记录') }}</option></select></BaseSelectControl><span v-else>{{ t('自动保留非空值') }}</span></div>
+          <div class="row"><b>{{ t('生存状态') }}</b><span>{{ statusText(keep) }}</span><span>{{ statusText(remove) }}</span><BaseSelectControl v-if="isConflict('status')"><select name="choice-status" :aria-label="t('保留字段：{0}', [choiceLabels.status])" v-model="choices.status"><option value="auto">{{ t('自动采用保留记录') }}</option><option value="keep">{{ t('保留记录') }}</option><option value="remove">{{ t('合并记录') }}</option></select></BaseSelectControl><span v-else>{{ t('自动保留非空值') }}</span></div>
+          <div class="row"><b>{{ t('头像') }}</b><span>{{ keep.avatarUrl ? t('已设置本地头像') : t('无') }}</span><span>{{ remove.avatarUrl ? t('已设置本地头像') : t('无') }}</span><BaseSelectControl v-if="isConflict('avatarUrl')"><select name="choice-avatarUrl" :aria-label="t('保留字段：{0}', [choiceLabels.avatarUrl])" v-model="choices.avatarUrl"><option value="auto">{{ t('自动采用保留记录') }}</option><option value="keep">{{ t('保留记录') }}</option><option value="remove">{{ t('合并记录') }}</option></select></BaseSelectControl><span v-else>{{ t('自动保留非空值') }}</span></div>
+          <div class="row"><b>{{ t('出生') }}</b><span>{{ dateText(keep.birth) }}</span><span>{{ dateText(remove.birth) }}</span><BaseSelectControl v-if="isConflict('birth')"><select name="choice-birth" :aria-label="t('保留字段：{0}', [choiceLabels.birth])" v-model="choices.birth"><option value="auto">{{ t('自动采用保留记录') }}</option><option value="keep">{{ t('保留记录') }}</option><option value="remove">{{ t('合并记录') }}</option></select></BaseSelectControl><span v-else>{{ t('自动保留非空值') }}</span></div>
+          <div class="row"><b>{{ t('死亡') }}</b><span>{{ dateText(keep.death) }}</span><span>{{ dateText(remove.death) }}</span><BaseSelectControl v-if="isConflict('death')"><select name="choice-death" :aria-label="t('保留字段：{0}', [choiceLabels.death])" v-model="choices.death"><option value="auto">{{ t('自动采用保留记录') }}</option><option value="keep">{{ t('保留记录') }}</option><option value="remove">{{ t('合并记录') }}</option></select></BaseSelectControl><span v-else>{{ t('自动保留非空值') }}</span></div>
+          <div class="row"><b>{{ t('父母') }}</b><span>{{ peopleText(familyIds(keep.id, 'parents')) }}</span><span>{{ peopleText(familyIds(remove.id, 'parents')) }}</span><span>{{ t('安全重连') }}</span></div>
+          <div class="row"><b>{{ t('伴侣') }}</b><span>{{ peopleText(familyIds(keep.id, 'partners')) }}</span><span>{{ peopleText(familyIds(remove.id, 'partners')) }}</span><span>{{ t('安全重连') }}</span></div>
+          <div class="row"><b>{{ t('子女') }}</b><span>{{ peopleText(familyIds(keep.id, 'children')) }}</span><span>{{ peopleText(familyIds(remove.id, 'children')) }}</span><span>{{ t('安全重连') }}</span></div>
+          <div v-for="relationship in relatedRelationships" :key="relationship.id" class="preserve-option"><label><input :name="`retain-relationship-${relationship.id}`" type="checkbox" :checked="retainedRelationshipIds.includes(relationship.id)" @change="retainedRelationshipIds = toggle(retainedRelationshipIds, relationship.id, ($event.target as HTMLInputElement).checked)">{{ t('保留关系 {0}', [relationship.id]) }}</label></div>
           <div v-for="conflict in relationshipConflicts" :key="conflict.key" class="relationship-conflict">
-            <strong>关系字段冲突：{{ conflict.left.id }} / {{ conflict.right.id }}</strong>
+            <strong>{{ t('关系字段冲突：{0} / {1}', [conflict.left.id, conflict.right.id]) }}</strong>
             <label v-for="field in conflict.fields" :key="field">
               {{ field }}
               <BaseSelectControl>
                 <select
                   :name="`relationship-choice-${field}-${[conflict.left.id, conflict.right.id].sort().join('-')}`"
-                  :aria-label="`关系冲突：${field}（${conflict.left.id} / ${conflict.right.id}）`"
+                  :aria-label="t('关系冲突：{0}（{1} / {2}）', [field, conflict.left.id, conflict.right.id])"
                   :value="relationshipFieldSelections[conflict.key]?.[field] ?? ''"
                   @change="setRelationshipField(conflict, field, ($event.target as HTMLSelectElement).value)"
                 >
-                  <option value="" disabled>请选择保留值</option>
+                  <option value="" disabled>{{ t('请选择保留值') }}</option>
                   <option :value="conflict.left.id">{{ conflict.left.id }}：{{ relationshipFieldText(conflict.left, field) }}</option>
                   <option :value="conflict.right.id">{{ conflict.right.id }}：{{ relationshipFieldText(conflict.right, field) }}</option>
                 </select>
               </BaseSelectControl>
             </label>
           </div>
-          <div class="row"><b>事件</b><span>{{ eventText(keep.id) }}</span><span>{{ eventText(remove.id) }}</span><span>参与者去重</span></div>
-          <div v-for="event in relatedEvents" :key="event.id" class="preserve-option"><label><input :name="`retain-event-${event.id}`" type="checkbox" :checked="retainedEventIds.includes(event.id)" @change="retainedEventIds = toggle(retainedEventIds, event.id, ($event.target as HTMLInputElement).checked)">保留事件关联“{{ event.title }}”</label></div>
-          <div class="row"><b>地点</b><span>出生：{{ placeById.get(keep.birthPlaceId ?? '') ?? '无' }}；死亡：{{ placeById.get(keep.deathPlaceId ?? '') ?? '无' }}</span><span>出生：{{ placeById.get(remove.birthPlaceId ?? '') ?? '无' }}；死亡：{{ placeById.get(remove.deathPlaceId ?? '') ?? '无' }}</span><span class="stacked"><BaseSelectControl v-if="isConflict('birthPlaceId')"><select name="choice-birthPlaceId" :aria-label="`保留字段：${choiceLabels.birthPlaceId}`" v-model="choices.birthPlaceId"><option value="auto">自动采用保留记录</option><option value="keep">出生地取保留记录</option><option value="remove">出生地取合并记录</option></select></BaseSelectControl><span v-else>出生地自动保留非空值</span><BaseSelectControl v-if="isConflict('deathPlaceId')"><select name="choice-deathPlaceId" :aria-label="`保留字段：${choiceLabels.deathPlaceId}`" v-model="choices.deathPlaceId"><option value="auto">自动采用保留记录</option><option value="keep">死亡地取保留记录</option><option value="remove">死亡地取合并记录</option></select></BaseSelectControl><span v-else>死亡地自动保留非空值</span></span></div>
-          <div class="row"><b>来源</b><span>{{ sourceText(keep) }}</span><span>{{ sourceText(remove) }}</span><span>默认全部保留</span></div>
+          <div class="row"><b>{{ t('事件') }}</b><span>{{ eventText(keep.id) }}</span><span>{{ eventText(remove.id) }}</span><span>{{ t('参与者去重') }}</span></div>
+          <div v-for="event in relatedEvents" :key="event.id" class="preserve-option"><label><input :name="`retain-event-${event.id}`" type="checkbox" :checked="retainedEventIds.includes(event.id)" @change="retainedEventIds = toggle(retainedEventIds, event.id, ($event.target as HTMLInputElement).checked)">{{ t('保留事件关联“{0}”', [event.title]) }}</label></div>
+          <div class="row"><b>{{ t('地点') }}</b><span>{{ t('出生：{0}；死亡：{1}', [placeById.get(keep.birthPlaceId ?? '') ?? t('无'), placeById.get(keep.deathPlaceId ?? '') ?? t('无')]) }}</span><span>{{ t('出生：{0}；死亡：{1}', [placeById.get(remove.birthPlaceId ?? '') ?? t('无'), placeById.get(remove.deathPlaceId ?? '') ?? t('无')]) }}</span><span class="stacked"><BaseSelectControl v-if="isConflict('birthPlaceId')"><select name="choice-birthPlaceId" :aria-label="t('保留字段：{0}', [choiceLabels.birthPlaceId])" v-model="choices.birthPlaceId"><option value="auto">{{ t('自动采用保留记录') }}</option><option value="keep">{{ t('出生地取保留记录') }}</option><option value="remove">{{ t('出生地取合并记录') }}</option></select></BaseSelectControl><span v-else>{{ t('出生地自动保留非空值') }}</span><BaseSelectControl v-if="isConflict('deathPlaceId')"><select name="choice-deathPlaceId" :aria-label="t('保留字段：{0}', [choiceLabels.deathPlaceId])" v-model="choices.deathPlaceId"><option value="auto">{{ t('自动采用保留记录') }}</option><option value="keep">{{ t('死亡地取保留记录') }}</option><option value="remove">{{ t('死亡地取合并记录') }}</option></select></BaseSelectControl><span v-else>{{ t('死亡地自动保留非空值') }}</span></span></div>
+          <div class="row"><b>{{ t('来源') }}</b><span>{{ sourceText(keep) }}</span><span>{{ sourceText(remove) }}</span><span>{{ t('默认全部保留') }}</span></div>
           <div v-for="sourceId in [...new Set([...(keep.sourceIds ?? []), ...(remove.sourceIds ?? [])])]" :key="sourceId" class="preserve-option">
-            <label><input type="checkbox" :checked="retainedSourceIds.includes(sourceId)" @change="retainedSourceIds = toggle(retainedSourceIds, sourceId, ($event.target as HTMLInputElement).checked)">保留来源“{{ sourceById.get(sourceId) ?? sourceId }}”</label>
+            <label><input type="checkbox" :checked="retainedSourceIds.includes(sourceId)" @change="retainedSourceIds = toggle(retainedSourceIds, sourceId, ($event.target as HTMLInputElement).checked)">{{ t('保留来源“{0}”', [sourceById.get(sourceId) ?? sourceId]) }}</label>
           </div>
-          <div class="row"><b>引用</b><span>{{ citationsText(keep.id) }}</span><span>{{ citationsText(remove.id) }}</span><span>默认全部保留</span></div>
-          <div v-for="citation in relatedCitations" :key="citation.id" class="preserve-option"><label><input :name="`retain-citation-${citation.id}`" type="checkbox" :checked="retainedCitationIds.includes(citation.id) && !forcedCitationIds.has(citation.id)" :disabled="forcedCitationIds.has(citation.id)" @change="retainedCitationIds = toggle(retainedCitationIds, citation.id, ($event.target as HTMLInputElement).checked)">保留引用 {{ citation.locator || citation.id }}</label></div>
-          <div class="row"><b>附件</b><span>{{ attachmentsText(keep.id) }}</span><span>{{ attachmentsText(remove.id) }}</span><span>默认全部保留</span></div>
-          <div v-for="link in relatedAttachmentLinks" :key="link.id" class="preserve-option"><label><input :name="`retain-attachment-${link.id}`" type="checkbox" :checked="retainedAttachmentLinkIds.includes(link.id) && !forcedAttachmentLinkIds.has(link.id)" :disabled="forcedAttachmentLinkIds.has(link.id)" @change="retainedAttachmentLinkIds = toggle(retainedAttachmentLinkIds, link.id, ($event.target as HTMLInputElement).checked)">保留附件“{{ attachmentById.get(link.attachmentId)?.name ?? link.attachmentId }}”</label></div>
-          <div v-if="forcedCitationIds.size || forcedAttachmentLinkIds.size" class="cascade-note">随已取消的关系或引用一并移除，避免产生悬空证据。</div>
-          <div class="row"><b>备注</b><span>{{ keep.notes || '无' }}</span><span>{{ remove.notes || '无' }}</span><BaseSelectControl v-if="isConflict('notes')"><select name="choice-notes" :aria-label="`保留字段：${choiceLabels.notes}`" v-model="choices.notes"><option value="auto">自动采用保留记录</option><option value="keep">保留记录</option><option value="remove">合并记录</option></select></BaseSelectControl><span v-else>自动保留非空值</span></div>
-          <div class="row"><b>人物简介</b><span>{{ keep.biography || '无' }}</span><span>{{ remove.biography || '无' }}</span><BaseSelectControl v-if="isConflict('biography')"><select name="choice-biography" :aria-label="`保留字段：${choiceLabels.biography}`" v-model="choices.biography"><option value="auto">自动采用保留记录</option><option value="keep">保留记录</option><option value="remove">合并记录</option></select></BaseSelectControl><span v-else>自动保留非空值</span></div>
+          <div class="row"><b>{{ t('引用') }}</b><span>{{ citationsText(keep.id) }}</span><span>{{ citationsText(remove.id) }}</span><span>{{ t('默认全部保留') }}</span></div>
+          <div v-for="citation in relatedCitations" :key="citation.id" class="preserve-option"><label><input :name="`retain-citation-${citation.id}`" type="checkbox" :checked="retainedCitationIds.includes(citation.id) && !forcedCitationIds.has(citation.id)" :disabled="forcedCitationIds.has(citation.id)" @change="retainedCitationIds = toggle(retainedCitationIds, citation.id, ($event.target as HTMLInputElement).checked)">{{ t('保留引用 {0}', [citation.locator || citation.id]) }}</label></div>
+          <div class="row"><b>{{ t('附件') }}</b><span>{{ attachmentsText(keep.id) }}</span><span>{{ attachmentsText(remove.id) }}</span><span>{{ t('默认全部保留') }}</span></div>
+          <div v-for="link in relatedAttachmentLinks" :key="link.id" class="preserve-option"><label><input :name="`retain-attachment-${link.id}`" type="checkbox" :checked="retainedAttachmentLinkIds.includes(link.id) && !forcedAttachmentLinkIds.has(link.id)" :disabled="forcedAttachmentLinkIds.has(link.id)" @change="retainedAttachmentLinkIds = toggle(retainedAttachmentLinkIds, link.id, ($event.target as HTMLInputElement).checked)">{{ t('保留附件“{0}”', [attachmentById.get(link.attachmentId)?.name ?? link.attachmentId]) }}</label></div>
+          <div v-if="forcedCitationIds.size || forcedAttachmentLinkIds.size" class="cascade-note">{{ t('随已取消的关系或引用一并移除，避免产生悬空证据。') }}</div>
+          <div class="row"><b>{{ t('备注') }}</b><span>{{ keep.notes || t('无') }}</span><span>{{ remove.notes || t('无') }}</span><BaseSelectControl v-if="isConflict('notes')"><select name="choice-notes" :aria-label="t('保留字段：{0}', [choiceLabels.notes])" v-model="choices.notes"><option value="auto">{{ t('自动采用保留记录') }}</option><option value="keep">{{ t('保留记录') }}</option><option value="remove">{{ t('合并记录') }}</option></select></BaseSelectControl><span v-else>{{ t('自动保留非空值') }}</span></div>
+          <div class="row"><b>{{ t('人物简介') }}</b><span>{{ keep.biography || t('无') }}</span><span>{{ remove.biography || t('无') }}</span><BaseSelectControl v-if="isConflict('biography')"><select name="choice-biography" :aria-label="t('保留字段：{0}', [choiceLabels.biography])" v-model="choices.biography"><option value="auto">{{ t('自动采用保留记录') }}</option><option value="keep">{{ t('保留记录') }}</option><option value="remove">{{ t('合并记录') }}</option></select></BaseSelectControl><span v-else>{{ t('自动保留非空值') }}</span></div>
         </div>
-        <p v-else role="alert">待合并人物不存在。</p>
+        <p v-else role="alert">{{ t('待合并人物不存在。') }}</p>
         <p v-if="errorMessage" role="alert">{{ errorMessage }}</p>
         <footer>
-          <span v-if="preview">预览：删除 {{ preview.summary.removedRelationships }} 条自环或重复关系，重连 {{ preview.summary.rewiredEvents + preview.summary.rewiredCitations + preview.summary.rewiredAttachmentLinks }} 个关联。</span>
-          <span v-else-if="unresolvedConflicts.length">请先选择所有冲突字段的保留值。</span>
-          <span v-else-if="unresolvedRelationshipConflicts.length">请先选择所有关系冲突字段的保留值。</span>
-          <button type="button" name="确认合并" :disabled="saving || !preview" @click="confirmMerge">{{ saving ? '合并中…' : '确认合并' }}</button>
+          <span v-if="preview">{{ t('预览：删除 {0} 条自环或重复关系，重连 {1} 个关联。', [preview.summary.removedRelationships, preview.summary.rewiredEvents + preview.summary.rewiredCitations + preview.summary.rewiredAttachmentLinks]) }}</span>
+          <span v-else-if="unresolvedConflicts.length">{{ t('请先选择所有冲突字段的保留值。') }}</span>
+          <span v-else-if="unresolvedRelationshipConflicts.length">{{ t('请先选择所有关系冲突字段的保留值。') }}</span>
+          <button type="button" :name="t('确认合并')" :disabled="saving || !preview" @click="confirmMerge">{{ saving ? t('合并中…') : t('确认合并') }}</button>
         </footer>
       </template>
     </section>

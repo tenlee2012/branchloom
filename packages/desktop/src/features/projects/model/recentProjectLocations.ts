@@ -1,3 +1,4 @@
+import { t } from '../../../shared/i18n'
 import type { Project } from '../../../shared/domain/types'
 
 export const RECENT_PROJECT_LOCATIONS_KEY = 'branchloom.prototype.recent-locations.v1'
@@ -100,7 +101,7 @@ export class BrowserRecentProjectLocations {
       id: `recent-${project.id}`,
       projectId: project.id,
       name: project.name,
-      location: '本机资料库',
+      location: t('本机资料库'),
       lastOpenedAt: new Date().toISOString(),
     }
     this.save([next, ...current])
@@ -154,7 +155,7 @@ export function resolveRecentProjects(
         id,
         projectId: project.id,
         name: project.name,
-        location: '本机资料库',
+        location: t('本机资料库'),
         lastOpenedAt: project.updatedAt,
         status: 'available',
         project,

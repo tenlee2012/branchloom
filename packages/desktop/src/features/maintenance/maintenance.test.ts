@@ -3,6 +3,7 @@ import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h } from 'vue'
+import { setLocale } from '../../shared/i18n'
 import type { BranchloomRepository, PrototypeState } from '../../shared/domain/types'
 import { createDemoState } from '../../shared/fixtures/demoState'
 import { findDuplicateNameEvidence } from '../../shared/domain/duplicateInspection'
@@ -137,6 +138,18 @@ afterEach(() => {
 })
 
 describe('project inspection', () => {
+  it('keeps issue identities and field codes stable across interface languages', async () => {
+    const repository = makeCorruptInspectionRepository()
+    setLocale('en')
+    const english = await repository.inspectProject(PROJECT_ID)
+    setLocale('zh-CN')
+    const chinese = await repository.inspectProject(PROJECT_ID)
+    const identities = (issues: typeof english) => issues.map(({ id, code, severity, targetType, targetId }) => ({ id, code, severity, targetType, targetId }))
+    expect(identities(english)).toEqual(identities(chinese))
+    const englishDateIssues = english.filter(({ code }) => code === 'incomplete-date')
+    expect(englishDateIssues.length).toBeGreaterThan(0)
+    expect(englishDateIssues.every(({ message }) => !message.includes('日期'))).toBe(true)
+  })
   it('detects every specified structural, historical and integrity issue with correct severity', async () => {
     const issues = await makeCorruptInspectionRepository().inspectProject(PROJECT_ID)
     const codes = issues.map(({ code }) => code)

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import LanguageSelect from './LanguageSelect.vue'
+import { t } from '../../shared/i18n'
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import {
@@ -26,7 +28,7 @@ const emit = defineEmits<{
       v-if="showMenuButton"
       class="app-topbar__menu"
       type="button"
-      aria-label="打开菜单"
+      :aria-label="t('打开菜单')"
       aria-controls="mobile-project-menu"
       aria-haspopup="dialog"
       :aria-expanded="Boolean(menuOpen)"
@@ -41,31 +43,30 @@ const emit = defineEmits<{
         data-tauri-drag-region
         aria-hidden="true"
       >
-        <span class="app-topbar__mobile-project">{{ projectName || '有谱' }}</span>
+        <span class="app-topbar__mobile-project">{{ projectName || t('有谱') }}</span>
       </div>
       <PageBackLink v-else placement="topbar" />
     </div>
 
     <div
-      v-if="route.name !== 'project-new' && route.name !== 'project-overview'"
       class="app-topbar__actions"
-      :aria-label="isTreeWorkspace ? '家谱树操作' : '资料操作'"
+      :aria-label="isTreeWorkspace ? t('家谱树操作') : t('资料操作')"
     >
-      <DataRefreshButton :compact-on-mobile="isTreeWorkspace" />
-      <BaseButton v-if="isTreeWorkspace" class="app-topbar__fit-canvas" name="适应画布" size="sm" variant="secondary" @click="emit('fitTree')">
-        <IconArrowsMaximize :size="17" aria-hidden="true" />适应画布
-      </BaseButton>
+      <LanguageSelect v-if="!showMenuButton" />
+      <DataRefreshButton v-if="route.name !== 'project-new' && route.name !== 'project-overview'" :compact-on-mobile="showMenuButton" />
+      <BaseButton v-if="isTreeWorkspace" class="app-topbar__fit-canvas" :name="t('适应画布')" size="sm" variant="secondary" @click="emit('fitTree')">
+        <IconArrowsMaximize :size="17" aria-hidden="true" />{{ t('适应画布') }} </BaseButton>
       <BaseButton
         v-if="isTreeWorkspace"
         class="app-topbar__add-person"
-        name="添加人物"
-        aria-label="添加人物"
-        title="添加人物"
+        :name="t('添加人物')"
+        :aria-label="t('添加人物')"
+        :title="t('添加人物')"
         size="sm"
         @click="emit('addPerson')"
       >
         <IconUserPlus :size="18" aria-hidden="true" />
-        <span class="app-topbar__add-person-label">添加人物</span>
+        <span class="app-topbar__add-person-label">{{ t('添加人物') }}</span>
       </BaseButton>
     </div>
   </header>

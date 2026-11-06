@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localizeSystemMessage, t } from '../../../shared/i18n'
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import StatusBadge from '../../../design-system/StatusBadge.vue'
@@ -7,9 +8,9 @@ import type { DataIssue } from '../../../shared/domain/types'
 const props = defineProps<{ projectId: string; issues: DataIssue[] }>()
 
 const groups = computed(() => [
-  { severity: 'error' as const, label: '结构错误', tone: 'danger' as const },
-  { severity: 'warning' as const, label: '警告', tone: 'warning' as const },
-  { severity: 'info' as const, label: '提示', tone: 'info' as const },
+  { severity: 'error' as const, label: t('结构错误'), tone: 'danger' as const },
+  { severity: 'warning' as const, label: t('警告'), tone: 'warning' as const },
+  { severity: 'info' as const, label: t('提示'), tone: 'info' as const },
 ].map((group) => ({
   ...group,
   issues: props.issues.filter(({ severity }) => severity === group.severity),
@@ -31,13 +32,13 @@ function target(issue: DataIssue): string {
       <header><h2>{{ group.label }}</h2><StatusBadge :tone="group.tone">{{ group.issues.length }}</StatusBadge></header>
       <ul>
         <li v-for="item in group.issues" :key="item.id">
-          <div><strong>{{ item.message }}</strong><code>{{ item.code }}</code></div>
-          <RouterLink :to="target(item)" :aria-label="`查看资料：${item.message}`">查看资料</RouterLink>
+          <div><strong>{{ localizeSystemMessage(item.message) }}</strong><code>{{ item.code }}</code></div>
+          <RouterLink :to="target(item)" :aria-label="t('查看资料：{0}', [item.message])">{{ t('查看资料') }}</RouterLink>
         </li>
       </ul>
     </section>
     <section v-if="issues.length === 0" class="issue-list__empty" role="status">
-      <strong>没有发现数据问题</strong><span>当前项目通过了完整性检查。</span>
+      <strong>{{ t('没有发现数据问题') }}</strong><span>{{ t('当前项目通过了完整性检查。') }}</span>
     </section>
   </div>
 </template>

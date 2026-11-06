@@ -1,3 +1,4 @@
+import { getLocale, t } from '../../../shared/i18n'
 import type { Core, ElementDefinition, EventObject, EventObjectNode, StylesheetStyle } from 'cytoscape'
 import type {
   GraphAdapter,
@@ -28,7 +29,7 @@ function compactDate(label: string | undefined): string {
   if (!year) return label
   if (label.includes('以前')) return `<${year}`
   if (label.includes('以后')) return `${year}+`
-  return `${label.includes('约') ? '约' : ''}${year}`
+  return `${label.includes('约') ? getLocale() === 'en' ? '~' : '约' : ''}${year}`
 }
 
 function nodeLabel(node: VisibleGraph['nodes'][number], density: GraphDensity): string {
@@ -46,7 +47,7 @@ function nodeLabel(node: VisibleGraph['nodes'][number], density: GraphDensity): 
     if (lifespan) lines.push(lifespan)
   }
   if (density.places && node.birthPlaceLabel) lines.push(node.birthPlaceLabel)
-  if (node.collapsed) lines.push('＋ 分支已收起')
+  if (node.collapsed) lines.push(t('＋ 分支已收起'))
   return lines.join('\n')
 }
 
@@ -154,7 +155,7 @@ function elements(graph: VisibleGraph, density: GraphDensity): ElementDefinition
           id: `${family.id}:child:${childId}`,
           source: family.id,
           target: childId,
-          label: density.relationships ? '亲生' : '',
+          label: density.relationships ? t('亲生') : '',
           category: 'parent',
           type: 'biological',
           lineStyle: 'solid',
@@ -370,7 +371,7 @@ export function applyGraphAnnotations(cy: Core, graph: VisibleGraph, density: Gr
   cy.batch(() => {
     for (const node of graph.nodes) {
       const element = cy.getElementById(node.id)
-      const kinship = annotations.kinships.get(node.id)?.label ?? (annotations.kinships.size ? '未找到关系路径' : '')
+      const kinship = annotations.kinships.get(node.id)?.label ?? (annotations.kinships.size ? t('未找到关系路径') : '')
       const shortLabel = kinship.length > 12 ? `${kinship.slice(0, 11)}…` : kinship
       element.data('label', [nodeLabel(node, density), shortLabel].filter(Boolean).join('\n'))
       element.data('kinship', kinship)

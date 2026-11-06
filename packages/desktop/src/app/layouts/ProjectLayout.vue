@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localizeSystemMessage, t } from '../../shared/i18n'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import AppSidebar from '../components/AppSidebar.vue'
@@ -48,12 +49,12 @@ async function refreshProjectInPlace() {
   try {
     const project = await repository.getProject(projectId)
     if (request !== latestRequest) return
-    if (!project) throw new Error('项目已不存在')
+    if (!project) throw new Error(t('项目已不存在'))
     session.openProject(project, repository.getHistoryState())
   } catch (error) {
     if (request !== latestRequest) return
     session.closeProject(projectId)
-    loadError.value = error instanceof Error ? error.message : '项目资料无法读取'
+    loadError.value = error instanceof Error ? localizeSystemMessage(error.message) : t('项目资料无法读取')
     loadState.value = 'error'
   }
 }
@@ -106,7 +107,7 @@ watch(
         loadState.value = 'ready'
         return
       }
-      loadError.value = error instanceof Error ? error.message : '项目资料无法读取'
+      loadError.value = error instanceof Error ? localizeSystemMessage(error.message) : t('项目资料无法读取')
       loadState.value = 'error'
     }
   },
@@ -124,23 +125,21 @@ onBeforeUnmount(() => {
   <div
     v-if="loadState === 'loading'"
     class="project-gate"
-    aria-label="正在载入项目"
+    :aria-label="t('正在载入项目')"
     role="status"
   >
     <img class="project-gate__seal" :src="appIcon" alt="" aria-hidden="true" />
-    <p>正在载入家族档案…</p>
+    <p>{{ t('正在载入家族档案…') }}</p>
   </div>
 
   <main v-else-if="loadState === 'error'" class="project-gate project-gate--error">
     <div class="project-gate__error" role="alert">
-      <p class="project-gate__eyebrow">项目未能打开</p>
-      <h1>无法打开这个项目</h1>
-      <p>项目不存在、已被移除，或本地资料暂时无法读取。</p>
+      <p class="project-gate__eyebrow">{{ t('项目未能打开') }}</p>
+      <h1>{{ t('无法打开这个项目') }}</h1>
+      <p>{{ t('项目不存在、已被移除，或本地资料暂时无法读取。') }}</p>
       <small v-if="loadError">{{ loadError }}</small>
     </div>
-    <RouterLink class="project-gate__home" to="/" aria-label="返回 Branchloom 首页">
-      返回首页
-    </RouterLink>
+    <RouterLink class="project-gate__home" to="/" :aria-label="t('返回 Branchloom 首页')"> {{ t('返回首页') }} </RouterLink>
   </main>
 
   <div v-else class="project-layout" :class="{ 'project-layout--compact': compactLayout }">

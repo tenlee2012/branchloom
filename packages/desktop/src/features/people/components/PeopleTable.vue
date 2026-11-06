@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { getLocale, t } from '../../../shared/i18n'
 import {
   IconEdit,
   IconFocusCentered,
@@ -30,15 +31,15 @@ const allPageSelected = computed(() =>
 )
 
 const statusLabels: Record<Person['status'], string> = {
-  living: '在世',
-  deceased: '已故',
-  unknown: '未知',
+  living: t('在世'),
+  deceased: t('已故'),
+  unknown: t('未知'),
 }
 const sexLabels: Record<Person['sex'], string> = {
-  female: '女性',
-  male: '男性',
-  nonbinary: '非二元',
-  unknown: '未知',
+  female: t('女性'),
+  male: t('男性'),
+  nonbinary: t('非二元'),
+  unknown: t('未知'),
 }
 
 function primaryName(person: Person): string {
@@ -52,38 +53,38 @@ function checked(event: Event): boolean {
 function formatUpdatedAt(value: string): string {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
-  return new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium' }).format(date)
+  return new Intl.DateTimeFormat(getLocale(), { dateStyle: 'medium' }).format(date)
 }
 
 function centerActionLabel(person: Person): string {
   return person.id === props.centerPersonId
-    ? `取消中心人物：${primaryName(person)}`
-    : `设为中心人物：${primaryName(person)}`
+    ? t('取消中心人物：{0}', [primaryName(person)])
+    : t('设为中心人物：{0}', [primaryName(person)])
 }
 
 </script>
 
 <template>
   <div class="people-table__viewport">
-    <table class="people-table" aria-label="人物列表">
+    <table class="people-table" :aria-label="t('人物列表')">
       <thead>
         <tr>
           <th class="people-table__select" scope="col">
-            <span class="visually-hidden">选择</span>
+            <span class="visually-hidden">{{ t('选择') }}</span>
             <input
               type="checkbox"
               :checked="allPageSelected"
-              aria-label="选择本页全部人物"
+              :aria-label="t('选择本页全部人物')"
               @change="emit('select-page', people.map(({ id }) => id), checked($event))"
             />
           </th>
-          <th scope="col">人物</th>
-          <th scope="col">状态</th>
-          <th scope="col">性别</th>
-          <th scope="col">出生</th>
-          <th scope="col">死亡</th>
-          <th scope="col">最近整理</th>
-          <th scope="col"><span class="visually-hidden">操作</span></th>
+          <th scope="col">{{ t('人物') }}</th>
+          <th scope="col">{{ t('状态') }}</th>
+          <th scope="col">{{ t('性别') }}</th>
+          <th scope="col">{{ t('出生') }}</th>
+          <th scope="col">{{ t('死亡') }}</th>
+          <th scope="col">{{ t('最近整理') }}</th>
+          <th scope="col"><span class="visually-hidden">{{ t('操作') }}</span></th>
         </tr>
       </thead>
       <tbody>
@@ -93,50 +94,50 @@ function centerActionLabel(person: Person): string {
           :data-person-id="person.id"
           :data-center-person="person.id === centerPersonId || undefined"
         >
-          <td class="people-table__select" data-label="选择">
+          <td class="people-table__select" :data-label="t('选择')">
             <input
               type="checkbox"
               :checked="selectedIds.includes(person.id)"
-              :aria-label="`选择${primaryName(person)}`"
+              :aria-label="t('选择{0}', [primaryName(person)])"
               @change="emit('select', person.id, checked($event))"
             />
           </td>
-          <th data-label="人物" scope="row">
+          <th :data-label="t('人物')" scope="row">
             <RouterLink
               class="people-table__name"
               data-person-name
               :to="{ name: 'person-detail', params: { projectId, personId: person.id } }"
-              :aria-label="`打开人物详情：${primaryName(person)}`"
+              :aria-label="t('打开人物详情：{0}', [primaryName(person)])"
             >
               {{ primaryName(person) }}
             </RouterLink>
           </th>
-          <td :data-person-status="person.status" data-label="状态">
+          <td :data-person-status="person.status" :data-label="t('状态')">
             <span :class="['people-table__status', `people-table__status--${person.status}`]">
               {{ statusLabels[person.status] }}
             </span>
           </td>
-          <td data-label="性别">{{ sexLabels[person.sex] }}</td>
-          <td data-label="出生">{{ person.birth?.display ?? '—' }}</td>
-          <td data-label="死亡">{{ person.death?.display ?? '—' }}</td>
-          <td data-label="最近整理">{{ formatUpdatedAt(person.updatedAt) }}</td>
-          <td class="people-table__actions" data-label="操作">
+          <td :data-label="t('性别')">{{ sexLabels[person.sex] }}</td>
+          <td :data-label="t('出生')">{{ person.birth?.display ?? '—' }}</td>
+          <td :data-label="t('死亡')">{{ person.death?.display ?? '—' }}</td>
+          <td :data-label="t('最近整理')">{{ formatUpdatedAt(person.updatedAt) }}</td>
+          <td class="people-table__actions" :data-label="t('操作')">
             <div class="people-table__action-list">
               <RouterLink
                 class="people-table__icon-action"
                 :to="{ name: 'person-edit', params: { projectId, personId: person.id } }"
-                :aria-label="`编辑人物：${primaryName(person)}`"
-                :title="`编辑人物：${primaryName(person)}`"
-                :data-tooltip="`编辑人物：${primaryName(person)}`"
+                :aria-label="t('编辑人物：{0}', [primaryName(person)])"
+                :title="t('编辑人物：{0}', [primaryName(person)])"
+                :data-tooltip="t('编辑人物：{0}', [primaryName(person)])"
               >
                 <IconEdit :size="18" :stroke-width="1.8" aria-hidden="true" />
               </RouterLink>
               <button
                 class="people-table__icon-action people-table__icon-action--danger"
                 type="button"
-                :aria-label="`删除人物：${primaryName(person)}`"
-                :title="`删除人物：${primaryName(person)}`"
-                :data-tooltip="`删除人物：${primaryName(person)}`"
+                :aria-label="t('删除人物：{0}', [primaryName(person)])"
+                :title="t('删除人物：{0}', [primaryName(person)])"
+                :data-tooltip="t('删除人物：{0}', [primaryName(person)])"
                 @click="emit('delete', person)"
               >
                 <IconTrash :size="18" :stroke-width="1.8" aria-hidden="true" />
@@ -144,9 +145,9 @@ function centerActionLabel(person: Person): string {
               <RouterLink
                 class="people-table__icon-action"
                 :to="{ name: 'project-tree', params: { projectId }, query: { personId: person.id } }"
-                :aria-label="`在家谱树中定位：${primaryName(person)}`"
-                :title="`在家谱树中定位：${primaryName(person)}`"
-                :data-tooltip="`在家谱树中定位：${primaryName(person)}`"
+                :aria-label="t('在家谱树中定位：{0}', [primaryName(person)])"
+                :title="t('在家谱树中定位：{0}', [primaryName(person)])"
+                :data-tooltip="t('在家谱树中定位：{0}', [primaryName(person)])"
               >
                 <IconHierarchy :size="18" :stroke-width="1.8" aria-hidden="true" />
               </RouterLink>

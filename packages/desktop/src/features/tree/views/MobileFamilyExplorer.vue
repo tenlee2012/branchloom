@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localizeSystemMessage, t } from '../../../shared/i18n'
 import { computed, ref, shallowRef, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
@@ -38,7 +39,7 @@ let latestRequest = 0
 
 const centerPerson = computed(() => familySlice.value?.people
   .find(({ id }) => id === familySlice.value?.centerPersonId))
-const centerName = computed(() => centerPerson.value ? getPrimaryName(centerPerson.value) : '未选择中心人物')
+const centerName = computed(() => centerPerson.value ? getPrimaryName(centerPerson.value) : t('未选择中心人物'))
 const branches = computed(() => familySlice.value
   ? buildMobileFamilyBranches(familySlice.value, familySlice.value.centerPersonId)
   : [])
@@ -54,8 +55,8 @@ watch(
 )
 
 function lifeSummary(person: Person): string {
-  if (!person.birth && !person.death) return person.status === 'living' ? '在世' : '生卒时间待考'
-  return [person.birth?.display ?? '生年待考', person.death?.display ?? ''].filter(Boolean).join(' — ')
+  if (!person.birth && !person.death) return person.status === 'living' ? t('在世') : t('生卒时间待考')
+  return [person.birth?.display ?? t('生年待考'), person.death?.display ?? ''].filter(Boolean).join(' — ')
 }
 
 function branchAddPreset(key: MobileFamilyBranchKey) {
@@ -101,7 +102,7 @@ async function load() {
     }
   } catch (error) {
     if (request !== latestRequest) return
-    loadError.value = error instanceof Error ? error.message : '家谱关系暂时无法读取'
+    loadError.value = error instanceof Error ? localizeSystemMessage(error.message) : t('家谱关系暂时无法读取')
     loadState.value = 'error'
     changingCenterId.value = ''
   }
@@ -151,44 +152,40 @@ defineExpose({ fitCanvas, addPerson })
   <section class="mobile-family-explorer" aria-labelledby="mobile-family-title">
     <header class="mobile-family-explorer__intro">
       <div>
-        <p>以人物为中心</p>
-        <h1 id="mobile-family-title">逐层读家谱</h1>
+        <p>{{ t('以人物为中心') }}</p>
+        <h1 id="mobile-family-title">{{ t('逐层读家谱') }}</h1>
       </div>
       <RouterLink
         :to="{ name: 'project-people', params: { projectId } }"
-        aria-label="搜索并选择中心人物"
+        :aria-label="t('搜索并选择中心人物')"
       >
-        <IconUser :size="19" aria-hidden="true" />选择人物
-      </RouterLink>
+        <IconUser :size="19" aria-hidden="true" />{{ t('选择人物') }} </RouterLink>
     </header>
 
-    <div v-if="trail.length" class="mobile-family-explorer__trail" aria-label="探索路径">
+    <div v-if="trail.length" class="mobile-family-explorer__trail" :aria-label="t('探索路径')">
       <button type="button" @click="returnToPreviousCenter">
-        <IconArrowLeft :size="18" aria-hidden="true" />
-        返回 {{ getPrimaryName(trail[trail.length - 1]!) }}
+        <IconArrowLeft :size="18" aria-hidden="true" /> {{ t('返回 {0}', [getPrimaryName(trail[trail.length - 1]!)]) }}
       </button>
-      <span>{{ trail.length }} 步探索</span>
+      <span>{{ t('{0} 步探索', [trail.length]) }}</span>
     </div>
 
     <div v-if="loadState === 'loading'" class="mobile-family-explorer__state" role="status">
-      <span aria-hidden="true" />
-      正在展开 {{ changingCenterId ? '这一支' : '家谱' }}…
-    </div>
+      <span aria-hidden="true" /> {{ t('正在展开 {0}…', [changingCenterId ? t('这一支') : t('家谱')]) }} </div>
 
     <div v-else-if="loadState === 'error'" class="mobile-family-explorer__state mobile-family-explorer__state--error" role="alert">
-      <strong>这一支家谱未能展开</strong>
+      <strong>{{ t('这一支家谱未能展开') }}</strong>
       <p>{{ loadError }}</p>
-      <BaseButton size="sm" variant="secondary" @click="load">重新读取</BaseButton>
+      <BaseButton size="sm" variant="secondary" @click="load">{{ t('重新读取') }}</BaseButton>
     </div>
 
     <EmptyState
       v-else-if="!centerPerson"
-      title="还没有中心人物"
-      description="先建立一位人物，再从他或她出发记录家族关系。"
+      :title="t('还没有中心人物')"
+      :description="t('先建立一位人物，再从他或她出发记录家族关系。')"
     >
-      <span class="mobile-family-explorer__empty-mark">谱</span>
+      <span class="mobile-family-explorer__empty-mark">{{ t('谱') }}</span>
       <template #actions>
-        <RouterLink :to="{ name: 'person-new', params: { projectId } }">建立第一个人物</RouterLink>
+        <RouterLink :to="{ name: 'person-new', params: { projectId } }">{{ t('建立第一个人物') }}</RouterLink>
       </template>
     </EmptyState>
 
@@ -199,7 +196,7 @@ defineExpose({ fitCanvas, addPerson })
           <span v-else>{{ centerName.slice(0, 1) }}</span>
         </div>
         <div class="mobile-family-explorer__identity">
-          <p>当前中心人物</p>
+          <p>{{ t('当前中心人物') }}</p>
           <h2>{{ centerName }}</h2>
           <span>{{ lifeSummary(centerPerson) }}</span>
         </div>
@@ -210,15 +207,14 @@ defineExpose({ fitCanvas, addPerson })
             params: { projectId, personId: centerPerson.id },
             query: { returnTo: route.fullPath },
           }"
-        >查看档案</RouterLink>
+        >{{ t('查看档案') }}</RouterLink>
         <button
           type="button"
           class="mobile-family-explorer__add-relative"
-          :aria-label="`为${centerName}添加亲属`"
+          :aria-label="t('为{0}添加亲属', [centerName])"
           @click="openQuickAdd('custom')"
         >
-          <IconPlus :size="18" aria-hidden="true" />添加亲属
-        </button>
+          <IconPlus :size="18" aria-hidden="true" />{{ t('添加亲属') }} </button>
       </article>
 
       <div class="mobile-family-explorer__branches">
@@ -241,7 +237,7 @@ defineExpose({ fitCanvas, addPerson })
             <button
               v-if="branchAddPreset(branch.key)"
               type="button"
-              :aria-label="`为${centerName}添加${branch.label}`"
+              :aria-label="t('为{0}添加{1}', [centerName, branch.label])"
               @click="openBranchQuickAdd(branch.key)"
             >
               <IconPlus :size="18" aria-hidden="true" />
@@ -253,7 +249,7 @@ defineExpose({ fitCanvas, addPerson })
               v-for="item in branch.items"
               :key="`${branch.key}-${item.relationship.id}-${item.person.id}`"
               type="button"
-              :aria-label="`以${getPrimaryName(item.person)}为中心继续探索`"
+              :aria-label="t('以{0}为中心继续探索', [getPrimaryName(item.person)])"
               @click="changeCenter(item.person)"
             >
               <span class="mobile-family-explorer__mini-portrait" aria-hidden="true">
@@ -268,7 +264,7 @@ defineExpose({ fitCanvas, addPerson })
               <IconChevronRight :size="20" aria-hidden="true" />
             </button>
           </div>
-          <p v-else class="mobile-family-explorer__empty-branch">这一支还没有记录</p>
+          <p v-else class="mobile-family-explorer__empty-branch">{{ t('这一支还没有记录') }}</p>
         </section>
       </div>
     </template>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '../shared/i18n'
 import { computed, ref, useId } from 'vue'
 import { useModalOverlay } from './useModalOverlay'
 
@@ -10,7 +11,7 @@ const props = withDefaults(
     closeLabel?: string
     inline?: boolean
   }>(),
-  { closeLabel: '关闭', inline: false },
+  { closeLabel: t('关闭'), inline: false },
 )
 
 const emit = defineEmits<{ close: [] }>()

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '../../../shared/i18n'
 import {
   IconCalendarEvent,
   IconFile,
@@ -17,15 +18,15 @@ function formatBytes(bytes: number): string {
 }
 
 const cards = [
-  { key: 'people', label: '人物', helper: '人物档案', icon: IconUsers },
-  { key: 'relationships', label: '关系', helper: '已记录关系', icon: IconLink },
-  { key: 'events', label: '事件', helper: '时间事件', icon: IconCalendarEvent },
-  { key: 'sources', label: '来源', helper: '资料来源', icon: IconNotes },
+  { key: 'people', label: t('人物'), helper: t('人物档案'), icon: IconUsers },
+  { key: 'relationships', label: t('关系'), helper: t('已记录关系'), icon: IconLink },
+  { key: 'events', label: t('事件'), helper: t('时间事件'), icon: IconCalendarEvent },
+  { key: 'sources', label: t('来源'), helper: t('资料来源'), icon: IconNotes },
 ] as const
 </script>
 
 <template>
-  <dl class="project-stats" aria-label="项目统计">
+  <dl class="project-stats" :aria-label="t('项目统计')">
     <div v-for="card in cards" :key="card.key">
       <dt>
         <component :is="card.icon" :size="18" :stroke-width="1.7" aria-hidden="true" />
@@ -35,9 +36,9 @@ const cards = [
       <small>{{ card.helper }}</small>
     </div>
     <div>
-      <dt><IconFile :size="18" :stroke-width="1.7" aria-hidden="true" />附件</dt>
+      <dt><IconFile :size="18" :stroke-width="1.7" aria-hidden="true" />{{ t('附件') }}</dt>
       <dd>{{ summary.attachments }}</dd>
-      <small>{{ formatBytes(summary.attachmentBytes) }} 本地文件</small>
+      <small>{{ t('{0} 本地文件', [formatBytes(summary.attachmentBytes)]) }}</small>
     </div>
   </dl>
 </template>

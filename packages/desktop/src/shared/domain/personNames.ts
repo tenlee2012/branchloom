@@ -1,20 +1,21 @@
+import { t } from '../i18n'
 import type { Person, PersonName, PersonNameType } from './types'
 
 export const personNameTypeLabels: Record<PersonNameType, string> = {
-  personal: '名／讳',
-  courtesy: '字',
-  art: '号',
-  genealogy: '谱名',
-  generation: '行名',
-  childhood: '乳名／小名',
-  former: '曾用名',
-  pen: '笔名／艺名',
-  religious: '法名／道号',
-  posthumous: '谥号',
-  temple: '庙号',
-  honorific: '尊号',
-  alias: '别名',
-  custom: '自定义',
+  get personal() { return t('名／讳') },
+  get courtesy() { return t('字') },
+  get art() { return t('号') },
+  get genealogy() { return t('谱名') },
+  get generation() { return t('行名') },
+  get childhood() { return t('乳名／小名') },
+  get former() { return t('曾用名') },
+  get pen() { return t('笔名／艺名') },
+  get religious() { return t('法名／道号') },
+  get posthumous() { return t('谥号') },
+  get temple() { return t('庙号') },
+  get honorific() { return t('尊号') },
+  get alias() { return t('别名') },
+  get custom() { return t('自定义') },
 }
 
 export const editablePersonNameTypes: PersonNameType[] = [
@@ -39,7 +40,7 @@ export function getPrimaryNameRecord(person: Pick<Person, 'names'>): PersonName 
 }
 
 export function getPrimaryName(person: Pick<Person, 'names'>): string {
-  return getPrimaryNameRecord(person)?.value ?? '未命名人物'
+  return getPrimaryNameRecord(person)?.value ?? t('未命名人物')
 }
 
 /** Lower ranks prefer exact names, then prefixes, then substrings over matches in other fields. */

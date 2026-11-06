@@ -17,6 +17,17 @@ pub fn runtime_capabilities() -> RuntimeCapabilities {
     }
 }
 
+/// Linux locale overrides take precedence over the webview's preferred language.
+/// Other platforms use the webview's native system-language reporting.
+#[tauri::command]
+pub fn system_locale() -> Option<String> {
+    if cfg!(target_os = "linux") {
+        crate::locale::locale_from_environment(|key| std::env::var(key).ok())
+    } else {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::runtime_capabilities;

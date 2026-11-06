@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 import type { DataIssue, GenealogyDate, Person } from './types'
 
 function isLeapYear(year: number): boolean {
@@ -122,7 +123,7 @@ export function validateLifeDates(person: Person): DataIssue[] {
       id: `issue-${person.id}-death-before-birth`,
       severity: 'warning',
       code: 'death-before-birth',
-      message: '死亡日期早于出生日期，请核对日期或不确定范围。',
+      message: t('死亡日期早于出生日期，请核对日期或不确定范围。'),
       targetType: 'person',
       targetId: person.id,
     },

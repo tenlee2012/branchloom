@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '../../../shared/i18n'
 import { computed, ref } from 'vue'
 import BaseButton from '../../../design-system/BaseButton.vue'
 import BaseDialog from '../../../design-system/BaseDialog.vue'
@@ -108,18 +109,16 @@ function removeName() {
   <fieldset class="person-name-fields">
     <div class="person-name-fields__heading">
       <div>
-        <legend>姓名与称谓</legend>
-        <p>主显示名与“名、字、号”等类型分别保存。</p>
+        <legend>{{ t('姓名与称谓') }}</legend>
+        <p>{{ t('主显示名与“名、字、号”等类型分别保存。') }}</p>
       </div>
-      <BaseButton name="添加姓名" variant="secondary" size="sm" @click="addName">
-        添加姓名
-      </BaseButton>
+      <BaseButton :name="t('添加姓名')" variant="secondary" size="sm" @click="addName"> {{ t('添加姓名') }} </BaseButton>
     </div>
 
     <article v-if="primaryName" class="person-name-fields__card person-name-fields__card--primary">
-      <div class="person-name-fields__badge">主显示名</div>
+      <div class="person-name-fields__badge">{{ t('主显示名') }}</div>
       <div class="person-name-fields__row">
-        <BaseField id="person-primary-name" label="主姓名" required>
+        <BaseField id="person-primary-name" :label="t('主姓名')" required>
           <template #default="field">
             <input
               id="person-primary-name"
@@ -132,7 +131,7 @@ function removeName() {
             />
           </template>
         </BaseField>
-        <BaseField :id="`${primaryName.id}-type`" label="姓名类型">
+        <BaseField :id="`${primaryName.id}-type`" :label="t('姓名类型')">
           <BaseSelectControl>
             <select
               :id="`${primaryName.id}-type`"
@@ -149,7 +148,7 @@ function removeName() {
       <BaseField
         v-if="primaryName.type === 'custom'"
         :id="`${primaryName.id}-custom-type`"
-        label="自定义类型名称"
+        :label="t('自定义类型名称')"
         required
       >
         <input
@@ -159,37 +158,37 @@ function removeName() {
         />
       </BaseField>
       <details class="person-name-fields__details" :data-name-details="primaryName.id">
-        <summary>更多姓名资料</summary>
+        <summary>{{ t('更多姓名资料') }}</summary>
         <div class="person-name-fields__details-grid">
-          <BaseField :id="`${primaryName.id}-context`" label="使用场景">
+          <BaseField :id="`${primaryName.id}-context`" :label="t('使用场景')">
             <input
               :id="`${primaryName.id}-context`"
               :value="primaryName.context ?? ''"
               @input="removeOptionalField(primaryName.id, 'context', ($event.target as HTMLInputElement).value)"
             />
           </BaseField>
-          <BaseField :id="`${primaryName.id}-family-name`" label="姓氏（辅助字段）">
+          <BaseField :id="`${primaryName.id}-family-name`" :label="t('姓氏（辅助字段）')">
             <input
               :id="`${primaryName.id}-family-name`"
               :value="primaryName.familyName ?? ''"
               @input="removeOptionalField(primaryName.id, 'familyName', ($event.target as HTMLInputElement).value)"
             />
           </BaseField>
-          <BaseField :id="`${primaryName.id}-given-name`" label="名字（辅助字段）">
+          <BaseField :id="`${primaryName.id}-given-name`" :label="t('名字（辅助字段）')">
             <input
               :id="`${primaryName.id}-given-name`"
               :value="primaryName.givenName ?? ''"
               @input="removeOptionalField(primaryName.id, 'givenName', ($event.target as HTMLInputElement).value)"
             />
           </BaseField>
-          <BaseField :id="`${primaryName.id}-valid-from`" label="开始使用时间">
+          <BaseField :id="`${primaryName.id}-valid-from`" :label="t('开始使用时间')">
             <input
               :id="`${primaryName.id}-valid-from`"
               :value="primaryName.validFrom?.display ?? ''"
               @input="updateNameDate(primaryName.id, 'validFrom', ($event.target as HTMLInputElement).value)"
             />
           </BaseField>
-          <BaseField :id="`${primaryName.id}-valid-to`" label="结束使用时间">
+          <BaseField :id="`${primaryName.id}-valid-to`" :label="t('结束使用时间')">
             <input
               :id="`${primaryName.id}-valid-to`"
               :value="primaryName.validTo?.display ?? ''"
@@ -197,7 +196,7 @@ function removeName() {
             />
           </BaseField>
         </div>
-        <BaseField :id="`${primaryName.id}-notes`" label="姓名备注">
+        <BaseField :id="`${primaryName.id}-notes`" :label="t('姓名备注')">
           <textarea
             :id="`${primaryName.id}-notes`"
             :value="primaryName.notes"
@@ -210,7 +209,7 @@ function removeName() {
 
     <article v-for="name in otherNames" :key="name.id" class="person-name-fields__card">
       <div class="person-name-fields__row">
-        <BaseField :id="`${name.id}-value`" label="名称">
+        <BaseField :id="`${name.id}-value`" :label="t('名称')">
           <input
             :id="`${name.id}-value`"
             name="personName"
@@ -218,12 +217,12 @@ function removeName() {
             @input="updateName(name.id, { value: ($event.target as HTMLInputElement).value })"
           />
         </BaseField>
-        <BaseField :id="`${name.id}-type`" label="类型">
+        <BaseField :id="`${name.id}-type`" :label="t('类型')">
           <BaseSelectControl>
             <select
               :id="`${name.id}-type`"
               :value="name.type"
-              :aria-label="`姓名类型：${name.value || '未填写'}`"
+              :aria-label="t('姓名类型：{0}', [name.value || t('未填写')])"
               @change="updateName(name.id, { type: ($event.target as HTMLSelectElement).value as PersonName['type'] })"
             >
               <option v-for="type in editablePersonNameTypes" :key="type" :value="type">
@@ -233,7 +232,7 @@ function removeName() {
           </BaseSelectControl>
         </BaseField>
       </div>
-      <BaseField v-if="name.type === 'custom'" :id="`${name.id}-custom-type`" label="自定义类型名称" required>
+      <BaseField v-if="name.type === 'custom'" :id="`${name.id}-custom-type`" :label="t('自定义类型名称')" required>
         <input
           :id="`${name.id}-custom-type`"
           :value="name.customTypeLabel ?? ''"
@@ -244,48 +243,48 @@ function removeName() {
         <BaseButton
           variant="ghost"
           size="sm"
-          :aria-label="`设为主姓名：${name.value || '未填写姓名'}`"
+          :aria-label="t('设为主姓名：{0}', [name.value || t('未填写姓名')])"
           @click="setPrimary(name.id)"
-        >设为主显示名</BaseButton>
+        >{{ t('设为主显示名') }}</BaseButton>
         <BaseButton
           variant="ghost"
           size="sm"
-          :aria-label="`移除姓名：${name.value || '未填写姓名'}`"
+          :aria-label="t('移除姓名：{0}', [name.value || t('未填写姓名')])"
           @click="requestRemoveName(name.id)"
-        >移除</BaseButton>
+        >{{ t('移除') }}</BaseButton>
       </div>
       <details class="person-name-fields__details" :data-name-details="name.id">
-        <summary>使用场景与更多姓名资料</summary>
+        <summary>{{ t('使用场景与更多姓名资料') }}</summary>
         <div class="person-name-fields__details-grid">
-          <BaseField :id="`${name.id}-context`" label="使用场景">
+          <BaseField :id="`${name.id}-context`" :label="t('使用场景')">
             <input
               :id="`${name.id}-context`"
               :value="name.context ?? ''"
               @input="removeOptionalField(name.id, 'context', ($event.target as HTMLInputElement).value)"
             />
           </BaseField>
-          <BaseField :id="`${name.id}-family-name`" label="姓氏（辅助字段）">
+          <BaseField :id="`${name.id}-family-name`" :label="t('姓氏（辅助字段）')">
             <input
               :id="`${name.id}-family-name`"
               :value="name.familyName ?? ''"
               @input="removeOptionalField(name.id, 'familyName', ($event.target as HTMLInputElement).value)"
             />
           </BaseField>
-          <BaseField :id="`${name.id}-given-name`" label="名字（辅助字段）">
+          <BaseField :id="`${name.id}-given-name`" :label="t('名字（辅助字段）')">
             <input
               :id="`${name.id}-given-name`"
               :value="name.givenName ?? ''"
               @input="removeOptionalField(name.id, 'givenName', ($event.target as HTMLInputElement).value)"
             />
           </BaseField>
-          <BaseField :id="`${name.id}-valid-from`" label="开始使用时间">
+          <BaseField :id="`${name.id}-valid-from`" :label="t('开始使用时间')">
             <input
               :id="`${name.id}-valid-from`"
               :value="name.validFrom?.display ?? ''"
               @input="updateNameDate(name.id, 'validFrom', ($event.target as HTMLInputElement).value)"
             />
           </BaseField>
-          <BaseField :id="`${name.id}-valid-to`" label="结束使用时间">
+          <BaseField :id="`${name.id}-valid-to`" :label="t('结束使用时间')">
             <input
               :id="`${name.id}-valid-to`"
               :value="name.validTo?.display ?? ''"
@@ -293,7 +292,7 @@ function removeName() {
             />
           </BaseField>
         </div>
-        <BaseField :id="`${name.id}-notes`" label="姓名备注">
+        <BaseField :id="`${name.id}-notes`" :label="t('姓名备注')">
           <textarea
             :id="`${name.id}-notes`"
             :value="name.notes"
@@ -307,20 +306,20 @@ function removeName() {
 
   <BaseDialog
     :open="Boolean(pendingRemoval)"
-    :title="`移除姓名“${pendingRemoval?.value || '未填写姓名'}”？`"
-    description="移除会在保存人物时生效。姓名不是独立资源，不会留下 name-id。"
-    close-label="保留姓名"
+    :title="t('移除姓名“{0}”？', [pendingRemoval?.value || t('未填写姓名')])"
+    :description="t('移除会在保存人物时生效。姓名不是独立资源，不会留下 name-id。')"
+    :close-label="t('保留姓名')"
     @close="pendingRemovalId = ''"
   >
     <div class="person-name-fields__remove-dialog">
-      <p>人物至少需要保留一个姓名；移除主姓名时，第一条剩余姓名会成为主姓名。</p>
+      <p>{{ t('人物至少需要保留一个姓名；移除主姓名时，第一条剩余姓名会成为主姓名。') }}</p>
       <div>
-        <BaseButton variant="secondary" @click="pendingRemovalId = ''">保留姓名</BaseButton>
+        <BaseButton variant="secondary" @click="pendingRemovalId = ''">{{ t('保留姓名') }}</BaseButton>
         <BaseButton
-          name="确认移除姓名"
+          :name="t('确认移除姓名')"
           variant="danger"
           @click="removeName"
-        >确认移除</BaseButton>
+        >{{ t('确认移除') }}</BaseButton>
       </div>
     </div>
   </BaseDialog>

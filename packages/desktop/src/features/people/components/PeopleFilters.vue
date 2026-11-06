@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '../../../shared/i18n'
 import { computed } from 'vue'
 import { IconFilterX, IconSearch } from '@tabler/icons-vue'
 import BaseButton from '../../../design-system/BaseButton.vue'
@@ -34,29 +35,29 @@ const activeFilters = computed(() => {
   if (props.search) {
     result.push({
       key: 'search',
-      label: `关键词：${props.search}`,
+      label: t('关键词：{0}', [props.search]),
       clear: () => emit('update:search', ''),
     })
   }
   if (props.status) {
-    const label = { living: '在世', deceased: '已故', unknown: '未知' }[props.status] ?? props.status
-    result.push({ key: 'status', label: `状态：${label}`, clear: () => emit('update:status', '') })
+    const label = { living: t('在世'), deceased: t('已故'), unknown: t('未知') }[props.status] ?? props.status
+    result.push({ key: 'status', label: t('状态：{0}', [label]), clear: () => emit('update:status', '') })
   }
   if (props.sex) {
     const label = {
-      female: '女性',
-      male: '男性',
-      nonbinary: '非二元',
-      unknown: '未知',
+      female: t('女性'),
+      male: t('男性'),
+      nonbinary: t('非二元'),
+      unknown: t('未知'),
     }[props.sex] ?? props.sex
-    result.push({ key: 'sex', label: `性别：${label}`, clear: () => emit('update:sex', '') })
+    result.push({ key: 'sex', label: t('性别：{0}', [label]), clear: () => emit('update:sex', '') })
   }
   const booleanFilters = [
-    ['sources', props.sourceFilter, '来源', '有来源', '无来源', () => emit('update:source-filter', '')],
-    ['avatar', props.avatarFilter, '头像', '有头像', '无头像', () => emit('update:avatar-filter', '')],
-    ['birth', props.birthFilter, '出生', '已记录', '未记录', () => emit('update:birth-filter', '')],
-    ['death', props.deathFilter, '死亡', '已记录', '未记录', () => emit('update:death-filter', '')],
-    ['issues', props.issueFilter, '问题', '有问题', '无问题', () => emit('update:issue-filter', '')],
+    ['sources', props.sourceFilter, t('来源'), t('有来源'), t('无来源'), () => emit('update:source-filter', '')],
+    ['avatar', props.avatarFilter, t('头像'), t('有头像'), t('无头像'), () => emit('update:avatar-filter', '')],
+    ['birth', props.birthFilter, t('出生'), t('已记录'), t('未记录'), () => emit('update:birth-filter', '')],
+    ['death', props.deathFilter, t('死亡'), t('已记录'), t('未记录'), () => emit('update:death-filter', '')],
+    ['issues', props.issueFilter, t('问题'), t('有问题'), t('无问题'), () => emit('update:issue-filter', '')],
   ] as const
   for (const [key, value, prefix, withLabel, withoutLabel, clear] of booleanFilters) {
     if (!value) continue
@@ -69,7 +70,7 @@ const activeFilters = computed(() => {
   if (props.sort !== 'name') {
     result.push({
       key: 'sort',
-      label: `排序：${props.sort === 'updatedAt' ? '最近更新' : '出生时间'}`,
+      label: t('排序：{0}', [props.sort === 'updatedAt' ? t('最近更新') : t('出生时间')]),
       clear: () => emit('update:sort', 'name'),
     })
   }
@@ -82,125 +83,125 @@ function inputValue(event: Event): string {
 </script>
 
 <template>
-  <form class="people-filters" aria-label="人物搜索与筛选" @submit.prevent>
+  <form class="people-filters" :aria-label="t('人物搜索与筛选')" @submit.prevent>
     <label class="people-filters__search">
-      <span>搜索人物</span>
+      <span>{{ t('搜索人物') }}</span>
       <span class="people-filters__search-control">
         <IconSearch :size="18" :stroke-width="1.8" aria-hidden="true" />
         <input
           type="search"
           :value="search"
-          aria-label="搜索人物"
+          :aria-label="t('搜索人物')"
           autocomplete="off"
-          placeholder="姓名、别名、生平、地点或事件"
+          :placeholder="t('姓名、别名、生平、地点或事件')"
           @input="emit('update:search', inputValue($event))"
         />
       </span>
     </label>
 
     <label>
-      <span>生存状态</span>
+      <span>{{ t('生存状态') }}</span>
       <FilterSelectControl>
         <select
           :value="status"
-          aria-label="生存状态"
+          :aria-label="t('生存状态')"
           @change="emit('update:status', inputValue($event))"
         >
-          <option value="">全部状态</option>
-          <option value="living">在世</option>
-          <option value="deceased">已故</option>
-          <option value="unknown">未知</option>
+          <option value="">{{ t('全部状态') }}</option>
+          <option value="living">{{ t('在世') }}</option>
+          <option value="deceased">{{ t('已故') }}</option>
+          <option value="unknown">{{ t('未知') }}</option>
         </select>
       </FilterSelectControl>
     </label>
 
     <label>
-      <span>资料来源</span>
+      <span>{{ t('资料来源') }}</span>
       <FilterSelectControl>
         <select
           :value="sourceFilter"
-          aria-label="来源状态"
+          :aria-label="t('来源状态')"
           @change="emit('update:source-filter', inputValue($event))"
         >
-          <option value="">全部人物</option>
-          <option value="with">有来源</option>
-          <option value="without">无来源</option>
+          <option value="">{{ t('全部人物') }}</option>
+          <option value="with">{{ t('有来源') }}</option>
+          <option value="without">{{ t('无来源') }}</option>
         </select>
       </FilterSelectControl>
     </label>
 
     <details class="people-filters__advanced">
-      <summary>更多筛选</summary>
+      <summary>{{ t('更多筛选') }}</summary>
       <div class="people-filters__advanced-grid">
         <label>
-          <span>性别</span>
+          <span>{{ t('性别') }}</span>
           <FilterSelectControl>
             <select
               :value="sex"
-              aria-label="性别筛选"
+              :aria-label="t('性别筛选')"
               @change="emit('update:sex', inputValue($event))"
             >
-              <option value="">全部性别</option>
-              <option value="female">女性</option>
-              <option value="male">男性</option>
-              <option value="nonbinary">非二元</option>
-              <option value="unknown">未知</option>
+              <option value="">{{ t('全部性别') }}</option>
+              <option value="female">{{ t('女性') }}</option>
+              <option value="male">{{ t('男性') }}</option>
+              <option value="nonbinary">{{ t('非二元') }}</option>
+              <option value="unknown">{{ t('未知') }}</option>
             </select>
           </FilterSelectControl>
         </label>
         <label>
-          <span>头像</span>
+          <span>{{ t('头像') }}</span>
           <FilterSelectControl>
             <select
               :value="avatarFilter"
-              aria-label="头像状态"
+              :aria-label="t('头像状态')"
               @change="emit('update:avatar-filter', inputValue($event))"
             >
-              <option value="">不限</option>
-              <option value="with">有头像</option>
-              <option value="without">无头像</option>
+              <option value="">{{ t('不限') }}</option>
+              <option value="with">{{ t('有头像') }}</option>
+              <option value="without">{{ t('无头像') }}</option>
             </select>
           </FilterSelectControl>
         </label>
         <label>
-          <span>出生资料</span>
+          <span>{{ t('出生资料') }}</span>
           <FilterSelectControl>
             <select
               :value="birthFilter"
-              aria-label="出生资料状态"
+              :aria-label="t('出生资料状态')"
               @change="emit('update:birth-filter', inputValue($event))"
             >
-              <option value="">不限</option>
-              <option value="with">已记录</option>
-              <option value="without">未记录</option>
+              <option value="">{{ t('不限') }}</option>
+              <option value="with">{{ t('已记录') }}</option>
+              <option value="without">{{ t('未记录') }}</option>
             </select>
           </FilterSelectControl>
         </label>
         <label>
-          <span>死亡资料</span>
+          <span>{{ t('死亡资料') }}</span>
           <FilterSelectControl>
             <select
               :value="deathFilter"
-              aria-label="死亡资料状态"
+              :aria-label="t('死亡资料状态')"
               @change="emit('update:death-filter', inputValue($event))"
             >
-              <option value="">不限</option>
-              <option value="with">已记录</option>
-              <option value="without">未记录</option>
+              <option value="">{{ t('不限') }}</option>
+              <option value="with">{{ t('已记录') }}</option>
+              <option value="without">{{ t('未记录') }}</option>
             </select>
           </FilterSelectControl>
         </label>
         <label>
-          <span>资料问题</span>
+          <span>{{ t('资料问题') }}</span>
           <FilterSelectControl>
             <select
               :value="issueFilter"
-              aria-label="资料问题状态"
+              :aria-label="t('资料问题状态')"
               @change="emit('update:issue-filter', inputValue($event))"
             >
-              <option value="">不限</option>
-              <option value="with">有待核对问题</option>
-              <option value="without">无已知问题</option>
+              <option value="">{{ t('不限') }}</option>
+              <option value="with">{{ t('有待核对问题') }}</option>
+              <option value="without">{{ t('无已知问题') }}</option>
             </select>
           </FilterSelectControl>
         </label>
@@ -208,16 +209,16 @@ function inputValue(event: Event): string {
     </details>
 
     <label>
-      <span>排序</span>
+      <span>{{ t('排序') }}</span>
       <FilterSelectControl>
         <select
           :value="sort"
-          aria-label="排序方式"
+          :aria-label="t('排序方式')"
           @change="emit('update:sort', inputValue($event))"
         >
-          <option value="name">{{ search.trim() ? '按匹配程度' : '按姓名' }}</option>
-          <option value="updatedAt">最近更新</option>
-          <option value="birth">按出生时间</option>
+          <option value="name">{{ search.trim() ? t('按匹配程度') : t('按姓名') }}</option>
+          <option value="updatedAt">{{ t('最近更新') }}</option>
+          <option value="birth">{{ t('按出生时间') }}</option>
         </select>
       </FilterSelectControl>
     </label>
@@ -225,21 +226,21 @@ function inputValue(event: Event): string {
     <BaseButton
       class="people-filters__clear"
       variant="secondary"
-      aria-label="清除全部筛选条件"
-      title="清除条件"
+      :aria-label="t('清除全部筛选条件')"
+      :title="t('清除条件')"
       @click="emit('clear')"
     >
       <IconFilterX :size="18" :stroke-width="1.8" aria-hidden="true" />
-      <span class="people-filters__clear-label">清除条件</span>
+      <span class="people-filters__clear-label">{{ t('清除条件') }}</span>
     </BaseButton>
 
-    <div v-if="activeFilters.length" class="people-filters__active" aria-label="当前筛选条件">
-      <span>当前条件</span>
+    <div v-if="activeFilters.length" class="people-filters__active" :aria-label="t('当前筛选条件')">
+      <span>{{ t('当前条件') }}</span>
       <button
         v-for="filter in activeFilters"
         :key="filter.key"
         type="button"
-        :aria-label="`清除${filter.label}`"
+        :aria-label="t('清除{0}', [filter.label])"
         @click="filter.clear"
       >
         {{ filter.label }} <span aria-hidden="true">×</span>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localizeSystemMessage, t } from '../../../shared/i18n'
 import { computed, reactive, ref, watch } from 'vue'
 import { useSessionStore } from '../../../app/stores/session'
 import BaseButton from '../../../design-system/BaseButton.vue'
@@ -117,30 +118,30 @@ function candidate(): Source {
 }
 
 function validate(source: Source): string | undefined {
-  if (!source.title) return '请填写来源标题。'
+  if (!source.title) return t('请填写来源标题。')
   if (source.url) {
     try {
       const url = new URL(source.url)
       if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('protocol')
     } catch {
-      return '网址必须是有效的 http:// 或 https:// 地址。'
+      return t('网址必须是有效的 http:// 或 https:// 地址。')
     }
   }
   for (const boundary of [source.date?.start, source.date?.end]) {
     if (boundary && !normalizeIsoDate(boundary)) {
-      return '日期边界必须是有效的 ISO 日期，例如 YYYY、YYYY-MM 或 YYYY-MM-DD。'
+      return t('日期边界必须是有效的 ISO 日期，例如 YYYY、YYYY-MM 或 YYYY-MM-DD。')
     }
   }
-  if (source.date?.precision === 'before' && !source.date.end) return '早于日期需要填写结束边界。'
-  if (source.date?.precision === 'after' && !source.date.start) return '晚于日期需要填写开始边界。'
+  if (source.date?.precision === 'before' && !source.date.end) return t('早于日期需要填写结束边界。')
+  if (source.date?.precision === 'after' && !source.date.start) return t('晚于日期需要填写开始边界。')
   if (source.date?.precision === 'range' && (!source.date.start || !source.date.end)) {
-    return '日期范围需要填写开始和结束边界。'
+    return t('日期范围需要填写开始和结束边界。')
   }
   if (source.date?.precision === 'range'
     && source.date.start
     && source.date.end
     && isDefinitelyReversedDateRange(source.date.start, source.date.end)) {
-    return '日期范围的开始边界晚于结束边界，请核对。'
+    return t('日期范围的开始边界晚于结束边界，请核对。')
   }
   return undefined
 }
@@ -167,9 +168,9 @@ async function submit() {
     emit('saved', saved)
     emit('close')
   } catch (error) {
-    const details = error instanceof Error && error.message.trim()
-      ? error.message
-      : '本地来源暂时无法写入'
+    const details = error instanceof Error && localizeSystemMessage(error.message).trim()
+      ? localizeSystemMessage(error.message)
+      : t('本地来源暂时无法写入')
     saveFailure.value = details
     session.saveStatus = 'failed'
     session.saveError = details
@@ -193,75 +194,75 @@ function discard() {
 <template>
   <BaseDrawer
     :open="open"
-    :title="source ? '编辑资料来源' : '新建资料来源'"
-    description="记录来源本身；定位信息和原文摘录在引用中填写。"
-    close-label="关闭来源编辑器"
+    :title="source ? t('编辑资料来源') : t('新建资料来源')"
+    :description="t('记录来源本身；定位信息和原文摘录在引用中填写。')"
+    :close-label="t('关闭来源编辑器')"
     @close="requestClose"
   >
     <form class="source-editor" novalidate @submit.prevent="submit">
-      <BaseField id="source-title" label="标题" required>
+      <BaseField id="source-title" :label="t('标题')" required>
         <input id="source-title" v-model="draft.title" name="sourceTitle" autocomplete="off" />
       </BaseField>
       <div class="source-editor__grid">
-        <BaseField id="source-type" label="类型">
+        <BaseField id="source-type" :label="t('类型')">
           <BaseSelectControl>
             <select id="source-type" v-model="draft.type" name="sourceType">
-              <option value="book">书籍</option>
-              <option value="web">网页</option>
-              <option value="archive">档案</option>
-              <option value="interview">访谈</option>
-              <option value="other">其他</option>
+              <option value="book">{{ t('书籍') }}</option>
+              <option value="web">{{ t('网页') }}</option>
+              <option value="archive">{{ t('档案') }}</option>
+              <option value="interview">{{ t('访谈') }}</option>
+              <option value="other">{{ t('其他') }}</option>
             </select>
           </BaseSelectControl>
         </BaseField>
-        <BaseField id="source-author" label="作者或责任者">
+        <BaseField id="source-author" :label="t('作者或责任者')">
           <input id="source-author" v-model="draft.author" name="sourceAuthor" />
         </BaseField>
-        <BaseField id="source-repository" label="出版或保存机构">
+        <BaseField id="source-repository" :label="t('出版或保存机构')">
           <input id="source-repository" v-model="draft.repository" name="sourceRepository" />
         </BaseField>
-        <BaseField id="source-reference" label="档案编号">
+        <BaseField id="source-reference" :label="t('档案编号')">
           <input id="source-reference" v-model="draft.referenceCode" name="sourceReferenceCode" />
         </BaseField>
       </div>
-      <BaseField id="source-url" label="网址" hint="仅支持 http:// 或 https:// 地址。">
+      <BaseField id="source-url" :label="t('网址')" :hint="t('仅支持 http:// 或 https:// 地址。')">
         <input id="source-url" v-model="draft.url" name="sourceUrl" inputmode="url" />
       </BaseField>
       <fieldset class="source-editor__date">
-        <legend>来源时间</legend>
-        <label><span>日期语义</span><BaseSelectControl><select v-model="draft.datePrecision" name="datePrecision">
-            <option value="exact">精确</option><option value="about">约</option>
-            <option value="before">早于</option><option value="after">晚于</option>
-            <option value="range">范围</option><option value="unknown">未知</option>
+        <legend>{{ t('来源时间') }}</legend>
+        <label><span>{{ t('日期语义') }}</span><BaseSelectControl><select v-model="draft.datePrecision" name="datePrecision">
+            <option value="exact">{{ t('精确') }}</option><option value="about">{{ t('约') }}</option>
+            <option value="before">{{ t('早于') }}</option><option value="after">{{ t('晚于') }}</option>
+            <option value="range">{{ t('范围') }}</option><option value="unknown">{{ t('未知') }}</option>
           </select></BaseSelectControl></label>
-        <label><span>显示文字</span><input v-model="draft.dateDisplay" name="dateDisplay" /></label>
-        <label><span>开始边界</span><input v-model="draft.dateStart" name="dateStart" placeholder="YYYY-MM-DD" /></label>
-        <label><span>结束边界</span><input v-model="draft.dateEnd" name="dateEnd" placeholder="YYYY-MM-DD" /></label>
+        <label><span>{{ t('显示文字') }}</span><input v-model="draft.dateDisplay" name="dateDisplay" /></label>
+        <label><span>{{ t('开始边界') }}</span><input v-model="draft.dateStart" name="dateStart" placeholder="YYYY-MM-DD" /></label>
+        <label><span>{{ t('结束边界') }}</span><input v-model="draft.dateEnd" name="dateEnd" placeholder="YYYY-MM-DD" /></label>
       </fieldset>
-      <BaseField id="source-notes" label="备注">
+      <BaseField id="source-notes" :label="t('备注')">
         <textarea id="source-notes" v-model="draft.notes" name="sourceNotes" rows="4" />
       </BaseField>
       <p v-if="validationError" class="source-editor__error" role="alert">{{ validationError }}</p>
       <div v-if="saveFailure" class="source-editor__error" role="alert">
-        <strong>保存失败，来源尚未写入。</strong>
-        <details open><summary>错误详情</summary><p>{{ saveFailure }}</p></details>
+        <strong>{{ t('保存失败，来源尚未写入。') }}</strong>
+        <details open><summary>{{ t('错误详情') }}</summary><p>{{ saveFailure }}</p></details>
       </div>
       <footer class="source-editor__actions">
-        <BaseButton name="取消" variant="secondary" :disabled="saving" @click="requestClose">取消</BaseButton>
-        <BaseButton name="保存来源" type="submit" :loading="saving">保存来源</BaseButton>
+        <BaseButton :name="t('取消')" variant="secondary" :disabled="saving" @click="requestClose">{{ t('取消') }}</BaseButton>
+        <BaseButton :name="t('保存来源')" type="submit" :loading="saving">{{ t('保存来源') }}</BaseButton>
       </footer>
     </form>
   </BaseDrawer>
   <BaseDialog
     :open="confirmClose"
-    title="放弃未保存的修改？"
-    description="关闭后，这次填写的来源资料不会保留。"
-    close-label="继续编辑"
+    :title="t('放弃未保存的修改？')"
+    :description="t('关闭后，这次填写的来源资料不会保留。')"
+    :close-label="t('继续编辑')"
     @close="confirmClose = false"
   >
     <div class="source-editor__actions">
-      <BaseButton name="继续编辑" variant="secondary" @click="confirmClose = false">继续编辑</BaseButton>
-      <BaseButton name="放弃修改" variant="danger" @click="discard">放弃修改</BaseButton>
+      <BaseButton :name="t('继续编辑')" variant="secondary" @click="confirmClose = false">{{ t('继续编辑') }}</BaseButton>
+      <BaseButton :name="t('放弃修改')" variant="danger" @click="discard">{{ t('放弃修改') }}</BaseButton>
     </div>
   </BaseDialog>
 </template>

@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 import type { Attachment, PersonName, Project } from './types'
 
 export type PublicationFormat = 'modern' | 'traditional' | 'chart'
@@ -67,16 +68,16 @@ export interface PublicationReport {
 }
 
 export const chapterLabels: Record<PublicationChapter, string> = {
-  cover: '封面', preface: '谱序', contents: '目录', tree: '世系图', biographies: '人物传记',
-  events: '家族大事记', sources: '史料来源', appendices: '史料附录', index: '姓名索引',
+  get cover() { return t('封面') }, get preface() { return t('谱序') }, get contents() { return t('目录') }, get tree() { return t('世系图') }, get biographies() { return t('人物传记') },
+  get events() { return t('家族大事记') }, get sources() { return t('史料来源') }, get appendices() { return t('史料附录') }, get index() { return t('姓名索引') },
 }
 export const fieldLabels: Record<string, string> = {
-  names: '其他姓名', status: '在世状态', dates: '生卒时间', places: '生卒地点', biography: '生平',
-  notes: '备注', relationships: '亲属关系', careers: '职业履历', titles: '称谓', photos: '人物照片', citations: '引用与摘录',
+  get names() { return t('其他姓名') }, get status() { return t('在世状态') }, get dates() { return t('生卒时间') }, get places() { return t('生卒地点') }, get biography() { return t('生平') },
+  get notes() { return t('备注') }, get relationships() { return t('亲属关系') }, get careers() { return t('职业履历') }, get titles() { return t('称谓') }, get photos() { return t('人物照片') }, get citations() { return t('引用与摘录') },
 }
 export function newPublicationPlan(title: string, format: PublicationFormat = 'modern'): PublicationPlan {
   return {
-    id: crypto.randomUUID(), name: format === 'modern' ? '现代谱册' : format === 'traditional' ? '传统谱册' : '世系挂图',
+    id: crypto.randomUUID(), name: format === 'modern' ? t('现代谱册') : format === 'traditional' ? t('传统谱册') : t('世系挂图'),
     format, title, subtitle: '', editor: '', edition: '', date: new Date().toLocaleDateString('sv-SE'), preface: '',
     scope: { mode: 'all', roots: [], generations: null, startGeneration: 1, partners: true, parentTypes: ['biological', 'adoptive', 'step', 'guardian'], exclude: [] },
     chapters: Object.keys(chapterLabels) as PublicationChapter[], fields: Object.keys(fieldLabels).filter((key) => key !== 'notes'),

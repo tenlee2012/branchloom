@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localizeSystemMessage, t } from '../../../shared/i18n'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSessionStore } from '../../../app/stores/session'
@@ -61,7 +62,7 @@ let impactRequest = 0
 let deleteRequest = 0
 
 function displayName(value: Person | undefined) {
-  return value ? getPrimaryName(value) : '这位人物'
+  return value ? getPrimaryName(value) : t('这位人物')
 }
 
 function editPerson() {
@@ -124,7 +125,7 @@ async function loadPerson(expectedProjectId: string, expectedPersonId: string) {
     if (personResult.status === 'rejected') throw personResult.reason
     const loaded = personResult.value
     if (request !== personRequest || expectedProjectId !== projectId.value || expectedPersonId !== personId.value) return
-    if (loaded.projectId !== expectedProjectId || loaded.deletedAt) throw new Error('人物不属于当前项目或已被删除')
+    if (loaded.projectId !== expectedProjectId || loaded.deletedAt) throw new Error(t('人物不属于当前项目或已被删除'))
     person.value = loaded
     projectPeople.value = peopleResult.status === 'fulfilled' ? peopleResult.value.items : [loaded]
     const relatedRelationships = relationshipsResult.status === 'fulfilled'
@@ -173,7 +174,7 @@ async function loadPerson(expectedProjectId: string, expectedPersonId: string) {
   } catch (error) {
     if (request !== personRequest || expectedProjectId !== projectId.value || expectedPersonId !== personId.value) return
     loadState.value = 'error'
-    loadError.value = error instanceof Error ? error.message : '人物资料无法读取'
+    loadError.value = error instanceof Error ? localizeSystemMessage(error.message) : t('人物资料无法读取')
   }
 }
 
@@ -208,7 +209,7 @@ async function openDelete() {
     }
   } catch (error) {
     if (request !== impactRequest || !deleteOpen.value) return
-    deleteError.value = error instanceof Error ? error.message : '关联资料无法读取'
+    deleteError.value = error instanceof Error ? localizeSystemMessage(error.message) : t('关联资料无法读取')
   } finally {
     if (request === impactRequest) deleteLoading.value = false
   }
@@ -241,7 +242,7 @@ async function confirmDelete() {
     await router.replace({ name: 'project-people', params: { projectId: target.projectId } })
   } catch (error) {
     if (request !== deleteRequest) return
-    const details = error instanceof Error ? error.message : '本地资料暂时无法写入'
+    const details = error instanceof Error ? localizeSystemMessage(error.message) : t('本地资料暂时无法写入')
     deleteError.value = details
     session.saveStatus = 'failed'
     session.saveError = details
@@ -348,14 +349,12 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="person-detail-view" aria-label="人物详情">
-    <div v-if="loadState === 'loading'" id="person-detail-state" class="person-detail-view__state" role="status">
-      正在读取人物档案…
-    </div>
+  <section class="person-detail-view" :aria-label="t('人物详情')">
+    <div v-if="loadState === 'loading'" id="person-detail-state" class="person-detail-view__state" role="status"> {{ t('正在读取人物档案…') }} </div>
     <div v-else-if="loadState === 'error'" id="person-detail-state" class="person-detail-view__state" role="alert">
-      <strong>人物档案未能打开</strong>
+      <strong>{{ t('人物档案未能打开') }}</strong>
       <span>{{ loadError }}</span>
-      <BaseButton variant="secondary" @click="loadPerson(projectId, personId)">重新读取</BaseButton>
+      <BaseButton variant="secondary" @click="loadPerson(projectId, personId)">{{ t('重新读取') }}</BaseButton>
     </div>
     <PersonDetailPanel
       v-else-if="person"

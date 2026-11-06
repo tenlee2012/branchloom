@@ -1,3 +1,4 @@
+import { t } from '../../../shared/i18n'
 import type { Person, PrototypeState, Relationship } from '../../../shared/domain/types'
 import { traverseFamilyGraph, type FamilyTreeMode } from '../../../shared/domain/familyGraph'
 import { getPrimaryName } from '../../../shared/domain/personNames'
@@ -45,15 +46,15 @@ export interface VisibleGraphEdge {
 }
 
 const relationshipPresentation: Record<Relationship['type'], { label: string; lineStyle: VisibleGraphEdge['lineStyle'] }> = {
-  biological: { label: '亲生', lineStyle: 'solid' },
-  adoptive: { label: '收养', lineStyle: 'dashed' },
-  step: { label: '继亲', lineStyle: 'dotted' },
-  guardian: { label: '监护', lineStyle: 'dashed' },
-  engaged: { label: '订婚', lineStyle: 'dotted' },
-  married: { label: '婚姻', lineStyle: 'solid' },
-  partner: { label: '事实伴侣', lineStyle: 'dashed' },
-  separated: { label: '分居', lineStyle: 'dashed' },
-  divorced: { label: '离异', lineStyle: 'dotted' },
+  biological: { get label() { return t('亲生') }, lineStyle: 'solid' },
+  adoptive: { get label() { return t('收养') }, lineStyle: 'dashed' },
+  step: { get label() { return t('继亲') }, lineStyle: 'dotted' },
+  guardian: { get label() { return t('监护') }, lineStyle: 'dashed' },
+  engaged: { get label() { return t('订婚') }, lineStyle: 'dotted' },
+  married: { get label() { return t('婚姻') }, lineStyle: 'solid' },
+  partner: { get label() { return t('事实伴侣') }, lineStyle: 'dashed' },
+  separated: { get label() { return t('分居') }, lineStyle: 'dashed' },
+  divorced: { get label() { return t('离异') }, lineStyle: 'dotted' },
 }
 
 export function buildVisibleGraph(state: PrototypeState, options: VisibleGraphOptions): VisibleGraph {

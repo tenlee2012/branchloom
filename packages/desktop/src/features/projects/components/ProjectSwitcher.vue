@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '../../../shared/i18n'
 import { onBeforeUnmount, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import BaseButton from '../../../design-system/BaseButton.vue'
@@ -22,7 +23,7 @@ async function loadProjects() {
     const result = await repository.listProjects()
     if (current === request) projects.value = result
   } catch (cause) {
-    if (current === request) error.value = cause instanceof Error ? cause.message : '项目列表暂时无法读取'
+    if (current === request) error.value = cause instanceof Error ? cause.message : t('项目列表暂时无法读取')
   } finally {
     if (current === request) loading.value = false
   }
@@ -43,23 +44,23 @@ onBeforeUnmount(() => { request += 1 })
     @toggle="disclosure?.open && loadProjects()"
     @keydown.esc.prevent.stop="close"
   >
-    <summary ref="summary">切换项目</summary>
-    <p v-if="loading" role="status">正在读取项目列表…</p>
+    <summary ref="summary">{{ t('切换项目') }}</summary>
+    <p v-if="loading" role="status">{{ t('正在读取项目列表…') }}</p>
     <div v-else-if="error" role="alert">
       <p>{{ error }}</p>
-      <BaseButton variant="secondary" size="sm" @click="loadProjects">重新读取项目列表</BaseButton>
+      <BaseButton variant="secondary" size="sm" @click="loadProjects">{{ t('重新读取项目列表') }}</BaseButton>
     </div>
-    <p v-else-if="!projects.length" role="status">暂无可切换的项目。</p>
-    <nav v-else aria-label="可切换的项目">
+    <p v-else-if="!projects.length" role="status">{{ t('暂无可切换的项目。') }}</p>
+    <nav v-else :aria-label="t('可切换的项目')">
       <RouterLink
         v-for="project in projects"
         :key="project.id"
         :to="{ name: 'project-tree', params: { projectId: project.id } }"
-        :aria-label="`打开项目：${project.name}`"
+        :aria-label="t('打开项目：{0}', [project.name])"
         @click="close"
       >
         <span>{{ project.name }}</span>
-        <small v-if="project.id === projectId">当前项目</small>
+        <small v-if="project.id === projectId">{{ t('当前项目') }}</small>
       </RouterLink>
     </nav>
   </details>

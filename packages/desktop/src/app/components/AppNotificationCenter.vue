@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '../../shared/i18n'
 import {
   IconAlertTriangle,
   IconCheck,
@@ -41,10 +42,10 @@ function dismiss(id: number) {
 
 function toneLabel(tone: AppNotification['tone']): string {
   return {
-    info: '提示',
-    success: '成功',
-    warning: '注意',
-    danger: '错误',
+    info: t('提示'),
+    success: t('成功'),
+    warning: t('注意'),
+    danger: t('错误'),
   }[tone]
 }
 
@@ -70,7 +71,7 @@ onBeforeUnmount(() => {
 <template>
   <aside
     class="notification-center"
-    aria-label="应用通知"
+    :aria-label="t('应用通知')"
   >
     <TransitionGroup name="notification-list" tag="ol">
       <li
@@ -98,7 +99,7 @@ onBeforeUnmount(() => {
         <button
           type="button"
           class="notification__dismiss"
-          :aria-label="`关闭通知：${notification.message}`"
+          :aria-label="t('关闭通知：{0}', [notification.message])"
           @click="dismiss(notification.id)"
         >
           <IconX :size="18" aria-hidden="true" />

@@ -9,10 +9,13 @@ import {
 import { resolveInitialRoute } from './app/startup'
 import { BrowserRecentProjectLocations } from './features/projects/model/recentProjectLocations'
 import { startNativeRepositoryRefresh } from './shared/repository/TauriRepository'
+
+import { initializeLocale, localizeSystemMessage, t } from './shared/i18n'
 import './app/styles/tokens.css'
 import './app/styles/base.css'
 
 async function bootstrap() {
+  await initializeLocale()
   const repository = await createRuntimeRepository()
   const recentProjectLocations = new BrowserRecentProjectLocations()
   const router = createAppRouter()
@@ -39,13 +42,13 @@ function renderBootstrapFailure(error: unknown) {
   main.className = 'bootstrap-failure'
   main.setAttribute('role', 'alert')
   const eyebrow = document.createElement('p')
-  eyebrow.textContent = '本地资料无法打开'
+  eyebrow.textContent = t('本地资料无法打开')
   const title = document.createElement('h1')
-  title.textContent = '有谱未能启动'
+  title.textContent = t('有谱未能启动')
   const description = document.createElement('p')
   description.textContent = error instanceof Error
-    ? error.message
-    : '请重新启动应用；如果问题持续，请保留本地数据目录并联系支持。'
+    ? localizeSystemMessage(error.message)
+    : t('请重新启动应用；如果问题持续，请保留本地数据目录并联系支持。')
   main.append(eyebrow, title, description)
   root.replaceChildren(main)
 }

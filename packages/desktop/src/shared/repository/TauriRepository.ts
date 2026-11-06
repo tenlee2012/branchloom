@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 import { isTauri } from '@tauri-apps/api/core'
 import type { PublicationRequest, PublicationStatus } from '../domain/publication'
 import type { BranchloomRepository, DuplicateCandidate, Snapshot } from '../domain/types'
@@ -248,7 +249,7 @@ function normalizedStatePayload(storage: PrototypeStorage): NormalizedStatePaylo
   const stateJson = storage.getItem(PROTOTYPE_STORAGE_KEY)
   const snapshotPayloadsJson = storage.getItem(SNAPSHOT_PAYLOADS_STORAGE_KEY)
   if (stateJson === null || snapshotPayloadsJson === null) {
-    throw new RepositoryError('storage', '本地数据库状态不完整，无法安全保存')
+    throw new RepositoryError('storage', t('本地数据库状态不完整，无法安全保存'))
   }
   const state = JSON.parse(stateJson) as RuntimeMediaState
   stripRuntimeMedia(state)
@@ -356,10 +357,10 @@ async function readLocalAttachment(projectId: string, contentHash: string): Prom
 
 async function savePublicationPdf(projectId: string, jobId: string, title: string): Promise<boolean> {
   const stem = title.trim().replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').replace(/\.+$/g, '')
-  const fileName = `${Array.from(stem).slice(0, 70).join('') || '族谱'}.pdf`
+  const fileName = `${Array.from(stem).slice(0, 70).join('') || t('族谱')}.pdf`
   if (isTauri()) {
     const { save } = await import('@tauri-apps/plugin-dialog')
-    const selected = await save({ title: '保存族谱 PDF', defaultPath: fileName, filters: [{ name: 'PDF 文档', extensions: ['pdf'] }] })
+    const selected = await save({ title: t('保存族谱 PDF'), defaultPath: fileName, filters: [{ name: t('PDF 文档'), extensions: ['pdf'] }] })
     if (!selected) return false
     const path = /^(content|file):\/\//i.test(selected) || selected.toLowerCase().endsWith('.pdf') ? selected : `${selected}.pdf`
     const { invoke } = await import('@tauri-apps/api/core')
@@ -367,7 +368,7 @@ async function savePublicationPdf(projectId: string, jobId: string, title: strin
     return true
   }
   const status = await nativeDataRequest<PublicationStatus>('publication_request', '/publication', { operation: 'status', projectId, jobId })
-  if (status.state !== 'ready' || status.stale) throw new Error('资料已更新或 PDF 尚未完成，请重新生成')
+  if (status.state !== 'ready' || status.stale) throw new Error(t('资料已更新或 PDF 尚未完成，请重新生成'))
   const chunks: Uint8Array<ArrayBuffer>[] = []
   for (let offset = 0; offset < status.bytes; offset += 1_048_576) {
     const result = await nativeDataRequest<{ data: string }>('publication_request', '/publication', { operation: 'read', projectId, jobId, offset, length: Math.min(1_048_576, status.bytes - offset) })
@@ -408,7 +409,7 @@ async function webBridgeRequest<T>(path: string, init?: RequestInit): Promise<T>
   } catch (error) {
     throw new RepositoryError(
       'storage',
-      '无法连接本地数据服务，请通过 Branchloom 的 Web 启动命令打开页面',
+      t('无法连接本地数据服务，请通过 Branchloom 的 Web 启动命令打开页面'),
       { cause: error },
     )
   }
@@ -416,7 +417,7 @@ async function webBridgeRequest<T>(path: string, init?: RequestInit): Promise<T>
   if (!response.ok) {
     const message = body && typeof body === 'object' && 'error' in body && body.error
       ? body.error
-      : `本地数据服务请求失败（${response.status}）`
+      : t('本地数据服务请求失败（{0}）', [response.status])
     throw new RepositoryError('storage', message)
   }
   return body as T
@@ -438,7 +439,7 @@ export async function createTauriRepository(
     } catch (error) {
       throw new RepositoryError(
         'corrupt',
-        '本地资料格式不受当前版本支持；为了保护数据，应用已停止加载且不会写入',
+        t('本地资料格式不受当前版本支持；为了保护数据，应用已停止加载且不会写入'),
         { cause: error },
       )
     }
@@ -452,7 +453,7 @@ export async function createTauriRepository(
   function installSnapshot(snapshot: NativeStateSnapshot, force = false): boolean {
     if (!force && snapshot.revision === revision) return false
     if (!snapshot.state) {
-      throw new RepositoryError('storage', '本地数据库中没有可刷新的项目状态')
+      throw new RepositoryError('storage', t('本地数据库中没有可刷新的项目状态'))
     }
     storage.seed(snapshot.state)
     delegate = createDelegate()
@@ -517,7 +518,7 @@ export async function createTauriRepository(
           delegate = createDelegate()
           throw new RepositoryError(
             'storage',
-            '本地数据库写入失败，本次修改已撤销',
+            t('本地数据库写入失败，本次修改已撤销'),
             { cause: error },
           )
         }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localizeSystemMessage, t } from '../../../shared/i18n'
 import { computed, reactive, ref, watch } from 'vue'
 import { useSessionStore } from '../../../app/stores/session'
 import BaseButton from '../../../design-system/BaseButton.vue'
@@ -86,7 +87,7 @@ async function save() {
     emit('changed')
     emit('close')
   } catch (error) {
-    const details = error instanceof Error ? error.message : '地点无法保存'
+    const details = error instanceof Error ? localizeSystemMessage(error.message) : t('地点无法保存')
     failure.value = details
     session.saveStatus = 'failed'
     session.saveError = details
@@ -109,9 +110,9 @@ async function remove() {
     resetDraft()
     emit('changed')
   } catch (error) {
-    const details = error instanceof Error ? error.message : '地点无法删除'
+    const details = error instanceof Error ? localizeSystemMessage(error.message) : t('地点无法删除')
     failure.value = details.includes('still referenced')
-      ? '该地点仍被人物、关系、事件或下级地点使用，请先移除关联。'
+      ? t('该地点仍被人物、关系、事件或下级地点使用，请先移除关联。')
       : details
     session.saveStatus = 'failed'
     session.saveError = failure.value
@@ -125,31 +126,31 @@ async function remove() {
 <template>
   <BaseDialog
     :open="open"
-    title="管理地点"
-    description="维护事件、人物和关系共用的地点资料。"
-    close-label="关闭地点管理"
+    :title="t('管理地点')"
+    :description="t('维护事件、人物和关系共用的地点资料。')"
+    :close-label="t('关闭地点管理')"
     @close="requestClose"
   >
     <form class="place-manager" novalidate @submit.prevent="save">
       <label class="place-manager__select">
-        <span>已有地点</span>
+        <span>{{ t('已有地点') }}</span>
         <BaseSelectControl>
           <select v-model="selectedId" name="placeRecord" :disabled="saving">
-            <option value="">新建地点</option>
+            <option value="">{{ t('新建地点') }}</option>
             <option v-for="place in places" :key="place.id" :value="place.id">{{ place.name }}</option>
           </select>
         </BaseSelectControl>
       </label>
-      <BaseField id="place-name" label="地点名称" required>
+      <BaseField id="place-name" :label="t('地点名称')" required>
         <input id="place-name" v-model="draft.name" name="placeName" :disabled="saving" />
       </BaseField>
-      <BaseField id="place-aliases" label="别名" hint="多个别名使用分号分隔">
+      <BaseField id="place-aliases" :label="t('别名')" :hint="t('多个别名使用分号分隔')">
         <input id="place-aliases" v-model="draft.aliases" name="placeAliases" :disabled="saving" />
       </BaseField>
-      <BaseField id="place-parent" label="上级地点">
+      <BaseField id="place-parent" :label="t('上级地点')">
         <BaseSelectControl>
           <select id="place-parent" v-model="draft.parentId" name="placeParent" :disabled="saving">
-            <option value="">无上级地点</option>
+            <option value="">{{ t('无上级地点') }}</option>
             <option v-for="place in places.filter(({ id }) => id !== selectedId)" :key="place.id" :value="place.id">
               {{ place.name }}
             </option>
@@ -157,53 +158,53 @@ async function remove() {
         </BaseSelectControl>
       </BaseField>
       <fieldset class="place-manager__coordinates">
-        <legend>GPS 坐标（可选）</legend>
-        <p id="place-coordinates-hint" class="place-manager__hint">使用 WGS84 十进制度；经纬度需一起填写，或一起留空。东经、北纬为正，西经、南纬为负。</p>
+        <legend>{{ t('GPS 坐标（可选）') }}</legend>
+        <p id="place-coordinates-hint" class="place-manager__hint">{{ t('使用 WGS84 十进制度；经纬度需一起填写，或一起留空。东经、北纬为正，西经、南纬为负。') }}</p>
         <div class="place-manager__coordinate-fields">
-          <BaseField id="place-longitude" label="经度" hint="-180 到 180">
+          <BaseField id="place-longitude" :label="t('经度')" :hint="t('-180 到 180')">
             <template #default="field">
-              <input id="place-longitude" v-model="draft.longitude" name="placeLongitude" inputmode="decimal" placeholder="例如 119.2965" :aria-describedby="`${field.describedBy} place-coordinates-hint`" :disabled="saving" />
+              <input id="place-longitude" v-model="draft.longitude" name="placeLongitude" inputmode="decimal" :placeholder="t('例如 119.2965')" :aria-describedby="`${field.describedBy} place-coordinates-hint`" :disabled="saving" />
             </template>
           </BaseField>
-          <BaseField id="place-latitude" label="纬度" hint="-90 到 90">
+          <BaseField id="place-latitude" :label="t('纬度')" :hint="t('-90 到 90')">
             <template #default="field">
-              <input id="place-latitude" v-model="draft.latitude" name="placeLatitude" inputmode="decimal" placeholder="例如 26.0745" :aria-describedby="`${field.describedBy} place-coordinates-hint`" :disabled="saving" />
+              <input id="place-latitude" v-model="draft.latitude" name="placeLatitude" inputmode="decimal" :placeholder="t('例如 26.0745')" :aria-describedby="`${field.describedBy} place-coordinates-hint`" :disabled="saving" />
             </template>
           </BaseField>
         </div>
       </fieldset>
-      <BaseField id="place-notes" label="备注">
+      <BaseField id="place-notes" :label="t('备注')">
         <textarea id="place-notes" v-model="draft.notes" name="placeNotes" rows="3" :disabled="saving" />
       </BaseField>
       <p v-if="failure" class="place-manager__error" role="alert">{{ failure }}</p>
       <footer class="place-manager__actions">
         <BaseButton
           v-if="selected"
-          name="删除地点"
+          :name="t('删除地点')"
           variant="danger"
           :disabled="saving"
           @click="confirmDelete = true"
-        >删除地点</BaseButton>
-        <BaseButton v-if="selectedId" variant="secondary" :disabled="saving" @click="resetDraft()">新建地点</BaseButton>
+        >{{ t('删除地点') }}</BaseButton>
+        <BaseButton v-if="selectedId" variant="secondary" :disabled="saving" @click="resetDraft()">{{ t('新建地点') }}</BaseButton>
         <BaseButton
-          :name="selectedId ? '保存地点' : '新建地点'"
+          :name="selectedId ? t('保存地点') : t('新建地点')"
           type="submit"
           :loading="saving"
           :disabled="!draft.name.trim()"
-        >{{ selectedId ? '保存地点' : '新建地点' }}</BaseButton>
+        >{{ selectedId ? t('保存地点') : t('新建地点') }}</BaseButton>
       </footer>
     </form>
   </BaseDialog>
   <BaseDialog
     :open="confirmDelete"
-    title="删除地点？"
-    :description="selected ? `将删除“${selected.name}”。仍被资料引用的地点不会被删除。` : ''"
-    close-label="保留地点"
+    :title="t('删除地点？')"
+    :description="selected ? t('将删除“{0}”。仍被资料引用的地点不会被删除。', [selected.name]) : ''"
+    :close-label="t('保留地点')"
     @close="confirmDelete = false"
   >
     <div class="place-manager__actions">
-      <BaseButton variant="secondary" @click="confirmDelete = false">保留地点</BaseButton>
-      <BaseButton name="确认删除地点" variant="danger" :loading="saving" @click="remove">确认删除</BaseButton>
+      <BaseButton variant="secondary" @click="confirmDelete = false">{{ t('保留地点') }}</BaseButton>
+      <BaseButton :name="t('确认删除地点')" variant="danger" :loading="saving" @click="remove">{{ t('确认删除') }}</BaseButton>
     </div>
   </BaseDialog>
 </template>

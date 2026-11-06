@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { getLocale, localizeSystemMessage, t } from '../../../shared/i18n'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
@@ -133,7 +134,7 @@ const annotations = computed(() => {
       ...graph.value.nodes.filter(({ person }) => person.names.some(({ value }) => value.toLowerCase().includes(query))).map(({ id }) => id),
       ...(personSearchState.value === 'ready' ? directoryPeople.value.map(({ id }) => id) : []),
     ] : []),
-    kinships: buildKinshipDescriptions(people.value, relationships.value, selectedPersonId.value),
+    kinships: buildKinshipDescriptions(people.value, relationships.value, selectedPersonId.value, getLocale()),
   }
 })
 const needsDefaultCenter = computed(() => (
@@ -299,7 +300,7 @@ async function load() {
     if (previewPerson) selectedPersonId.value = previewPerson.id
   } catch (error) {
     if (request !== latestRequest) return
-    loadError.value = error instanceof Error ? error.message : '本地家谱资料无法读取'
+    loadError.value = error instanceof Error ? localizeSystemMessage(error.message) : t('本地家谱资料无法读取')
     loadState.value = 'error'
   }
 }
@@ -364,7 +365,7 @@ async function refreshPersonDirectory() {
     personSearchState.value = query ? 'ready' : 'idle'
   } catch (error) {
     if (request !== latestDirectoryRequest || scopedProjectId !== projectId.value) return
-    personSearchError.value = error instanceof Error ? error.message : '人物搜索未能完成'
+    personSearchError.value = error instanceof Error ? localizeSystemMessage(error.message) : t('人物搜索未能完成')
     personSearchState.value = 'error'
   }
 }
@@ -382,7 +383,7 @@ async function refreshFamilySlice(personId: string) {
     applySlice(project.value, slice)
   } catch (error) {
     if (request !== latestRequest) return
-    loadError.value = error instanceof Error ? error.message : '本地家谱资料无法读取'
+    loadError.value = error instanceof Error ? localizeSystemMessage(error.message) : t('本地家谱资料无法读取')
     loadState.value = 'error'
   } finally {
     if (request === latestRequest) familySliceLoading.value = false
@@ -390,7 +391,7 @@ async function refreshFamilySlice(personId: string) {
 }
 
 function primaryName(person: Person | undefined) {
-  return person ? getPrimaryName(person) : '未选择'
+  return person ? getPrimaryName(person) : t('未选择')
 }
 
 async function changeCenter(personId: string) {
@@ -509,13 +510,13 @@ defineExpose({ fitCanvas, addPerson })
 
 <template>
   <section class="tree-view" aria-labelledby="tree-view-title">
-    <h1 id="tree-view-title" class="visually-hidden">家谱树</h1>
+    <h1 id="tree-view-title" class="visually-hidden">{{ t('家谱树') }}</h1>
     <p
       v-if="locatedRelationship"
       class="tree-view__located"
       role="status"
       :data-located-relationship-id="locatedRelationship.id"
-    >已定位关系 <code>{{ locatedRelationship.id }}</code>，并选中相关人物。</p>
+    >{{ t('已定位关系') }} <code>{{ locatedRelationship.id }}</code>{{ t('，并选中相关人物。') }}</p>
 
     <TreeToolbar
       :mode="mode"
@@ -551,35 +552,29 @@ defineExpose({ fitCanvas, addPerson })
       :class="{ 'tree-view__workbench--no-panel': !selectedPerson && (!researchRelationship || researchClosed) }"
     >
       <div v-if="loadState === 'loading'" class="tree-view__state" role="status">
-        <span class="tree-view__spinner" aria-hidden="true" />
-        正在计算家谱显示范围…
-      </div>
+        <span class="tree-view__spinner" aria-hidden="true" /> {{ t('正在计算家谱显示范围…') }} </div>
       <div v-else-if="loadState === 'error'" class="tree-view__state tree-view__state--error" role="alert">
-        <strong>家谱树未能读取</strong>
+        <strong>{{ t('家谱树未能读取') }}</strong>
         <span>{{ loadError }}</span>
-        <BaseButton variant="secondary" size="sm" @click="load">重新读取</BaseButton>
+        <BaseButton variant="secondary" size="sm" @click="load">{{ t('重新读取') }}</BaseButton>
       </div>
 
       <div v-else-if="graph.status === 'missing-center'" class="tree-view__empty" role="status">
         <EmptyState
-          :title="needsDefaultCenter ? '尚未设置中心人物' : '没有找到中心人物'"
+          :title="needsDefaultCenter ? t('尚未设置中心人物') : t('没有找到中心人物')"
           :description="needsDefaultCenter
-            ? '请前往人物列表选择一位中心人物，再查看家谱树。'
+            ? t('请前往人物列表选择一位中心人物，再查看家谱树。')
             : people.length
-              ? '请从工具栏选择一位人物，或返回人物档案确认资料。'
-              : '从第一个人物开始，逐步添加父母、伴侣和子女。'"
+              ? t('请从工具栏选择一位人物，或返回人物档案确认资料。')
+              : t('从第一个人物开始，逐步添加父母、伴侣和子女。')"
         >
-          <span class="tree-view__empty-mark">谱</span>
+          <span class="tree-view__empty-mark">{{ t('谱') }}</span>
           <template #actions>
             <RouterLink
               v-if="needsDefaultCenter"
               :to="{ name: 'project-people', params: { projectId } }"
-            >
-              前往人物列表设置
-            </RouterLink>
-            <RouterLink v-else :to="{ name: 'project-people', params: { projectId } }">
-              前往人物档案
-            </RouterLink>
+            > {{ t('前往人物列表设置') }} </RouterLink>
+            <RouterLink v-else :to="{ name: 'project-people', params: { projectId } }"> {{ t('前往人物档案') }} </RouterLink>
           </template>
         </EmptyState>
       </div>
@@ -587,10 +582,10 @@ defineExpose({ fitCanvas, addPerson })
       <div v-else-if="graph.thresholdExceeded" class="tree-view__threshold" role="alert">
         <span class="tree-view__threshold-mark" aria-hidden="true">!</span>
         <div>
-          <strong>当前范围包含 {{ graph.nodes.length }} 位人物，请缩小显示范围</strong>
-          <p>为保持缩放和平移流畅，家谱树一次最多建议显示 {{ graph.warningThreshold }} 位人物。减少代数或收起分支后再查看。</p>
+          <strong>{{ t('当前范围包含 {0} 位人物，请缩小显示范围', [graph.nodes.length]) }}</strong>
+          <p>{{ t('为保持缩放和平移流畅，家谱树一次最多建议显示 {0} 位人物。减少代数或收起分支后再查看。', [graph.warningThreshold]) }}</p>
         </div>
-        <BaseButton variant="secondary" @click="shrinkRange">缩小显示范围</BaseButton>
+        <BaseButton variant="secondary" @click="shrinkRange">{{ t('缩小显示范围') }}</BaseButton>
       </div>
 
       <div v-else class="tree-view__canvas-wrap">
@@ -613,19 +608,18 @@ defineExpose({ fitCanvas, addPerson })
           @action="openQuickAdd"
           @close="closePersonPreview"
         />
-        <div v-if="centerPerson" class="visually-hidden" aria-live="polite">
-          中心人物：<strong>{{ primaryName(centerPerson) }}</strong>
+        <div v-if="centerPerson" class="visually-hidden" aria-live="polite"> {{ t('中心人物：') }}<strong>{{ primaryName(centerPerson) }}</strong>
         </div>
-        <div class="tree-view__legend" aria-label="关系图例">
-          <span><i class="married" aria-hidden="true"></i>婚姻</span>
-          <span><i class="biological" aria-hidden="true"></i>父母子女</span>
-          <span><i class="adoptive" aria-hidden="true"></i>收养</span>
-          <span class="visually-hidden">亲生 继亲 监护 订婚 事实伴侣 分居 离异</span>
+        <div class="tree-view__legend" :aria-label="t('关系图例')">
+          <span><i class="married" aria-hidden="true"></i>{{ t('婚姻') }}</span>
+          <span><i class="biological" aria-hidden="true"></i>{{ t('父母子女') }}</span>
+          <span><i class="adoptive" aria-hidden="true"></i>{{ t('收养') }}</span>
+          <span class="visually-hidden">{{ t('亲生 继亲 监护 订婚 事实伴侣 分居 离异') }}</span>
         </div>
-        <div class="tree-view__canvas-actions" aria-label="画布工具">
-          <button type="button" aria-label="拖动画布"><IconArrowsMove :size="22" aria-hidden="true" /></button>
-          <button type="button" aria-label="适应家谱" @click="graphComponent?.fit()"><IconMaximize :size="22" aria-hidden="true" /></button>
-          <button type="button" aria-label="重新排列家谱" @click="graphComponent?.relayout()"><IconHierarchy :size="22" aria-hidden="true" /></button>
+        <div class="tree-view__canvas-actions" :aria-label="t('画布工具')">
+          <button type="button" :aria-label="t('拖动画布')"><IconArrowsMove :size="22" aria-hidden="true" /></button>
+          <button type="button" :aria-label="t('适应家谱')" @click="graphComponent?.fit()"><IconMaximize :size="22" aria-hidden="true" /></button>
+          <button type="button" :aria-label="t('重新排列家谱')" @click="graphComponent?.relayout()"><IconHierarchy :size="22" aria-hidden="true" /></button>
         </div>
       </div>
       <PersonPreviewDrawer

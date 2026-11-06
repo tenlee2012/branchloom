@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '../../../shared/i18n'
 import {
   parentRelationshipOptions,
   partnerRelationshipOptions,
@@ -7,9 +8,9 @@ import {
 
 <template>
   <aside class="relationship-legend" aria-labelledby="relationship-legend-title">
-    <h3 id="relationship-legend-title">关系类型说明</h3>
+    <h3 id="relationship-legend-title">{{ t('关系类型说明') }}</h3>
     <div>
-      <p><strong>亲子与照护</strong></p>
+      <p><strong>{{ t('亲子与照护') }}</strong></p>
       <ul>
         <li v-for="option in parentRelationshipOptions" :key="option.value">
           <span class="relationship-legend__line" :data-type="option.value" aria-hidden="true" />
@@ -18,7 +19,7 @@ import {
       </ul>
     </div>
     <div>
-      <p><strong>伴侣</strong></p>
+      <p><strong>{{ t('伴侣') }}</strong></p>
       <ul>
         <li v-for="option in partnerRelationshipOptions" :key="option.value">
           <span class="relationship-legend__line relationship-legend__line--partner" aria-hidden="true" />

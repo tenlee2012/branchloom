@@ -1,3 +1,4 @@
+import { t } from '../../../shared/i18n'
 import { compareGenealogyDates, normalizeIsoDate } from '../../../shared/domain/date'
 import {
   builtInEventTypes,
@@ -19,24 +20,24 @@ function boundarySpan(start: string | undefined, end: string | undefined): strin
 
 export function formatEventDate(date: GenealogyDate): string {
   if (date.display.trim()) return date.display
-  if (date.precision === 'unknown') return '日期未知'
+  if (date.precision === 'unknown') return t('日期未知')
 
   const start = validBoundary(date.start)
   const end = validBoundary(date.end)
-  if (date.precision === 'exact') return start ?? end ?? '日期未知'
+  if (date.precision === 'exact') return start ?? end ?? t('日期未知')
   if (date.precision === 'about') {
     const value = boundarySpan(start, end)
-    return value ? `约 ${value}` : '日期未知'
+    return value ? t('约 {0}', [value]) : t('日期未知')
   }
   if (date.precision === 'before') {
     const value = end ?? start
-    return value ? `${value} 以前` : '日期未知'
+    return value ? t('{0} 以前', [value]) : t('日期未知')
   }
   if (date.precision === 'after') {
     const value = start ?? end
-    return value ? `${value} 以后` : '日期未知'
+    return value ? t('{0} 以后', [value]) : t('日期未知')
   }
-  return boundarySpan(start, end) ?? '日期未知'
+  return boundarySpan(start, end) ?? t('日期未知')
 }
 
 export interface TimelineGroup {
@@ -103,8 +104,8 @@ export function groupEvents(
     let group = grouped.get(key)
     if (!group) {
       group = year === undefined
-        ? { key, label: '日期未知', unknown: true, events: [] }
-        : { key, label: `${year} 年`, year, unknown: false, events: [] }
+        ? { key, label: t('日期未知'), unknown: true, events: [] }
+        : { key, label: t('{0} 年', [year]), year, unknown: false, events: [] }
       grouped.set(key, group)
     }
     group.events.push(event)
@@ -183,10 +184,10 @@ export function findLifespanWarnings(event: FamilyEvent, people: readonly Person
     const death = dateBounds(person.death)
     const name = primaryName(person)
     if (eventBounds.upper && birth.lower && eventBounds.upper < birth.lower) {
-      warnings.push(`${event.title || '该事件'}发生在${name}出生前，请核对日期。`)
+      warnings.push(t('{0}发生在{1}出生前，请核对日期。', [event.title || t('该事件'), name]))
     }
     if (eventBounds.lower && death.upper && eventBounds.lower > death.upper) {
-      warnings.push(`${event.title || '该事件'}发生在${name}死亡后，请核对日期。`)
+      warnings.push(t('{0}发生在{1}死亡后，请核对日期。', [event.title || t('该事件'), name]))
     }
   }
 

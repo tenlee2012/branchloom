@@ -1,3 +1,4 @@
+import { localizeSystemMessage, t } from './i18n'
 import { invoke, isTauri } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 
@@ -119,10 +120,10 @@ export interface GithubOperationProgress {
 export function githubSyncOutcomeError(outcome: GithubSyncOutcome): string | undefined {
   if (!outcome.error) return undefined
   if (outcome.status === 'remotePushedLocalFailed') {
-    return `远端已推送（${outcome.pushedCommit ?? '提交未知'}），但本地应用失败：${outcome.error}`
+    return t('远端已推送（{0}），但本地应用失败：{1}', [outcome.pushedCommit ?? t('提交未知'), outcome.error])
   }
   if (!outcome.baselineUpdated) {
-    return `数据已部分同步，但同步基线保存失败：${outcome.error}`
+    return t('数据已部分同步，但同步基线保存失败：{0}', [outcome.error])
   }
   return outcome.error
 }
@@ -160,28 +161,28 @@ export function githubError(error: unknown, fallback: string): string {
       : ''
   const normalized = message.toLowerCase()
   if (isGithubProjectMismatch(error)) {
-    return 'GitHub 仓库属于另一个稳定项目。当前项目为空时可以采用 GitHub 项目；已有本地资料时请从首页独立导入。'
+    return t('GitHub 仓库属于另一个稳定项目。当前项目为空时可以采用 GitHub 项目；已有本地资料时请从首页独立导入。')
   }
   if (isGithubInitializationRequired(error)) {
-    return 'GitHub 仓库已有资料，但本地还没有同步基线。请选择首次同步时使用 GitHub 版本还是本地版本。'
+    return t('GitHub 仓库已有资料，但本地还没有同步基线。请选择首次同步时使用 GitHub 版本还是本地版本。')
   }
   if (normalized.includes('does not contain a branchloom project')) {
-    return '这个 GitHub 仓库中没有可导入的 Branchloom 项目。请检查仓库和分支。'
+    return t('这个 GitHub 仓库中没有可导入的 Branchloom 项目。请检查仓库和分支。')
   }
   if (normalized.includes('local project is not empty and cannot be replaced')) {
-    return '当前项目已经包含资料，不能再用 GitHub 项目覆盖。请从首页将 GitHub 项目独立导入。'
+    return t('当前项目已经包含资料，不能再用 GitHub 项目覆盖。请从首页将 GitHub 项目独立导入。')
   }
   if (normalized.includes('没有找到已保存的 github token')) {
-    return '已保存的 GitHub Token 不可用，请重新输入并连接仓库。'
+    return t('已保存的 GitHub Token 不可用，请重新输入并连接仓库。')
   }
   if (normalized.includes('401') || normalized.includes('unauthorized') || normalized.includes('bad credentials')) {
-    return 'GitHub Token 无效或已过期，请重新生成 Token 后再连接。'
+    return t('GitHub Token 无效或已过期，请重新生成 Token 后再连接。')
   }
   if (normalized.includes('403') || normalized.includes('forbidden')) {
-    return 'GitHub Token 没有访问该仓库的权限，请检查仓库授权和 Contents 读写权限。'
+    return t('GitHub Token 没有访问该仓库的权限，请检查仓库授权和 Contents 读写权限。')
   }
   if (normalized.includes('timed out') || normalized.includes('timeout')) {
-    return '连接 GitHub 超时，请检查网络后重试。'
+    return t('连接 GitHub 超时，请检查网络后重试。')
   }
   if (
     normalized.includes('github request failed')
@@ -190,9 +191,9 @@ export function githubError(error: unknown, fallback: string): string {
     || normalized.includes('connection reset')
     || normalized.includes('dns error')
   ) {
-    return '读取 GitHub 时网络连接中断，应用已自动重试；请确认网络稳定后再次尝试。'
+    return t('读取 GitHub 时网络连接中断，应用已自动重试；请确认网络稳定后再次尝试。')
   }
-  return message || fallback
+  return localizeSystemMessage(message || fallback)
 }
 
 export function isGithubProjectMismatch(error: unknown): boolean {

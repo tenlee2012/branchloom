@@ -6,6 +6,7 @@ mod commands;
 mod credentials;
 mod exchange_files;
 mod external_links;
+mod locale;
 mod runtime;
 
 #[cfg(mobile)]
@@ -61,6 +62,7 @@ pub fn run() {
             commands::preview_github_sync,
             commands::apply_github_sync,
             runtime::runtime_capabilities,
+            runtime::system_locale,
             ai_tools::get_ai_tools_status,
             ai_tools::preview_ai_tools_change,
             ai_tools::apply_ai_tools_change,

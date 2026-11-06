@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localizeSystemMessage, t } from '../../../shared/i18n'
 import { IconDeviceFloppy, IconPhotoPlus } from '@tabler/icons-vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -51,7 +52,7 @@ async function fileDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.addEventListener('load', () => resolve(String(reader.result ?? '')))
-    reader.addEventListener('error', () => reject(reader.error ?? new Error('图片无法读取')))
+    reader.addEventListener('error', () => reject(reader.error ?? new Error(t('图片无法读取'))))
     reader.readAsDataURL(file)
   })
 }
@@ -71,7 +72,7 @@ async function selectCover(event: Event) {
   coverFailure.value = ''
   if (!file.type.startsWith('image/')) {
     clearCoverSelection()
-    coverFailure.value = '请选择图片文件。'
+    coverFailure.value = t('请选择图片文件。')
     return
   }
   try {
@@ -79,7 +80,7 @@ async function selectCover(event: Event) {
     coverFile.value = file
   } catch (error) {
     clearCoverSelection()
-    coverFailure.value = error instanceof Error ? error.message : '项目封面无法预览'
+    coverFailure.value = error instanceof Error ? localizeSystemMessage(error.message) : t('项目封面无法预览')
   }
 }
 
@@ -97,9 +98,9 @@ async function loadSettings() {
     loadState.value = 'ready'
   } catch (error) {
     if (request !== loadRequest) return
-    loadError.value = error instanceof Error && error.message.trim()
-      ? error.message
-      : '项目设置暂时无法读取'
+    loadError.value = error instanceof Error && localizeSystemMessage(error.message).trim()
+      ? localizeSystemMessage(error.message)
+      : t('项目设置暂时无法读取')
     loadState.value = 'error'
   }
 }
@@ -110,7 +111,7 @@ async function saveSettings() {
   if (saving.value || !project.value) return
   const name = draft.name.trim()
   if (!name) {
-    validationError.value = '请填写项目名称。'
+    validationError.value = t('请填写项目名称。')
     return
   }
   validationError.value = ''
@@ -134,9 +135,9 @@ async function saveSettings() {
     session.openProject(refreshed, repository.getHistoryState())
     session.saveStatus = 'saved'
   } catch (error) {
-    const details = error instanceof Error && error.message.trim()
-      ? error.message
-      : '项目设置暂时无法保存'
+    const details = error instanceof Error && localizeSystemMessage(error.message).trim()
+      ? localizeSystemMessage(error.message)
+      : t('项目设置暂时无法保存')
     saveFailure.value = details
     session.saveStatus = 'failed'
     session.saveError = details
@@ -155,9 +156,9 @@ async function deleteProject() {
     session.closeProject(project.value.id)
     await router.replace({ name: 'home' })
   } catch (error) {
-    const details = error instanceof Error && error.message.trim()
-      ? error.message
-      : '当前项目暂时无法删除'
+    const details = error instanceof Error && localizeSystemMessage(error.message).trim()
+      ? localizeSystemMessage(error.message)
+      : t('当前项目暂时无法删除')
     dangerFailure.value = details
     session.saveStatus = 'failed'
     session.saveError = details
@@ -169,23 +170,23 @@ async function deleteProject() {
 </script>
 
 <template>
-  <section class="project-settings" aria-label="项目设置">
+  <section class="project-settings" :aria-label="t('项目设置')">
     <ProjectManagementTabs />
-    <div v-if="loadState === 'loading'" class="project-settings__state" role="status">正在读取项目设置…</div>
+    <div v-if="loadState === 'loading'" class="project-settings__state" role="status">{{ t('正在读取项目设置…') }}</div>
     <div v-else-if="loadState === 'error'" class="project-settings__state project-settings__error" role="alert">
-      <strong>项目设置暂时无法读取</strong><span>{{ loadError }}</span>
-      <BaseButton size="sm" variant="secondary" @click="loadSettings">重新读取</BaseButton>
+      <strong>{{ t('项目设置暂时无法读取') }}</strong><span>{{ loadError }}</span>
+      <BaseButton size="sm" variant="secondary" @click="loadSettings">{{ t('重新读取') }}</BaseButton>
     </div>
     <template v-else-if="project">
       <form class="project-settings__form" novalidate @submit.prevent="saveSettings">
         <header class="project-settings__form-heading">
           <div>
-            <span>基础资料</span>
-            <h2>项目身份</h2>
-            <p>管理项目的展示信息。</p>
+            <span>{{ t('基础资料') }}</span>
+            <h2>{{ t('项目身份') }}</h2>
+            <p>{{ t('管理项目的展示信息。') }}</p>
           </div>
           <small class="project-settings__stable-id">
-            <span>稳定 ID</span>
+            <span>{{ t('稳定 ID') }}</span>
             <code>{{ project.id }}</code>
           </small>
         </header>
@@ -193,19 +194,19 @@ async function deleteProject() {
         <section class="project-settings__section" aria-labelledby="project-profile-title">
           <header class="project-settings__section-heading">
             <div>
-              <h3 id="project-profile-title">项目信息</h3>
-              <p>这些内容会出现在项目列表、顶部栏与侧边栏中。</p>
+              <h3 id="project-profile-title">{{ t('项目信息') }}</h3>
+              <p>{{ t('这些内容会出现在项目列表、顶部栏与侧边栏中。') }}</p>
             </div>
           </header>
           <div class="project-settings__fields">
-            <BaseField id="project-name" label="项目名称" required>
+            <BaseField id="project-name" :label="t('项目名称')" required>
               <input id="project-name" v-model="draft.name" name="projectName" autocomplete="off" />
             </BaseField>
             <BaseField
               id="project-cover"
               class="project-settings__field--wide"
-              label="项目封面"
-              hint="点击预览选择图片；保存项目设置后，文件才会复制到本地资料目录并生效。"
+              :label="t('项目封面')"
+              :hint="t('点击预览选择图片；保存项目设置后，文件才会复制到本地资料目录并生效。')"
               :error="coverFailure"
             >
               <label
@@ -217,11 +218,11 @@ async function deleteProject() {
               >
                 <img
                   :src="coverSource"
-                  :alt="hasProjectCover ? `${draft.name || project.name}的项目封面` : '尚未设置项目封面'"
+                  :alt="hasProjectCover ? t('{0}的项目封面', [draft.name || project.name]) : t('尚未设置项目封面')"
                 />
                 <span class="project-settings__cover-action">
                   <IconPhotoPlus :size="20" aria-hidden="true" />
-                  {{ hasProjectCover ? '更换封面' : '上传封面' }}
+                  {{ hasProjectCover ? t('更换封面') : t('上传封面') }}
                 </span>
                 <input
                   id="project-cover"
@@ -233,10 +234,9 @@ async function deleteProject() {
                 />
               </label>
               <small v-if="coverFile" class="project-settings__cover-staged">
-                {{ coverFile.name }} · 待保存
-              </small>
+                {{ t('{0} · 待保存', [coverFile.name]) }} </small>
             </BaseField>
-            <BaseField id="project-description" class="project-settings__field--wide" label="项目简介">
+            <BaseField id="project-description" class="project-settings__field--wide" :label="t('项目简介')">
               <textarea
                 id="project-description"
                 v-model="draft.description"
@@ -253,11 +253,9 @@ async function deleteProject() {
         </div>
 
         <footer class="project-settings__actions">
-          <p><strong>保存后立即生效</strong><span>项目名称与封面会同步更新到桌面端界面。</span></p>
-          <BaseButton name="保存项目设置" type="submit" size="lg" :loading="saving">
-            <IconDeviceFloppy :size="18" aria-hidden="true" />
-            保存项目设置
-          </BaseButton>
+          <p><strong>{{ t('保存后立即生效') }}</strong><span>{{ t('项目名称与封面会同步更新到桌面端界面。') }}</span></p>
+          <BaseButton :name="t('保存项目设置')" type="submit" size="lg" :loading="saving">
+            <IconDeviceFloppy :size="18" aria-hidden="true" /> {{ t('保存项目设置') }} </BaseButton>
         </footer>
       </form>
       <DangerZone

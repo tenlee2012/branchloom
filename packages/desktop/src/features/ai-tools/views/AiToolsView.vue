@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localizeSystemMessage, t } from '../../../shared/i18n'
 import { computed, onMounted, ref } from 'vue'
 import {
   IconCheck,
@@ -43,31 +44,31 @@ const primaryAction = computed<AiToolsAction>(() => {
   return 'repair'
 })
 const primaryLabel = computed(() => {
-  if (needsRepair.value) return '修复 CLI 和 Skill'
-  if (needsUpdate.value) return '更新 CLI 和 Skill'
-  if (needsInstall.value) return '安装 CLI 和 Skill'
-  return '重新校验并修复'
+  if (needsRepair.value) return t('修复 CLI 和 Skill')
+  if (needsUpdate.value) return t('更新 CLI 和 Skill')
+  if (needsInstall.value) return t('安装 CLI 和 Skill')
+  return t('重新校验并修复')
 })
 const statusHeading = computed(() => status.value?.compatible
-  ? 'AI 工具已经可以使用'
-  : '完成本机设置后即可使用')
+  ? t('AI 工具已经可以使用')
+  : t('完成本机设置后即可使用'))
 const statusDescription = computed(() => {
-  if (hasConflict.value) return '检测到现有文件冲突。Branchloom 不会覆盖不属于本应用的工具。'
-  if (needsRepair.value) return '部分组件已被修改或损坏，修复后会恢复为当前桌面版本随附的文件。'
-  if (needsUpdate.value) return '本机组件版本较旧，可以更新为当前桌面版本随附的组合。'
-  if (needsInstall.value) return 'CLI 与 Skill 均由桌面应用离线提供，安装前会先显示具体修改。'
-  if (!status.value?.pathAvailable) return 'CLI 与 Skill 已安装，完成下方 PATH 配置后即可从终端直接调用。'
-  return 'CLI 与 Skill 版本匹配，并已通过本机完整性检查。'
+  if (hasConflict.value) return t('检测到现有文件冲突。Branchloom 不会覆盖不属于本应用的工具。')
+  if (needsRepair.value) return t('部分组件已被修改或损坏，修复后会恢复为当前桌面版本随附的文件。')
+  if (needsUpdate.value) return t('本机组件版本较旧，可以更新为当前桌面版本随附的组合。')
+  if (needsInstall.value) return t('CLI 与 Skill 均由桌面应用离线提供，安装前会先显示具体修改。')
+  if (!status.value?.pathAvailable) return t('CLI 与 Skill 已安装，完成下方 PATH 配置后即可从终端直接调用。')
+  return t('CLI 与 Skill 版本匹配，并已通过本机完整性检查。')
 })
 
 function badge(state: AiToolComponentState) {
   const values: Record<AiToolComponentState, { label: string; tone: 'neutral' | 'success' | 'warning' | 'danger' | 'info' }> = {
-    notInstalled: { label: '未安装', tone: 'neutral' },
-    installed: { label: '已安装', tone: 'success' },
-    updateAvailable: { label: '可更新', tone: 'info' },
-    modified: { label: '已修改', tone: 'warning' },
-    damaged: { label: '需要修复', tone: 'warning' },
-    conflict: { label: '路径冲突', tone: 'danger' },
+    notInstalled: { label: t('未安装'), tone: 'neutral' },
+    installed: { label: t('已安装'), tone: 'success' },
+    updateAvailable: { label: t('可更新'), tone: 'info' },
+    modified: { label: t('已修改'), tone: 'warning' },
+    damaged: { label: t('需要修复'), tone: 'warning' },
+    conflict: { label: t('路径冲突'), tone: 'danger' },
   }
   return values[state]
 }
@@ -82,7 +83,7 @@ async function loadStatus() {
   try {
     status.value = await tauriAiToolsGateway.status()
   } catch (error) {
-    errorMessage.value = aiToolsError(error, 'AI 工具状态暂时无法读取')
+    errorMessage.value = aiToolsError(error, t('AI 工具状态暂时无法读取'))
   } finally {
     loading.value = false
   }
@@ -94,13 +95,13 @@ async function openPreview(action: AiToolsAction, selected: AiToolComponent[]) {
   try {
     const plan = await tauriAiToolsGateway.preview(action, selected)
     if (plan.changes.length === 0) {
-      successMessage.value = '当前安装已经是所需状态，无需修改。'
+      successMessage.value = t('当前安装已经是所需状态，无需修改。')
       await loadStatus()
       return
     }
     preview.value = plan
   } catch (error) {
-    errorMessage.value = aiToolsError(error, '无法生成安装预览')
+    errorMessage.value = aiToolsError(error, t('无法生成安装预览'))
   }
 }
 
@@ -113,11 +114,11 @@ async function applyPreview() {
     const result = await tauriAiToolsGateway.apply(preview.value.planId)
     status.value = result.status
     successMessage.value = result.changed.length
-      ? 'AI 工具安装状态已更新。重新打开终端和 Codex 后即可使用。'
-      : '当前安装已经是最新状态。'
+      ? t('AI 工具安装状态已更新。重新打开终端和 Codex 后即可使用。')
+      : t('当前安装已经是最新状态。')
     preview.value = undefined
   } catch (error) {
-    errorMessage.value = aiToolsError(error, 'AI 工具安装失败')
+    errorMessage.value = aiToolsError(error, t('AI 工具安装失败'))
   } finally {
     applying.value = false
   }
@@ -127,9 +128,9 @@ async function copyPathInstruction() {
   if (!status.value?.pathInstruction) return
   try {
     await navigator.clipboard.writeText(status.value.pathInstruction)
-    successMessage.value = 'PATH 配置命令已复制。执行后请重新打开终端。'
+    successMessage.value = t('PATH 配置命令已复制。执行后请重新打开终端。')
   } catch {
-    errorMessage.value = `无法自动复制，请手动复制：${status.value.pathInstruction}`
+    errorMessage.value = t('无法自动复制，请手动复制：{0}', [status.value.pathInstruction])
   }
 }
 
@@ -140,9 +141,9 @@ onMounted(loadStatus)
   <section class="ai-tools" aria-labelledby="ai-tools-title">
     <header class="ai-tools__heading">
       <div>
-        <p>全局设置</p>
-        <h1 id="ai-tools-title">AI 工具</h1>
-        <span>管理随桌面应用提供的 Branchloom CLI 与 Codex Skill。</span>
+        <p>{{ t('全局设置') }}</p>
+        <h1 id="ai-tools-title">{{ t('AI 工具') }}</h1>
+        <span>{{ t('管理随桌面应用提供的 Branchloom CLI 与 Codex Skill。') }}</span>
       </div>
       <div v-if="available && !loading && status" class="ai-tools__primary">
         <BaseButton
@@ -164,28 +165,27 @@ onMounted(loadStatus)
     <div v-if="!available" class="ai-tools__notice" role="status">
       <span class="ai-tools__notice-icon"><IconRobot :size="24" aria-hidden="true" /></span>
       <div>
-        <strong>仅桌面版支持安装</strong>
-        <p>浏览器开发模式可以查看此页面，但不会修改本机命令或 Codex Skill。</p>
+        <strong>{{ t('仅桌面版支持安装') }}</strong>
+        <p>{{ t('浏览器开发模式可以查看此页面，但不会修改本机命令或 Codex Skill。') }}</p>
       </div>
     </div>
 
     <div v-else-if="loading" class="ai-tools__notice" role="status" aria-busy="true">
       <span class="ai-tools__notice-icon"><IconRobot :size="24" aria-hidden="true" /></span>
       <div>
-        <strong>正在检查本机 AI 工具</strong>
-        <p>正在核对 CLI、Skill、版本与安装位置…</p>
+        <strong>{{ t('正在检查本机 AI 工具') }}</strong>
+        <p>{{ t('正在核对 CLI、Skill、版本与安装位置…') }}</p>
       </div>
     </div>
 
     <div v-else-if="errorMessage && !status" class="ai-tools__notice ai-tools__notice--error" role="alert">
       <span class="ai-tools__notice-icon"><IconRobot :size="24" aria-hidden="true" /></span>
       <div>
-        <strong>AI 工具状态暂时无法读取</strong>
+        <strong>{{ t('AI 工具状态暂时无法读取') }}</strong>
         <p>{{ errorMessage }}</p>
       </div>
       <BaseButton size="sm" variant="secondary" @click="loadStatus">
-        <IconRefresh :size="16" aria-hidden="true" />重新检查
-      </BaseButton>
+        <IconRefresh :size="16" aria-hidden="true" />{{ t('重新检查') }} </BaseButton>
     </div>
 
     <template v-else-if="status">
@@ -195,24 +195,24 @@ onMounted(loadStatus)
           <IconShieldCheck v-else :size="28" aria-hidden="true" />
         </span>
         <div class="ai-tools__overview-copy">
-          <p>本机状态</p>
+          <p>{{ t('本机状态') }}</p>
           <h2 id="ai-tools-status-title">{{ statusHeading }}</h2>
           <span>{{ statusDescription }}</span>
         </div>
         <StatusBadge :tone="status.compatible ? 'success' : 'warning'">
-          {{ status.compatible ? '版本兼容' : '需要设置' }}
+          {{ status.compatible ? t('版本兼容') : t('需要设置') }}
         </StatusBadge>
         <dl class="ai-tools__summary">
           <div>
-            <dt>桌面版本</dt>
+            <dt>{{ t('桌面版本') }}</dt>
             <dd>{{ status.desktopVersion }}</dd>
           </div>
           <div>
-            <dt>CLI 合约</dt>
+            <dt>{{ t('CLI 合约') }}</dt>
             <dd>v{{ status.contractVersion }}</dd>
           </div>
           <div>
-            <dt>目标平台</dt>
+            <dt>{{ t('目标平台') }}</dt>
             <dd>{{ status.platform }}</dd>
           </div>
         </dl>
@@ -221,10 +221,10 @@ onMounted(loadStatus)
       <section class="ai-tools__components" aria-labelledby="ai-tools-components-title">
         <header class="ai-tools__section-heading">
           <div>
-            <p>安装组件</p>
-            <h2 id="ai-tools-components-title">CLI 与 Skill</h2>
+            <p>{{ t('安装组件') }}</p>
+            <h2 id="ai-tools-components-title">{{ t('CLI 与 Skill') }}</h2>
           </div>
-          <span>仅管理由 Branchloom 安装的文件</span>
+          <span>{{ t('仅管理由 Branchloom 安装的文件') }}</span>
         </header>
         <div class="ai-tools__cards">
           <article v-for="item in components" :key="item.component" class="ai-tools__card">
@@ -238,22 +238,22 @@ onMounted(loadStatus)
               </span>
               <div>
                 <h2>{{ item.component === 'cli' ? 'Branchloom CLI' : 'Branchloom Skill' }}</h2>
-                <p>{{ item.component === 'cli' ? '供终端和 AI 调用的原生命令' : '供 AI Agent 理解并安全调用 CLI' }}</p>
+                <p>{{ item.component === 'cli' ? t('供终端和 AI 调用的原生命令') : t('供 AI Agent 理解并安全调用 CLI') }}</p>
               </div>
               <StatusBadge :tone="badge(item.state).tone">{{ badge(item.state).label }}</StatusBadge>
             </header>
 
             <dl>
               <div>
-                <dt>安装位置</dt>
+                <dt>{{ t('安装位置') }}</dt>
                 <dd>{{ item.path }}</dd>
               </div>
               <div>
-                <dt>版本</dt>
-                <dd>{{ item.installedVersion ?? '未安装' }} / 安装包 {{ item.bundledVersion }}</dd>
+                <dt>{{ t('版本') }}</dt>
+                <dd>{{ t('{0} / 安装包 {1}', [item.installedVersion ?? t('未安装'), item.bundledVersion]) }}</dd>
               </div>
             </dl>
-            <p class="ai-tools__card-message">{{ item.message }}</p>
+            <p class="ai-tools__card-message">{{ localizeSystemMessage(item.message) }}</p>
 
             <footer>
               <BaseButton
@@ -263,7 +263,7 @@ onMounted(loadStatus)
                 @click="openPreview(item.state === 'notInstalled' ? 'install' : 'repair', [item.component])"
               >
                 <IconRefresh :size="16" aria-hidden="true" />
-                {{ item.state === 'notInstalled' ? '安装' : '修复' }}
+                {{ item.state === 'notInstalled' ? t('安装') : t('修复') }}
               </BaseButton>
               <BaseButton
                 v-if="item.managed"
@@ -271,8 +271,7 @@ onMounted(loadStatus)
                 variant="ghost"
                 @click="openPreview('uninstall', [item.component])"
               >
-                <IconTrash :size="16" aria-hidden="true" />卸载
-              </BaseButton>
+                <IconTrash :size="16" aria-hidden="true" />{{ t('卸载') }} </BaseButton>
             </footer>
           </article>
         </div>
@@ -280,25 +279,24 @@ onMounted(loadStatus)
 
       <div v-if="hasConflict" class="ai-tools__conflict" role="alert">
         <IconShieldCheck :size="20" aria-hidden="true" />
-        <p>请先处理组件卡片中标记的路径冲突。Branchloom 不会覆盖其他工具。</p>
+        <p>{{ t('请先处理组件卡片中标记的路径冲突。Branchloom 不会覆盖其他工具。') }}</p>
       </div>
 
       <div v-if="!status.pathAvailable" class="ai-tools__path" role="status">
         <div>
-          <strong>终端暂时找不到 branchloom 命令</strong>
-          <p>CLI 可以安装，但需要把安装目录加入用户 PATH。</p>
+          <strong>{{ t('终端暂时找不到 branchloom 命令') }}</strong>
+          <p>{{ t('CLI 可以安装，但需要把安装目录加入用户 PATH。') }}</p>
           <code>{{ status.pathInstruction }}</code>
         </div>
         <BaseButton size="sm" variant="secondary" @click="copyPathInstruction">
-          <IconCopy :size="16" aria-hidden="true" />复制配置
-        </BaseButton>
+          <IconCopy :size="16" aria-hidden="true" />{{ t('复制配置') }} </BaseButton>
       </div>
     </template>
 
     <BaseDialog
       :open="Boolean(preview)"
-      :title="preview?.action === 'uninstall' ? '确认卸载 AI 工具' : '确认修改 AI 工具'"
-      description="请核对目标位置。确认后只会修改下列 CLI 或 Skill 文件。"
+      :title="preview?.action === 'uninstall' ? t('确认卸载 AI 工具') : t('确认修改 AI 工具')"
+      :description="t('请核对目标位置。确认后只会修改下列 CLI 或 Skill 文件。')"
       :show-close="!applying"
       @close="preview = undefined"
     >
@@ -310,16 +308,16 @@ onMounted(loadStatus)
           </li>
         </ul>
         <p v-for="warning in preview.warnings" :key="warning" class="ai-tools__preview-warning">
-          {{ warning }}
+          {{ localizeSystemMessage(warning) }}
         </p>
         <footer>
-          <BaseButton variant="secondary" :disabled="applying" @click="preview = undefined">取消</BaseButton>
+          <BaseButton variant="secondary" :disabled="applying" @click="preview = undefined">{{ t('取消') }}</BaseButton>
           <BaseButton
             :variant="preview.action === 'uninstall' ? 'danger' : 'primary'"
             :loading="applying"
             @click="applyPreview"
           >
-            {{ preview.action === 'uninstall' ? '确认卸载' : '确认并执行' }}
+            {{ preview.action === 'uninstall' ? t('确认卸载') : t('确认并执行') }}
           </BaseButton>
         </footer>
       </div>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '../../../shared/i18n'
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import BaseButton from '../../../design-system/BaseButton.vue'
@@ -40,11 +41,11 @@ const organizationById = computed(() => new Map(props.organizations.map((organiz
 
 function personName(id: string) {
   const person = personById.value.get(id)
-  return person ? getPrimaryName(person) : '未知人物'
+  return person ? getPrimaryName(person) : t('未知人物')
 }
 
 function typeLabel(type: Source['type']) {
-  return { book: '书籍', web: '网页', archive: '档案', interview: '访谈', other: '其他' }[type]
+  return { book: t('书籍'), web: t('网页'), archive: t('档案'), interview: t('访谈'), other: t('其他') }[type]
 }
 
 function sourceCitations(sourceId: string) {
@@ -66,10 +67,10 @@ function backlinks(source: Source): Backlink[] {
     if (citation.targetType === 'person') {
       add({ key: `person:${citation.targetId}`, type: 'person', targetId: citation.targetId, label: personName(citation.targetId), to: `/project/${props.projectId}/people/${citation.targetId}` })
     } else if (citation.targetType === 'event') {
-      add({ key: `event:${citation.targetId}`, type: 'event', targetId: citation.targetId, label: eventById.value.get(citation.targetId)?.title ?? '未知事件', to: { path: `/project/${props.projectId}/timeline`, query: { eventId: citation.targetId } } })
+      add({ key: `event:${citation.targetId}`, type: 'event', targetId: citation.targetId, label: eventById.value.get(citation.targetId)?.title ?? t('未知事件'), to: { path: `/project/${props.projectId}/timeline`, query: { eventId: citation.targetId } } })
     } else if (citation.targetType === 'relationship') {
       const relationship = relationshipById.value.get(citation.targetId)
-      add({ key: `relationship:${citation.targetId}`, type: 'relationship', targetId: citation.targetId, label: relationship ? `${personName(relationship.fromPersonId)}与${personName(relationship.toPersonId)}（${relationship.category === 'parent' ? '亲子' : '伴侣'}）` : '未知关系', to: { path: `/project/${props.projectId}/tree`, query: { relationshipId: citation.targetId } } })
+      add({ key: `relationship:${citation.targetId}`, type: 'relationship', targetId: citation.targetId, label: relationship ? t('{0}与{1}（{2}）', [personName(relationship.fromPersonId), personName(relationship.toPersonId), relationship.category === 'parent' ? t('亲子') : t('伴侣')]) : t('未知关系'), to: { path: `/project/${props.projectId}/tree`, query: { relationshipId: citation.targetId } } })
     } else if (citation.targetType === 'career') {
       const career = careerById.value.get(citation.targetId)
       const organization = career ? organizationById.value.get(career.organizationId ?? '') : undefined
@@ -79,7 +80,7 @@ function backlinks(source: Source): Backlink[] {
         targetId: citation.targetId,
         label: career
           ? [personName(career.personId), organization?.name, career.positionTitle].filter(Boolean).join(' · ')
-          : '未知履历',
+          : t('未知履历'),
         to: career ? `/project/${props.projectId}/people/${career.personId}` : `/project/${props.projectId}/people`,
       })
     }
@@ -95,7 +96,7 @@ function backlinks(source: Source): Backlink[] {
       key: `relationship:${relationship.id}`,
       type: 'relationship',
       targetId: relationship.id,
-      label: `${personName(relationship.fromPersonId)}与${personName(relationship.toPersonId)}（${relationship.category === 'parent' ? '亲子' : '伴侣'}）`,
+      label: t('{0}与{1}（{2}）', [personName(relationship.fromPersonId), personName(relationship.toPersonId), relationship.category === 'parent' ? t('亲子') : t('伴侣')]),
       to: {
         path: `/project/${props.projectId}/tree`,
         query: { relationshipId: relationship.id },
@@ -123,9 +124,9 @@ function unused(source: Source) {
 <template>
   <EmptyState
     v-if="sources.length === 0"
-    title="没有符合条件的资料来源"
-    description="可以调整搜索或筛选条件，也可以新建来源。"
-  ><span aria-hidden="true">据</span></EmptyState>
+    :title="t('没有符合条件的资料来源')"
+    :description="t('可以调整搜索或筛选条件，也可以新建来源。')"
+  ><span aria-hidden="true">{{ t('据') }}</span></EmptyState>
   <div v-else class="source-list">
     <article
       v-for="source in sources"
@@ -140,37 +141,37 @@ function unused(source: Source) {
         <div>
           <div class="source-list__badges">
             <StatusBadge tone="info">{{ typeLabel(source.type) }}</StatusBadge>
-            <StatusBadge v-if="unused(source)" tone="warning">未使用</StatusBadge>
+            <StatusBadge v-if="unused(source)" tone="warning">{{ t('未使用') }}</StatusBadge>
           </div>
           <h2>{{ source.title }}</h2>
-          <p>{{ [source.author, source.repository, source.referenceCode].filter(Boolean).join(' · ') || '尚未补充责任者或保存机构' }}</p>
+          <p>{{ [source.author, source.repository, source.referenceCode].filter(Boolean).join(' · ') || t('尚未补充责任者或保存机构') }}</p>
         </div>
         <div class="source-list__actions">
-          <BaseButton :name="`编辑来源：${source.title}`" size="sm" variant="secondary" @click="emit('editSource', source)">编辑</BaseButton>
-          <BaseButton :name="`删除来源：${source.title}`" size="sm" variant="ghost" @click="emit('deleteSource', source)">删除</BaseButton>
+          <BaseButton :name="t('编辑来源：{0}', [source.title])" size="sm" variant="secondary" @click="emit('editSource', source)">{{ t('编辑') }}</BaseButton>
+          <BaseButton :name="t('删除来源：{0}', [source.title])" size="sm" variant="ghost" @click="emit('deleteSource', source)">{{ t('删除') }}</BaseButton>
         </div>
       </header>
       <div class="source-list__citation-heading">
-        <strong>{{ sourceCitations(source.id).length }} 条引用</strong>
-        <span>{{ backlinks(source).length }} 处关联资料</span>
+        <strong>{{ t('{0} 条引用', [sourceCitations(source.id).length]) }}</strong>
+        <span>{{ t('{0} 处关联资料', [backlinks(source).length]) }}</span>
       </div>
-      <ul v-if="backlinks(source).length" class="source-list__backlinks" :aria-label="`${source.title} 的关联资料`">
+      <ul v-if="backlinks(source).length" class="source-list__backlinks" :aria-label="t('{0} 的关联资料', [source.title])">
         <li v-for="backlink in backlinks(source)" :key="backlink.key">
           <RouterLink :to="backlink.to">{{ backlink.label }}</RouterLink>
-          <span>{{ backlink.type === 'person' ? '人物' : backlink.type === 'event' ? '事件' : '关系' }}</span>
+          <span>{{ backlink.type === 'person' ? t('人物') : backlink.type === 'event' ? t('事件') : t('关系') }}</span>
         </li>
       </ul>
-      <p v-else class="source-list__unused">该来源尚未被人物、关系或事件使用。</p>
+      <p v-else class="source-list__unused">{{ t('该来源尚未被人物、关系或事件使用。') }}</p>
       <div v-if="sourceCitations(source.id).length" class="source-list__citations">
         <button
           v-for="citation in sourceCitations(source.id)"
           :key="citation.id"
           type="button"
-          :name="`编辑引用：${citation.id}`"
+          :name="t('编辑引用：{0}', [citation.id])"
           @click="emit('editCitation', citation)"
         >
-          <span>{{ citation.locator || '未填写定位信息' }}</span>
-          <small>{{ citation.excerpt || '打开编辑引用详情' }}</small>
+          <span>{{ citation.locator || t('未填写定位信息') }}</span>
+          <small>{{ citation.excerpt || t('打开编辑引用详情') }}</small>
         </button>
       </div>
     </article>

@@ -1,3 +1,4 @@
+import { localizeSystemMessage, t } from '../../../shared/i18n'
 import { computed, ref, type Ref } from 'vue'
 import type { Store } from 'pinia'
 import { parseGenealogyDate, validateLifeDates } from '../../../shared/domain/date'
@@ -109,7 +110,7 @@ export function usePersonEditor(
     if (saving.value) return undefined
     const names = normalizePersonNames(draft.value.names)
     if (names.length === 0) {
-      validationError.value = '请至少填写一个姓名。'
+      validationError.value = t('请至少填写一个姓名。')
       return undefined
     }
 
@@ -133,7 +134,7 @@ export function usePersonEditor(
       session.saveStatus = 'saved'
       return saved
     } catch (error) {
-      const details = error instanceof Error ? error.message : '本地资料暂时无法写入'
+      const details = error instanceof Error ? localizeSystemMessage(error.message) : t('本地资料暂时无法写入')
       saveFailure.value = details
       session.saveStatus = 'failed'
       session.saveError = details
