@@ -13,12 +13,14 @@ use uuid::Uuid;
 use crate::contract::{
     describe_resource, prepare_create_input, validate_record, validate_update_input,
 };
-use crate::core::duplicate::{score_duplicate_candidates, DuplicateCandidate};
+use crate::core::duplicate::{primary_name, score_duplicate_candidates, DuplicateCandidate};
 use crate::core::error::{CoreError, CoreResult};
 use crate::core::project::{NewProject, ProjectPatch, ProjectRecord};
 use crate::gedcom::{export_gedcom, read_gedcom, GedcomSummary, GEDCOM_EXTENSION};
 use crate::project_format::{ProjectData, ProjectTree, ARCHIVE_EXTENSION};
 use crate::storage::{DesktopRecordChange, NormalizedState, Resource, Storage};
+
+mod person_merge;
 
 pub use crate::storage::Resource as BusinessResource;
 pub const SCHEMA_VERSION: i64 = crate::storage::CURRENT_SCHEMA_VERSION;
@@ -561,8 +563,11 @@ impl ApplicationService {
             "deleteAttachment" => {
                 self.delete_desktop_record(Resource::Attachment, args, expected_revision)?
             }
-            "mergePeople" | "cleanupProject" | "restoreSnapshot" | "resetDemo" | "undo"
-            | "redo" => {
+            "mergePeople" => {
+                let input = serde_json::from_value(mutation_arg(args, 0)?.clone())?;
+                return self.merge_people_if_revision(&input, expected_revision);
+            }
+            "cleanupProject" | "restoreSnapshot" | "resetDemo" | "undo" | "redo" => {
                 return Err(CoreError::Validation(format!(
                     "{method} is disabled in managed storage until its Rust core implementation is available"
                 )))
@@ -576,6 +581,91 @@ impl ApplicationService {
         Ok(DesktopMutationResult {
             result,
             revision: self.data_revision()?,
+        })
+    }
+
+    fn merge_people_if_revision(
+        &mut self,
+        input: &person_merge::PersonMergeInput,
+        expected_revision: i64,
+    ) -> CoreResult<DesktopMutationResult> {
+        let actual = self.data_revision()?;
+        if actual != expected_revision {
+            return Err(CoreError::RevisionConflict {
+                expected: expected_revision,
+                actual,
+            });
+        }
+        if input.keep_person_id == input.remove_person_id {
+            return Err(CoreError::Validation(
+                "Cannot merge a person into itself".to_owned(),
+            ));
+        }
+        let find_person = |id: &str| {
+            self.get_record(Resource::Person, id)?
+                .ok_or_else(|| CoreError::NotFound {
+                    entity: "person",
+                    id: id.to_owned(),
+                })
+        };
+        let keep = find_person(&input.keep_person_id)?;
+        let remove = find_person(&input.remove_person_id)?;
+        let project_id = required_record_string(&keep, "projectId")?;
+        if required_record_string(&remove, "projectId")? != project_id {
+            return Err(CoreError::Validation(
+                "Merge people must belong to the same project".to_owned(),
+            ));
+        }
+        if [&keep, &remove]
+            .iter()
+            .any(|person| !person["deletedAt"].is_null())
+        {
+            return Err(CoreError::Validation(
+                "Deleted people cannot be merged".to_owned(),
+            ));
+        }
+
+        let mut payload = self
+            .storage
+            .load_project_state_if_revision(project_id, expected_revision)?;
+        sanitize_state_value(&mut payload);
+        let timestamp = OffsetDateTime::now_utc().format(&Rfc3339)?;
+        let plan = person_merge::plan(&payload, &keep, &remove, input, &timestamp)?;
+        for change in &plan.changes {
+            let Some(after) = &change.after else { continue };
+            let resource = match change.collection {
+                "people" => Resource::Person,
+                "relationships" => Resource::Relationship,
+                "events" => Resource::Event,
+                "citations" => Resource::Citation,
+                "careers" => Resource::Career,
+                "personTitles" => Resource::Title,
+                "attachmentLinks" => {
+                    self.validate_attachment_link(after)?;
+                    continue;
+                }
+                _ => continue,
+            };
+            self.validate_desktop_record(resource, after)?;
+        }
+
+        let note = format!("{} → {}", primary_name(&remove), primary_name(&keep));
+        let snapshot = build_snapshot(&mut payload, project_id, "merge", &note, &timestamp)?;
+        let revision = self.storage.apply_person_merge_if_revision(
+            &plan.changes,
+            &snapshot,
+            &payload,
+            expected_revision,
+        )?;
+        Ok(DesktopMutationResult {
+            result: json!({
+                "snapshot": snapshot,
+                "retainedPerson": plan.retained_person,
+                "removedPersonId": input.remove_person_id,
+                "summary": plan.summary,
+                "issues": [],
+            }),
+            revision,
         })
     }
 
@@ -1614,46 +1704,8 @@ impl ApplicationService {
             .state
             .ok_or_else(|| CoreError::Validation("local data is not initialized".to_owned()))?;
         let mut state: Value = serde_json::from_str(&normalized.state_json)?;
-        let people = state
-            .get("people")
-            .and_then(Value::as_array)
-            .ok_or_else(|| CoreError::Validation("people collection is missing".to_owned()))?;
-        let relationships = state
-            .get("relationships")
-            .and_then(Value::as_array)
-            .ok_or_else(|| {
-                CoreError::Validation("relationships collection is missing".to_owned())
-            })?;
-        let events = state
-            .get("events")
-            .and_then(Value::as_array)
-            .ok_or_else(|| CoreError::Validation("events collection is missing".to_owned()))?;
-        let summary = json!({
-            "people": people.iter().filter(|item| {
-                item.get("projectId").and_then(Value::as_str) == Some(project_id)
-                    && item.get("deletedAt").is_none_or(Value::is_null)
-            }).count(),
-            "relationships": relationships.iter().filter(|item| {
-                item.get("projectId").and_then(Value::as_str) == Some(project_id)
-            }).count(),
-            "events": events.iter().filter(|item| {
-                item.get("projectId").and_then(Value::as_str) == Some(project_id)
-            }).count(),
-        });
         let created_at = OffsetDateTime::now_utc().format(&Rfc3339)?;
-        let snapshot = json!({
-            "id": Uuid::new_v4().to_string(),
-            "projectId": project_id,
-            "createdAt": created_at,
-            "reason": "manual",
-            "note": note,
-            "summary": summary,
-        });
-        state
-            .get_mut("snapshots")
-            .and_then(Value::as_array_mut)
-            .ok_or_else(|| CoreError::Validation("snapshots collection is missing".to_owned()))?
-            .push(snapshot.clone());
+        let snapshot = build_snapshot(&mut state, project_id, "manual", note, &created_at)?;
         let revision =
             self.storage
                 .create_snapshot_if_revision(&snapshot, &state, expected_revision)?;
@@ -2015,6 +2067,48 @@ impl ApplicationService {
             summary: imported.summary,
         })
     }
+}
+
+fn build_snapshot(
+    state: &mut Value,
+    project_id: &str,
+    reason: &str,
+    note: &str,
+    created_at: &str,
+) -> CoreResult<Value> {
+    let count = |collection: &str| {
+        let records = state
+            .get(collection)
+            .and_then(Value::as_array)
+            .ok_or_else(|| CoreError::Validation(format!("{collection} collection is missing")))?;
+        Ok::<_, CoreError>(
+            records
+                .iter()
+                .filter(|record| {
+                    record["projectId"] == project_id
+                        && (collection != "people" || record["deletedAt"].is_null())
+                })
+                .count(),
+        )
+    };
+    let snapshot = json!({
+        "id": Uuid::new_v4().to_string(),
+        "projectId": project_id,
+        "createdAt": created_at,
+        "reason": reason,
+        "note": note,
+        "summary": {
+            "people": count("people")?,
+            "relationships": count("relationships")?,
+            "events": count("events")?,
+        },
+    });
+    state
+        .get_mut("snapshots")
+        .and_then(Value::as_array_mut)
+        .ok_or_else(|| CoreError::Validation("snapshots collection is missing".to_owned()))?
+        .push(snapshot.clone());
+    Ok(snapshot)
 }
 
 fn validate_gedcom_destination(destination: &Path) -> CoreResult<()> {

@@ -392,6 +392,7 @@ export interface PersonMergeInput {
   keepPersonId: UUID
   removePersonId: UUID
   choices: PersonMergeChoices
+  expectedRevision?: number
 }
 
 export interface PersonMergeSummary {
@@ -445,6 +446,7 @@ export interface RestoreResult {
 }
 
 export interface BranchloomRepository {
+  getDataRevision?(): number
   publication<T = unknown>(input: PublicationRequest): Promise<T>
   savePublicationPdf(projectId: string, jobId: string, title: string): Promise<boolean>
   listProjects(): Promise<Project[]>

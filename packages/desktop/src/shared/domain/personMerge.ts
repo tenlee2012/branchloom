@@ -1,4 +1,5 @@
 import type {
+  Attachment,
   AttachmentLink,
   Citation,
   DataIssue,
@@ -20,6 +21,7 @@ export interface PersonMergeContext {
   events: FamilyEvent[]
   citations: Citation[]
   attachmentLinks: AttachmentLink[]
+  attachments?: Attachment[]
   issues?: DataIssue[]
 }
 
@@ -59,7 +61,8 @@ function selectedOptional<T>(keep: T | undefined, remove: T | undefined, side: P
 }
 
 function selectedText(keep: string, remove: string, side: PersonMergeSide | undefined): string {
-  return side === 'remove' ? remove : side === 'keep' ? keep : keep || remove
+  if (side === 'remove') return remove
+  return side === 'keep' || keep.trim() ? keep : remove
 }
 
 const PERSON_CONFLICT_FIELDS = [
@@ -67,8 +70,16 @@ const PERSON_CONFLICT_FIELDS = [
 ] as const
 type PersonConflictField = typeof PERSON_CONFLICT_FIELDS[number]
 
-function meaningfulPersonValue(person: Person, field: PersonConflictField): unknown {
-  const value = person[field]
+export function meaningfulPersonMergeValue(
+  person: Person,
+  field: PersonConflictField,
+  context: Pick<PersonMergeContext, 'attachmentLinks' | 'attachments'>,
+): unknown {
+  let value = person[field]
+  if (field === 'avatarUrl') {
+    const link = context.attachmentLinks.find((link) => link.targetType === 'person' && link.targetId === person.id && link.role === 'avatar')
+    if (link) value = context.attachments?.find(({ id }) => id === link.attachmentId)?.contentHash ?? link.attachmentId
+  }
   if ((field === 'sex' || field === 'status') && value === 'unknown') return undefined
   if ((field === 'birth' || field === 'death')
     && (value as Person['birth'])?.precision === 'unknown') return undefined
@@ -76,10 +87,10 @@ function meaningfulPersonValue(person: Person, field: PersonConflictField): unkn
   return value
 }
 
-function assertPersonConflictChoices(keep: Person, remove: Person, choices: PersonMergeChoices): void {
+function assertPersonConflictChoices(keep: Person, remove: Person, choices: PersonMergeChoices, context: PersonMergeContext): void {
   for (const field of PERSON_CONFLICT_FIELDS) {
-    const left = meaningfulPersonValue(keep, field)
-    const right = meaningfulPersonValue(remove, field)
+    const left = meaningfulPersonMergeValue(keep, field, context)
+    const right = meaningfulPersonMergeValue(remove, field, context)
     const conflict = left !== undefined && right !== undefined && JSON.stringify(left) !== JSON.stringify(right)
     if (conflict && choices[field] !== 'keep' && choices[field] !== 'remove') {
       throw new Error(`Person merge requires an explicit choice for conflicting field: ${field}`)
@@ -187,6 +198,10 @@ function rewiredRelationship(relationship: Relationship, keepPersonId: UUID, rem
   return next
 }
 
+function createsSelfRelationship(before: Relationship, after: Relationship): boolean {
+  return before.fromPersonId !== before.toPersonId && after.fromPersonId === after.toPersonId
+}
+
 export function derivePersonMergeDependencyConstraints(
   context: Pick<PersonMergeContext, 'relationships' | 'citations' | 'attachmentLinks'>,
   input: PersonMergeInput,
@@ -203,7 +218,7 @@ export function derivePersonMergeDependencyConstraints(
   for (const relationship of context.relationships) {
     if (relatedRelationshipIds.has(relationship.id) && !selectedRelationshipIds.has(relationship.id)) continue
     const rewired = rewiredRelationship(relationship, keepPersonId, removePersonId)
-    if (rewired.fromPersonId === rewired.toPersonId) continue
+    if (createsSelfRelationship(relationship, rewired)) continue
     if (!retainedByKey.has(relationshipKey(rewired))) retainedByKey.set(relationshipKey(rewired), relationship.id)
   }
 
@@ -212,7 +227,7 @@ export function derivePersonMergeDependencyConstraints(
   for (const relationship of context.relationships) {
     if (!relatedRelationshipIds.has(relationship.id) || selectedRelationshipIds.has(relationship.id)) continue
     const rewired = rewiredRelationship(relationship, keepPersonId, removePersonId)
-    const equivalentId = rewired.fromPersonId === rewired.toPersonId
+    const equivalentId = createsSelfRelationship(relationship, rewired)
       ? undefined
       : retainedByKey.get(relationshipKey(rewired))
     if (equivalentId) relationshipReplacementIds[relationship.id] = equivalentId
@@ -263,10 +278,8 @@ function rewireRelationships(
   const conflicts: RelationshipMergeConflict[] = []
   const affectedIds = new Set<UUID>()
   for (const original of relationships) {
-    const next = clone(original)
-    if (next.fromPersonId === removePersonId) next.fromPersonId = keepPersonId
-    if (next.toPersonId === removePersonId) next.toPersonId = keepPersonId
-    if (next.fromPersonId === next.toPersonId) {
+    const next = rewiredRelationship(original, keepPersonId, removePersonId)
+    if (createsSelfRelationship(original, next)) {
       affectedIds.add(original.id)
       targetMap.set(original.id, { targetType: 'person', targetId: keepPersonId })
       continue
@@ -319,10 +332,14 @@ function rewireEvents(events: FamilyEvent[], keepPersonId: UUID, removePersonId:
   const items = events.map((event) => {
     if (!event.participantIds.includes(removePersonId)) return clone(event)
     rewired += 1
-    return {
-      ...clone(event),
-      participantIds: [...new Set(event.participantIds.map((id) => id === removePersonId ? keepPersonId : id))],
+    const next = clone(event)
+    next.participantIds = [...new Set(event.participantIds.map((id) => id === removePersonId ? keepPersonId : id))]
+    const roles = next.participantRoles
+    if (roles && roles[removePersonId] !== undefined) {
+      roles[keepPersonId] ??= roles[removePersonId]
+      delete roles[removePersonId]
     }
+    return next
   })
   return { items, rewired }
 }
@@ -351,6 +368,35 @@ function rewireTypedTargets<T extends Citation | AttachmentLink>(
   return { items: output, rewired }
 }
 
+function rewireAttachmentLinks(
+  links: AttachmentLink[],
+  keepPersonId: UUID,
+  removePersonId: UUID,
+  targets: Map<UUID, { targetType: 'person' | 'relationship'; targetId: UUID }>,
+) {
+  const { items } = rewireTypedTargets(links, keepPersonId, removePersonId, targets)
+  const candidates = items.map((link, index) => {
+    const before = links[index]!
+    const rewired = link.targetType !== before.targetType || link.targetId !== before.targetId
+    return {
+      key: JSON.stringify([link.attachmentId, link.targetType, link.targetId]),
+      priority: (link.role === 'avatar' ? 2 : 0) + Number(!rewired),
+      rewired,
+      link,
+    }
+  })
+  const preferred = new Map<string, (typeof candidates)[number]>()
+  for (const candidate of candidates) {
+    const prior = preferred.get(candidate.key)
+    if (!prior || candidate.priority > prior.priority) preferred.set(candidate.key, candidate)
+  }
+  const retained = candidates.filter((candidate) => {
+    const match = preferred.get(candidate.key)
+    return match === candidate || (!match?.rewired && !candidate.rewired)
+  })
+  return { items: retained.map(({ link }) => link), rewired: retained.filter(({ rewired }) => rewired).length }
+}
+
 export function createPersonMergePreview(
   context: PersonMergeContext,
   input: PersonMergeInput,
@@ -361,7 +407,7 @@ export function createPersonMergePreview(
   if (!keep || !remove) throw new Error('Both merge people must exist')
   if (keep.projectId !== remove.projectId) throw new Error('Merge people must belong to the same project')
   const choices = input.choices
-  assertPersonConflictChoices(keep, remove, choices)
+  assertPersonConflictChoices(keep, remove, choices, context)
   const retainedNames = distinctNames(keep, remove, choices.retainedNameValues)
   const retainedPerson: Person = {
     ...clone(keep),
@@ -408,7 +454,13 @@ export function createPersonMergePreview(
   const eventInput = context.events.map((event) => {
     const associated = event.participantIds.includes(keep.id) || event.participantIds.includes(remove.id)
     if (!associated || !retainedEventIds || retainedEventIds.has(event.id)) return event
-    return { ...clone(event), participantIds: event.participantIds.filter((id) => id !== keep.id && id !== remove.id) }
+    const next = clone(event)
+    next.participantIds = event.participantIds.filter((id) => id !== keep.id && id !== remove.id)
+    if (next.participantRoles) {
+      delete next.participantRoles[keep.id]
+      delete next.participantRoles[remove.id]
+    }
+    return next
   })
   const events = rewireEvents(eventInput, keep.id, remove.id)
 
@@ -448,7 +500,7 @@ export function createPersonMergePreview(
     || link.targetType !== 'person'
     || ![keep.id, remove.id].includes(link.targetId)
     || link.id === selectedAvatarLinkId)
-  const attachmentLinks = rewireTypedTargets(attachmentLinkInput, keep.id, remove.id, relationships.targetMap)
+  const attachmentLinks = rewireAttachmentLinks(attachmentLinkInput, keep.id, remove.id, relationships.targetMap)
   const issues = (context.issues ?? [])
     .filter((issue) => {
       if (issue.targetType === 'person' && issue.targetId === remove.id) return false

@@ -1151,6 +1151,7 @@ export class BrowserPrototypeRepository implements BranchloomRepository {
         events: this.state.events.filter(({ projectId: id }) => id === projectId),
         citations: this.state.citations.filter(({ projectId: id }) => id === projectId),
         attachmentLinks: this.state.attachmentLinks.filter(({ projectId: id }) => id === projectId),
+        attachments: this.state.attachments.filter(({ projectId: id }) => id === projectId),
         issues: this.state.issues.filter((issue) =>
           this.issueBelongsToStateProject(issue, projectId, this.state)),
       }, safeInput)

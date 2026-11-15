@@ -1044,7 +1044,7 @@ fn iso_upper_bound(value: &str) -> String {
     }
 }
 
-fn normalize_name(value: &str) -> String {
+pub(crate) fn normalize_name(value: &str) -> String {
     value
         .nfc()
         .collect::<String>()

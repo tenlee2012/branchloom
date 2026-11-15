@@ -24,6 +24,7 @@ import {
   collectRelationshipMergeConflicts,
   createPersonMergePreview,
   derivePersonMergeDependencyConstraints,
+  meaningfulPersonMergeValue,
   type RelationshipMergeConflict,
 } from '../model/mergePeople'
 
@@ -31,6 +32,7 @@ const props = defineProps<{
   open: boolean
   keepPersonId: UUID
   removePersonId: UUID
+  expectedRevision?: number
   people: Person[]
   relationships: Relationship[]
   events: FamilyEvent[]
@@ -71,6 +73,7 @@ const retainedCitationIds = ref<UUID[]>([])
 const retainedAttachmentLinkIds = ref<UUID[]>([])
 const relationshipFieldSelections = ref<Record<string, Partial<Record<RelationshipMergeField, UUID>>>>({})
 const saving = ref(false)
+const stale = ref(false)
 const errorMessage = ref('')
 const result = ref<PersonMergeResult>()
 
@@ -90,6 +93,7 @@ function reset() {
   retainedAttachmentLinkIds.value = relatedAttachmentLinks.value.map(({ id }) => id)
   relationshipFieldSelections.value = {}
   saving.value = false
+  stale.value = false
   errorMessage.value = ''
   result.value = undefined
 }
@@ -112,12 +116,7 @@ function statusText(person: Person | undefined): string {
 }
 
 function fieldValue(person: Person, key: ChoiceKey): unknown {
-  const value = person[key]
-  if ((key === 'sex' || key === 'status') && value === 'unknown') return undefined
-  if ((key === 'birth' || key === 'death')
-    && (value as Person['birth'])?.precision === 'unknown') return undefined
-  if (typeof value === 'string' && !value.trim()) return undefined
-  return value
+  return meaningfulPersonMergeValue(person, key, props)
 }
 
 function isConflict(key: ChoiceKey): boolean {
@@ -280,6 +279,7 @@ const preview = computed(() => {
     events: props.events,
     citations: props.citations,
     attachmentLinks: props.attachmentLinks,
+    attachments: props.attachments,
   }, {
     keepPersonId: props.keepPersonId,
     removePersonId: props.removePersonId,
@@ -288,7 +288,7 @@ const preview = computed(() => {
 })
 
 async function confirmMerge() {
-  if (saving.value) return
+  if (saving.value || stale.value) return
   if (!preview.value) {
     errorMessage.value = t('至少需要保留一个姓名。')
     return
@@ -302,14 +302,17 @@ async function confirmMerge() {
       keepPersonId: props.keepPersonId,
       removePersonId: props.removePersonId,
       choices: currentChoices(),
+      expectedRevision: props.expectedRevision,
     })
     await session.refreshHistory(repository)
     session.saveStatus = 'saved'
     emit('merged', result.value)
   } catch (error) {
-    const details = error instanceof Error && localizeSystemMessage(error.message).trim()
-      ? localizeSystemMessage(error.message)
-      : t('人物合并事务失败，原数据已保留。')
+    const message = error instanceof Error ? error.message : typeof error === 'string' ? error : ''
+    stale.value = message.includes('data revision conflict:')
+    const details = stale.value
+      ? t('资料已更新。请关闭窗口，刷新资料后重新预览合并。')
+      : localizeSystemMessage(message).trim() || t('人物合并事务失败，原数据已保留。')
     errorMessage.value = details
     session.saveStatus = 'failed'
     session.saveError = details
@@ -324,7 +327,7 @@ async function confirmMerge() {
     <section role="dialog" aria-modal="true" aria-labelledby="merge-title" class="wizard">
       <template v-if="result">
         <h2 id="merge-title">{{ t('合并完成') }}</h2>
-        <p>{{ t('已创建合并前快照“{0}”，可从备份与快照恢复。', [result.snapshot.note]) }}</p>
+        <p>{{ t('已创建合并前快照“{0}”。', [result.snapshot.note]) }}</p>
         <dl class="summary">
           <div><dt>{{ t('关系重连') }}</dt><dd>{{ result.summary.rewiredRelationships }}</dd></div>
           <div><dt>{{ t('事件重连') }}</dt><dd>{{ result.summary.rewiredEvents }}</dd></div>
@@ -397,7 +400,7 @@ async function confirmMerge() {
           <span v-if="preview">{{ t('预览：删除 {0} 条自环或重复关系，重连 {1} 个关联。', [preview.summary.removedRelationships, preview.summary.rewiredEvents + preview.summary.rewiredCitations + preview.summary.rewiredAttachmentLinks]) }}</span>
           <span v-else-if="unresolvedConflicts.length">{{ t('请先选择所有冲突字段的保留值。') }}</span>
           <span v-else-if="unresolvedRelationshipConflicts.length">{{ t('请先选择所有关系冲突字段的保留值。') }}</span>
-          <button type="button" :name="t('确认合并')" :disabled="saving || !preview" @click="confirmMerge">{{ saving ? t('合并中…') : t('确认合并') }}</button>
+          <button type="button" :name="t('确认合并')" :disabled="saving || stale || !preview" @click="confirmMerge">{{ saving ? t('合并中…') : t('确认合并') }}</button>
         </footer>
       </template>
     </section>

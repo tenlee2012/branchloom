@@ -289,7 +289,7 @@ fn strings<'a>(value: &'a Value, key: &str) -> BTreeSet<&'a str> {
         .collect()
 }
 
-fn primary_name(person: &Value) -> String {
+pub(crate) fn primary_name(person: &Value) -> String {
     person
         .get("names")
         .and_then(Value::as_array)
