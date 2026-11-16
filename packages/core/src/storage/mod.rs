@@ -841,6 +841,31 @@ impl Storage {
         changes: &[DesktopRecordChange],
         expected_revision: i64,
     ) -> CoreResult<i64> {
+        self.apply_desktop_changes(operation, changes, None, expected_revision)
+    }
+
+    pub(crate) fn apply_person_merge_if_revision(
+        &mut self,
+        changes: &[DesktopRecordChange],
+        snapshot: &Value,
+        payload: &Value,
+        expected_revision: i64,
+    ) -> CoreResult<i64> {
+        self.apply_desktop_changes(
+            "mergePeople",
+            changes,
+            Some((snapshot, payload)),
+            expected_revision,
+        )
+    }
+
+    fn apply_desktop_changes(
+        &mut self,
+        operation: &str,
+        changes: &[DesktopRecordChange],
+        snapshot: Option<(&Value, &Value)>,
+        expected_revision: i64,
+    ) -> CoreResult<i64> {
         if changes.is_empty() {
             return Err(CoreError::Validation(
                 "desktop mutation must contain at least one record change".to_owned(),
@@ -876,45 +901,55 @@ impl Storage {
         let change_set_id = Uuid::new_v4().to_string();
         let mut audit_items = Vec::with_capacity(changes.len());
         for change in changes {
-            if !matches!(
-                change.collection,
-                "people"
-                    | "organizations"
-                    | "careers"
-                    | "personTitles"
-                    | "relationships"
-                    | "events"
-                    | "places"
-                    | "sources"
-                    | "citations"
-                    | "attachments"
-                    | "attachmentLinks"
-            ) {
-                return Err(CoreError::Validation(format!(
-                    "unsupported desktop collection: {}",
-                    change.collection
-                )));
-            }
-            let table = collection_table(change.collection);
+            let table = match change.collection {
+                "projects" if change.id == *project_id && change.after.is_some() => "projects",
+                "people" | "organizations" | "careers" | "personTitles" | "relationships"
+                | "events" | "places" | "sources" | "citations" | "attachments"
+                | "attachmentLinks" | "issues" => collection_table(change.collection),
+                _ => {
+                    return Err(CoreError::Validation(format!(
+                        "unsupported desktop change in collection: {}",
+                        change.collection
+                    )));
+                }
+            };
+            let scope_column = if table == "projects" {
+                "id"
+            } else {
+                "project_id"
+            };
             let before = transaction
                 .query_row(
-                    &format!("SELECT data_json FROM {table} WHERE id = ?1"),
+                    &format!("SELECT {scope_column}, data_json FROM {table} WHERE id = ?1"),
                     [&change.id],
-                    |row| row.get::<_, String>(0),
+                    |row| Ok((row.get::<_, Option<String>>(0)?, row.get::<_, String>(1)?)),
                 )
                 .optional()?
-                .map(|raw| serde_json::from_str::<Value>(&raw))
+                .map(|(scope, raw)| {
+                    if scope.as_ref().is_some_and(|scope| scope != project_id) {
+                        return Err(CoreError::Validation(
+                            "desktop mutation cannot change records from another project"
+                                .to_owned(),
+                        ));
+                    }
+                    Ok(serde_json::from_str::<Value>(&raw)?)
+                })
                 .transpose()?;
             match &change.after {
                 Some(after) => {
                     if required_string(after, "id")? != change.id
-                        || required_string(after, "projectId")? != change.project_id
+                        || (table != "projects"
+                            && required_string(after, "projectId")? != change.project_id)
                     {
                         return Err(CoreError::Validation(
                             "desktop record identity does not match its mutation".to_owned(),
                         ));
                     }
-                    upsert_entity_json(&transaction, table, after)?;
+                    if table == "projects" {
+                        upsert_project_json(&transaction, after)?;
+                    } else {
+                        upsert_entity_json(&transaction, table, after)?;
+                    }
                 }
                 None => {
                     transaction
@@ -969,6 +1004,9 @@ impl Storage {
                         .transpose()?,
                 ],
             )?;
+        }
+        if let Some((snapshot, payload)) = snapshot {
+            insert_snapshot(&transaction, snapshot, payload)?;
         }
         let revision = bump_data_revision(&transaction)?;
         transaction.commit()?;
@@ -1310,6 +1348,72 @@ impl Storage {
         }))
     }
 
+    pub(crate) fn load_project_state_if_revision(
+        &self,
+        project_id: &str,
+        expected_revision: i64,
+    ) -> CoreResult<Value> {
+        let transaction = self.connection.unchecked_transaction()?;
+        ensure_expected_revision(&transaction, Some(expected_revision))?;
+        let project_json: String = transaction
+            .query_row(
+                "SELECT data_json FROM projects WHERE id = ?1",
+                [project_id],
+                |row| row.get(0),
+            )
+            .optional()?
+            .ok_or_else(|| CoreError::NotFound {
+                entity: "project",
+                id: project_id.to_owned(),
+            })?;
+        let project: Value = serde_json::from_str(&project_json)?;
+        let mut state = Map::new();
+        state.insert("schemaVersion".to_owned(), json!(NORMALIZED_STATE_VERSION));
+        state.insert("projects".to_owned(), json!([project]));
+        for (collection, table) in ENTITY_COLLECTIONS {
+            let scope = if collection == "issues" {
+                "project_id = ?1 OR project_id IS NULL"
+            } else {
+                "project_id = ?1"
+            };
+            let mut statement = transaction.prepare(&format!(
+                "SELECT data_json FROM {table} WHERE {scope} ORDER BY rowid"
+            ))?;
+            let rows = statement.query_map([project_id], |row| row.get::<_, String>(0))?;
+            let mut records = rows
+                .map(|row| Ok(serde_json::from_str::<Value>(&row?)?))
+                .collect::<CoreResult<Vec<_>>>()?;
+            if collection == "issues" {
+                // Older issue records get their project from the record they describe.
+                records.retain(|issue| {
+                    if let Some(scope) = issue.get("projectId").and_then(Value::as_str) {
+                        return scope == project_id;
+                    }
+                    let targets = match issue.get("targetType").and_then(Value::as_str) {
+                        Some("person") => "people",
+                        Some("relationship") => "relationships",
+                        Some("event") => "events",
+                        Some("source") => "sources",
+                        Some("attachment") => "attachments",
+                        _ => return false,
+                    };
+                    let target_id = issue.get("targetId").and_then(Value::as_str);
+                    state
+                        .get(targets)
+                        .and_then(Value::as_array)
+                        .is_some_and(|records| {
+                            records
+                                .iter()
+                                .any(|record| record.get("id").and_then(Value::as_str) == target_id)
+                        })
+                });
+            }
+            state.insert(collection.to_owned(), Value::Array(records));
+        }
+        transaction.commit()?;
+        Ok(Value::Object(state))
+    }
+
     pub fn synchronize_normalized_state(
         &mut self,
         state_json: &str,
@@ -1338,7 +1442,6 @@ impl Storage {
         payload: &Value,
         expected_revision: i64,
     ) -> CoreResult<i64> {
-        let snapshot_id = required_string(snapshot, "id")?;
         let project_id = required_string(snapshot, "projectId")?;
         let transaction = self
             .connection
@@ -1356,11 +1459,7 @@ impl Storage {
                 id: project_id.to_owned(),
             });
         }
-        insert_entity_json(&transaction, "snapshots", snapshot)?;
-        transaction.execute(
-            "INSERT INTO snapshot_payloads(snapshot_id, payload_json) VALUES (?1, ?2)",
-            params![snapshot_id, serde_json::to_string(payload)?],
-        )?;
+        insert_snapshot(&transaction, snapshot, payload)?;
         let revision = bump_data_revision(&transaction)?;
         transaction.commit()?;
         Ok(revision)
@@ -2325,6 +2424,20 @@ fn upsert_project_json(transaction: &Transaction<'_>, value: &Value) -> CoreResu
             created_at,
             updated_at
         ],
+    )?;
+    Ok(())
+}
+
+fn insert_snapshot(
+    transaction: &Transaction<'_>,
+    snapshot: &Value,
+    payload: &Value,
+) -> CoreResult<()> {
+    let snapshot_id = required_string(snapshot, "id")?;
+    insert_entity_json(transaction, "snapshots", snapshot)?;
+    transaction.execute(
+        "INSERT INTO snapshot_payloads(snapshot_id, payload_json) VALUES (?1, ?2)",
+        params![snapshot_id, serde_json::to_string(payload)?],
     )?;
     Ok(())
 }

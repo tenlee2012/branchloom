@@ -1,7 +1,7 @@
 import { t } from '../i18n'
 import { isTauri } from '@tauri-apps/api/core'
 import type { PublicationRequest, PublicationStatus } from '../domain/publication'
-import type { BranchloomRepository, DuplicateCandidate, Snapshot } from '../domain/types'
+import type { BranchloomRepository, DuplicateCandidate, PersonMergeInput, PersonMergeResult, Snapshot } from '../domain/types'
 import { BrowserPrototypeRepository } from './BrowserPrototypeRepository'
 import {
   PROTOTYPE_STORAGE_KEY,
@@ -463,6 +463,7 @@ export async function createTauriRepository(
 
   return new Proxy({} as BranchloomRepository, {
     get(_target, property) {
+      if (property === 'getDataRevision') return () => revision
       if (property === 'publication' && gateway.publication) {
         return async <T>(input: PublicationRequest): Promise<T> => {
           const result = await gateway.publication!<T>(input)
@@ -483,6 +484,26 @@ export async function createTauriRepository(
       }
       if (property === 'listDuplicateCandidates' && gateway.listDuplicateCandidates) {
         return gateway.listDuplicateCandidates.bind(gateway)
+      }
+      if (property === 'mergePeople' && gateway.applyMutation) {
+        const applyMutation = gateway.applyMutation.bind(gateway)
+        return async ({ expectedRevision = revision, ...input }: PersonMergeInput): Promise<PersonMergeResult> => {
+          const outcome = await applyMutation('mergePeople', [input], expectedRevision)
+          const result = outcome.result as PersonMergeResult
+          try {
+            installSnapshot(await gateway.load(), true)
+            return {
+              ...result,
+              retainedPerson: await delegate.getPerson(result.retainedPerson.id),
+              issues: await delegate.inspectProject(result.snapshot.projectId),
+            }
+          } catch {
+            // The commit succeeded. The regular refresh can retry loading the new data.
+            return result
+          } finally {
+            notifyProjectDataChanged()
+          }
+        }
       }
       const member = Reflect.get(delegate, property)
       if (typeof member !== 'function') return member

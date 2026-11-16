@@ -2,6 +2,7 @@ export {
   createPersonMergePreview,
   collectRelationshipMergeConflicts,
   derivePersonMergeDependencyConstraints,
+  meaningfulPersonMergeValue,
   type PersonMergeDependencyConstraints,
   type PersonMergeContext,
   type PersonMergePreview,

@@ -19,6 +19,7 @@ import type {
   UUID,
 } from '../../../shared/domain/types'
 import { useBranchloomRepository } from '../../../shared/repository/injection'
+import { refreshNativeRepository } from '../../../shared/repository/TauriRepository'
 import CleanupDialog from '../components/CleanupDialog.vue'
 import DuplicateCandidates from '../components/DuplicateCandidates.vue'
 import IssueList from '../components/IssueList.vue'
@@ -49,9 +50,10 @@ const sources = ref<Source[]>([])
 const citations = ref<Citation[]>([])
 const attachments = ref<Attachment[]>([])
 const attachmentLinks = ref<AttachmentLink[]>([])
+const duplicateRevision = ref<number>()
 const duplicateState = ref<'loading' | 'ready' | 'failed'>('loading')
 const duplicateError = ref('')
-const mergeTarget = ref<{ keepPersonId: UUID; removePersonId: UUID }>()
+const mergeTarget = ref<{ keepPersonId: UUID; removePersonId: UUID; expectedRevision?: number }>()
 let requestId = 0
 let duplicateRequestId = 0
 
@@ -61,9 +63,12 @@ async function loadDuplicateData(scopedProjectId = projectId.value) {
   duplicateError.value = ''
   duplicateCandidates.value = []
   try {
+    await refreshNativeRepository(repository)
+    if (request !== duplicateRequestId || scopedProjectId !== projectId.value) return
+    const revision = repository.getDataRevision?.()
     const [nextCandidates, peoplePage, nextRelationships, nextEvents, nextPlaces, nextSources, nextCitations, nextAttachments, nextLinks] = await Promise.all([
       repository.listDuplicateCandidates(scopedProjectId),
-      repository.listPeople(scopedProjectId, { page: 1, pageSize: 500, sort: 'name' }),
+      repository.listPeople(scopedProjectId, { page: 1, pageSize: Number.MAX_SAFE_INTEGER, sort: 'name' }),
       repository.listRelationships(scopedProjectId),
       repository.listEvents(scopedProjectId),
       repository.listPlaces(scopedProjectId),
@@ -82,6 +87,7 @@ async function loadDuplicateData(scopedProjectId = projectId.value) {
     citations.value = nextCitations.filter(({ projectId: id }) => id === scopedProjectId)
     attachments.value = nextAttachments.filter(({ projectId: id }) => id === scopedProjectId)
     attachmentLinks.value = nextLinks.filter(({ projectId: id }) => id === scopedProjectId)
+    duplicateRevision.value = revision
     duplicateState.value = 'ready'
   } catch (error) {
     if (request !== duplicateRequestId || scopedProjectId !== projectId.value) return
@@ -93,7 +99,7 @@ async function loadDuplicateData(scopedProjectId = projectId.value) {
 }
 
 function openMerge(keepPersonId: UUID, removePersonId: UUID) {
-  mergeTarget.value = { keepPersonId, removePersonId }
+  mergeTarget.value = { keepPersonId, removePersonId, expectedRevision: duplicateRevision.value }
 }
 
 function closeMerge() {
@@ -189,6 +195,7 @@ watch(projectId, () => {
       :open="true"
       :keep-person-id="mergeTarget.keepPersonId"
       :remove-person-id="mergeTarget.removePersonId"
+      :expected-revision="mergeTarget.expectedRevision"
       :people="people"
       :relationships="relationships"
       :events="events"

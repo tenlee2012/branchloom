@@ -1,5 +1,6 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import {
+  DEMO_PROJECT_ID,
   expectNoRuntimeErrors,
   openDemo,
   resetDemo,
@@ -8,8 +9,7 @@ import {
 
 test.beforeEach(async ({ page }) => resetDemo(page))
 
-test('duplicate review shows an explicit merge preview, creates a snapshot and removes the duplicate', async ({ page }) => {
-  const errors = watchRuntimeErrors(page)
+async function previewDuplicateMerge(page: Page) {
   await openDemo(page, '/manage/checks')
   await expect(page.getByRole('heading', { name: '重复人物候选' })).toBeVisible()
   const candidate = page.locator('.duplicate-candidates article').filter({ hasText: '林晨' }).first()
@@ -26,15 +26,43 @@ test('duplicate review shows an explicit merge preview, creates a snapshot and r
     await relationshipChoices.nth(index).selectOption({ index: 1 })
   }
   await expect(wizard).toContainText('预览：删除')
+  return wizard
+}
+
+test('duplicate review shows an explicit merge preview, creates a snapshot and removes the duplicate', async ({ page }) => {
+  const errors = watchRuntimeErrors(page)
+  const wizard = await previewDuplicateMerge(page)
   await wizard.getByRole('button', { name: '确认合并' }).click()
   const result = page.getByRole('dialog', { name: '合并完成' })
   await expect(result).toContainText('已创建合并前快照')
   await result.getByRole('button', { name: '完成' }).click()
 
   await page.getByRole('link', { name: '人物', exact: true }).click()
+  await expect(page).toHaveURL(/\/people$/)
+  await page.reload()
   await page.getByLabel('搜索人物').fill('林晨')
   await expect(page.getByRole('link', { name: '打开人物详情：林晨' })).toHaveCount(1)
   expectNoRuntimeErrors(errors)
+})
+
+test('merge confirmation rejects a preview after another edit', async ({ page }) => {
+  const wizard = await previewDuplicateMerge(page)
+  const revision = await (await page.request.get('/__branchloom/revision')).json() as number
+  // Keep this window open to exercise a commit before the background refresh sees the new revision.
+  await page.route('**/__branchloom/revision', (route) => route.fulfill({ json: revision }))
+  const updated = await page.request.post('/__branchloom/mutation/apply', {
+    data: {
+      method: 'updateProject',
+      args: [DEMO_PROJECT_ID, { description: '合并预览打开期间更新了项目说明' }],
+      expectedRevision: revision,
+    },
+  })
+  expect(updated.ok()).toBe(true)
+  await wizard.getByRole('button', { name: '确认合并' }).click()
+  await expect(wizard.getByRole('alert')).toContainText('资料已更新')
+  await expect(wizard.getByRole('button', { name: '确认合并' })).toBeDisabled()
+  await wizard.getByRole('button', { name: '取消' }).click()
+  await expect(page.locator('.duplicate-candidates article').filter({ hasText: '林晨' }).first()).toBeVisible()
 })
 
 test('data checks navigate to the target and cleanup requires a snapshot-backed confirmation flow', async ({ page }) => {
